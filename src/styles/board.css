@@ -1,0 +1,506 @@
+.vs-boardPage {
+  display: flex;
+  gap: 0;
+  height: 100%;
+  min-height: 0;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.vs-boardMain {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 1.1rem 1.25rem 1.4rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.vs-boardPage.has-assist .vs-boardMain {
+  border-right: 1px solid var(--vs-border);
+}
+
+.vs-boardHeading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.vs-boardWeek {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.9rem;
+}
+
+.vs-boardWeekDays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.vs-boardDay {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  min-height: 64px;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--vs-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--vs-bg-raised) 88%, transparent);
+  color: var(--vs-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.vs-boardDay span {
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: var(--vs-muted);
+  text-transform: capitalize;
+}
+
+.vs-boardDay em {
+  font-style: normal;
+  font-size: 1.05rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+}
+
+.vs-boardDay:hover {
+  border-color: color-mix(in srgb, var(--vs-accent) 35%, var(--vs-border));
+}
+
+.vs-boardDay.is-today {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vs-accent) 35%, transparent);
+}
+
+.vs-boardDay.is-active {
+  background: var(--vs-accent-soft);
+  border-color: color-mix(in srgb, var(--vs-accent) 45%, transparent);
+}
+
+.vs-boardDay.is-active span {
+  color: var(--vs-accent);
+}
+
+.vs-boardComposer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+}
+
+.vs-boardComposer input[type="text"],
+.vs-boardComposer input:not([type]) {
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--vs-border);
+  background: var(--vs-bg-raised);
+  color: var(--vs-text);
+  padding: 0 0.75rem;
+  font: 600 0.85rem/1 "DM Sans", system-ui, sans-serif;
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+.vs-prioritySelect {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.vs-priorityTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  min-width: 8.5rem;
+  height: 38px;
+  padding: 0 0.7rem;
+  border: 1px solid var(--vs-border);
+  border-radius: 10px;
+  background: var(--vs-bg-raised);
+  color: var(--vs-text);
+  font: 600 0.85rem/1 "DM Sans", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.vs-prioritySelect.is-open .vs-priorityTrigger,
+.vs-priorityTrigger:hover {
+  border-color: color-mix(in srgb, var(--vs-accent) 45%, transparent);
+}
+
+.vs-priorityMenu {
+  position: absolute;
+  z-index: 35;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0.3rem;
+  list-style: none;
+  border: 1px solid var(--vs-border-strong);
+  border-radius: 12px;
+  background: var(--vs-bg-raised);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.4);
+}
+
+.vs-priorityMenu li {
+  margin: 0;
+}
+
+.vs-priorityOption {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--vs-text);
+  font: 600 0.84rem/1.2 "DM Sans", system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vs-priorityOption:hover,
+.vs-priorityOption.is-selected {
+  background: color-mix(in srgb, var(--vs-accent) 14%, transparent);
+  color: var(--vs-accent);
+}
+
+.vs-boardColumns {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.vs-boardCol {
+  min-height: 320px;
+  border-radius: 14px;
+  border: 1px solid var(--vs-border);
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+}
+
+.vs-boardCol > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.7rem 0.8rem;
+  border-bottom: 1px solid var(--vs-border);
+}
+
+.vs-boardCol > header strong {
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.vs-boardCol > header em {
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--vs-muted);
+}
+
+.vs-boardCol.is-todo > header strong { color: #a7a9be; }
+.vs-boardCol.is-progress > header strong { color: #f472b6; }
+.vs-boardCol.is-review > header strong { color: #f0c14b; }
+.vs-boardCol.is-done > header strong { color: #3ecf8e; }
+.vs-boardCol.is-cancelled > header strong { color: #f87171; }
+
+.vs-boardCards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.65rem;
+  min-height: 0;
+  flex: 1;
+}
+
+.vs-boardEmpty {
+  margin: 0.4rem 0;
+  color: var(--vs-muted);
+  font-size: 0.78rem;
+}
+
+.vs-boardCard {
+  position: relative;
+  border-radius: 12px;
+  border: 1px solid var(--vs-border);
+  background: var(--vs-bg-raised);
+  padding: 0.7rem 0.75rem 0.7rem 0.85rem;
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  overflow: hidden;
+}
+
+.vs-boardCard::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: color-mix(in srgb, var(--vs-muted) 55%, transparent);
+}
+
+.vs-boardCard.is-low::before { background: #a7a9be; }
+.vs-boardCard.is-medium::before { background: #f472b6; }
+.vs-boardCard.is-high::before { background: #f0c14b; }
+.vs-boardCard.is-critical::before { background: #f87171; }
+
+.vs-boardCard:active {
+  cursor: grabbing;
+}
+
+.vs-boardCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.vs-boardCard strong {
+  font-size: 0.88rem;
+  line-height: 1.3;
+}
+
+.vs-boardCard small {
+  color: var(--vs-muted);
+  font-size: 0.72rem;
+}
+
+.vs-boardPri {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  padding: 0.18rem 0.4rem;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.vs-boardPri.is-low {
+  color: #a7a9be;
+  border-color: rgba(167, 169, 190, 0.35);
+}
+.vs-boardPri.is-medium {
+  color: #f472b6;
+  border-color: rgba(244, 114, 182, 0.4);
+}
+.vs-boardPri.is-high {
+  color: #f0c14b;
+  border-color: rgba(240, 193, 75, 0.45);
+}
+.vs-boardPri.is-critical {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.5);
+}
+
+.vs-boardAssist {
+  position: relative;
+  width: min(420px, 42vw);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--vs-border);
+  background: color-mix(in srgb, var(--vs-bg-raised) 94%, var(--vs-bg));
+}
+
+.vs-boardAssistResize {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  left: -3px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+}
+
+.vs-boardAssistResize:hover,
+.vs-boardAssistResize:active {
+  background: color-mix(in srgb, var(--vs-accent) 45%, transparent);
+}
+
+.vs-boardHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.vs-boardModeTabs {
+  display: inline-flex;
+  gap: 0.15rem;
+  padding: 0.15rem;
+  border-radius: 10px;
+  border: 1px solid var(--vs-border);
+  background: var(--vs-bg);
+}
+
+.vs-boardModeTabs button {
+  min-height: 30px;
+  padding: 0 0.7rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--vs-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.vs-boardModeTabs button.is-active {
+  background: var(--vs-accent-soft);
+  color: var(--vs-accent);
+}
+
+.vs-boardMonth {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.vs-boardMonthNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.vs-boardMonthNav strong {
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: capitalize;
+}
+
+.vs-boardMonthGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.3rem;
+}
+
+.vs-boardMonthDay {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  min-height: 52px;
+  padding: 0.4rem 0.45rem;
+  border-radius: 10px;
+  border: 1px solid var(--vs-border);
+  background: var(--vs-bg);
+  color: var(--vs-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.vs-boardMonthDay span {
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.vs-boardMonthDay em {
+  font-style: normal;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--vs-accent);
+}
+
+.vs-boardMonthDay.is-out {
+  opacity: 0.38;
+}
+
+.vs-boardMonthDay.is-today {
+  border-color: color-mix(in srgb, var(--vs-accent) 40%, var(--vs-border));
+}
+
+.vs-boardMonthDay.is-active {
+  background: var(--vs-accent-soft);
+  border-color: color-mix(in srgb, var(--vs-accent) 50%, transparent);
+}
+
+.vs-boardMonthDay:hover {
+  border-color: color-mix(in srgb, var(--vs-accent) 35%, var(--vs-border));
+}
+
+.vs-boardAssistHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 0.9rem;
+  border-bottom: 1px solid var(--vs-border);
+}
+
+.vs-boardAssistHead strong {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.vs-boardAssistHead small {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--vs-muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.vs-boardAssistActions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.vs-boardAssistTerm {
+  flex: 1;
+  min-height: 220px;
+  overflow: hidden;
+}
+
+.vs-boardAssistEmpty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--vs-muted);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 1100px) {
+  .vs-boardColumns {
+    grid-template-columns: repeat(5, minmax(200px, 1fr));
+  }
+
+  .vs-boardPage.has-assist {
+    flex-direction: column;
+  }
+
+  .vs-boardAssist {
+    width: 100%;
+    min-height: 320px;
+    border-top: 1px solid var(--vs-border);
+  }
+
+  .vs-boardPage.has-assist .vs-boardMain {
+    border-right: 0;
+  }
+}

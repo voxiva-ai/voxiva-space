@@ -1,0 +1,156 @@
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { EditorView } from "@codemirror/view";
+import { tags as t } from "@lezer/highlight";
+import type { Extension } from "@codemirror/state";
+
+/** Richer dark palette — closer to One Dark / VS Code contrast. */
+const darkHighlight = HighlightStyle.define([
+  { tag: t.comment, color: "#7d8590", fontStyle: "italic" },
+  { tag: t.lineComment, color: "#7d8590", fontStyle: "italic" },
+  { tag: t.blockComment, color: "#7d8590", fontStyle: "italic" },
+  { tag: t.docComment, color: "#7d8590", fontStyle: "italic" },
+  { tag: t.keyword, color: "#ff7b72" },
+  { tag: t.controlKeyword, color: "#ff7b72" },
+  { tag: t.operatorKeyword, color: "#ff7b72" },
+  { tag: t.definitionKeyword, color: "#ff7b72" },
+  { tag: t.moduleKeyword, color: "#ff7b72" },
+  { tag: t.self, color: "#ff7b72" },
+  { tag: t.atom, color: "#79c0ff" },
+  { tag: t.bool, color: "#79c0ff" },
+  { tag: t.null, color: "#79c0ff" },
+  { tag: t.number, color: "#ffa657" },
+  { tag: t.string, color: "#a5d6ff" },
+  { tag: t.special(t.string), color: "#a5d6ff" },
+  { tag: t.character, color: "#a5d6ff" },
+  { tag: t.regexp, color: "#7ee787" },
+  { tag: t.escape, color: "#79c0ff" },
+  { tag: t.propertyName, color: "#79c0ff" },
+  { tag: t.attributeName, color: "#79c0ff" },
+  { tag: t.variableName, color: "#e6edf3" },
+  { tag: t.definition(t.variableName), color: "#d2a8ff" },
+  { tag: t.function(t.variableName), color: "#d2a8ff" },
+  { tag: t.local(t.variableName), color: "#e6edf3" },
+  { tag: t.className, color: "#ffa657" },
+  { tag: t.typeName, color: "#7ee787" },
+  { tag: t.namespace, color: "#ffa657" },
+  { tag: t.macroName, color: "#d2a8ff" },
+  { tag: t.labelName, color: "#79c0ff" },
+  { tag: t.tagName, color: "#7ee787" },
+  { tag: t.angleBracket, color: "#8b949e" },
+  { tag: t.operator, color: "#ff7b72" },
+  { tag: t.punctuation, color: "#8b949e" },
+  { tag: t.bracket, color: "#8b949e" },
+  { tag: t.meta, color: "#8b949e" },
+  { tag: t.heading, color: "#79c0ff", fontWeight: "700" },
+  { tag: t.heading1, color: "#79c0ff", fontWeight: "800" },
+  { tag: t.link, color: "#a5d6ff", textDecoration: "underline" },
+  { tag: t.url, color: "#a5d6ff" },
+  { tag: t.emphasis, fontStyle: "italic" },
+  { tag: t.strong, fontWeight: "700" },
+  { tag: t.strikethrough, textDecoration: "line-through" },
+  { tag: t.invalid, color: "#ffa198", textDecoration: "underline wavy" },
+  { tag: t.changed, color: "#ffa657" },
+  { tag: t.inserted, color: "#7ee787" },
+  { tag: t.deleted, color: "#ffa198" },
+]);
+
+const lightHighlight = HighlightStyle.define([
+  { tag: t.comment, color: "#6e7781", fontStyle: "italic" },
+  { tag: t.lineComment, color: "#6e7781", fontStyle: "italic" },
+  { tag: t.blockComment, color: "#6e7781", fontStyle: "italic" },
+  { tag: t.docComment, color: "#6e7781", fontStyle: "italic" },
+  { tag: t.keyword, color: "#cf222e" },
+  { tag: t.controlKeyword, color: "#cf222e" },
+  { tag: t.operatorKeyword, color: "#cf222e" },
+  { tag: t.definitionKeyword, color: "#cf222e" },
+  { tag: t.moduleKeyword, color: "#cf222e" },
+  { tag: t.self, color: "#cf222e" },
+  { tag: t.atom, color: "#0550ae" },
+  { tag: t.bool, color: "#0550ae" },
+  { tag: t.null, color: "#0550ae" },
+  { tag: t.number, color: "#953800" },
+  { tag: t.string, color: "#0a3069" },
+  { tag: t.special(t.string), color: "#0a3069" },
+  { tag: t.character, color: "#0a3069" },
+  { tag: t.regexp, color: "#116329" },
+  { tag: t.escape, color: "#0550ae" },
+  { tag: t.propertyName, color: "#0550ae" },
+  { tag: t.attributeName, color: "#0550ae" },
+  { tag: t.variableName, color: "#1f2328" },
+  { tag: t.definition(t.variableName), color: "#8250df" },
+  { tag: t.function(t.variableName), color: "#8250df" },
+  { tag: t.className, color: "#953800" },
+  { tag: t.typeName, color: "#116329" },
+  { tag: t.namespace, color: "#953800" },
+  { tag: t.tagName, color: "#116329" },
+  { tag: t.operator, color: "#cf222e" },
+  { tag: t.punctuation, color: "#656d76" },
+  { tag: t.bracket, color: "#656d76" },
+  { tag: t.meta, color: "#656d76" },
+  { tag: t.heading, color: "#0550ae", fontWeight: "700" },
+  { tag: t.link, color: "#0550ae", textDecoration: "underline" },
+  { tag: t.url, color: "#0550ae" },
+  { tag: t.emphasis, fontStyle: "italic" },
+  { tag: t.strong, fontWeight: "700" },
+  { tag: t.invalid, color: "#cf222e" },
+]);
+
+const chrome = EditorView.theme({
+  "&": {
+    height: "100%",
+    backgroundColor: "var(--vs-bg)",
+    color: "var(--vs-text)",
+    fontSize: "13.5px",
+  },
+  ".cm-scroller": {
+    fontFamily: "var(--vs-mono)",
+    lineHeight: "1.7",
+  },
+  ".cm-content": {
+    padding: "12px 0 28px",
+    caretColor: "var(--vs-accent)",
+  },
+  ".cm-line": {
+    padding: "0 16px 0 4px",
+  },
+  ".cm-gutters": {
+    backgroundColor: "color-mix(in srgb, var(--vs-bg-raised) 88%, transparent)",
+    color: "var(--vs-muted)",
+    borderRight: "1px solid var(--vs-border)",
+    paddingLeft: "6px",
+  },
+  ".cm-lineNumbers .cm-gutterElement": {
+    minWidth: "2.6rem",
+    padding: "0 12px 0 6px",
+    fontSize: "11.5px",
+    opacity: "0.55",
+  },
+  ".cm-foldGutter .cm-gutterElement": {
+    padding: "0 4px",
+    color: "var(--vs-muted)",
+  },
+  ".cm-activeLine": {
+    backgroundColor: "color-mix(in srgb, var(--vs-accent) 8%, transparent)",
+  },
+  ".cm-activeLineGutter": {
+    backgroundColor: "color-mix(in srgb, var(--vs-accent) 10%, transparent)",
+    color: "var(--vs-text)",
+    opacity: "1",
+  },
+  ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
+    backgroundColor: "color-mix(in srgb, var(--vs-accent) 30%, transparent) !important",
+  },
+  ".cm-cursor, .cm-dropCursor": {
+    borderLeftColor: "var(--vs-accent)",
+    borderLeftWidth: "2px",
+  },
+  "&.cm-focused": { outline: "none" },
+  ".cm-matchingBracket, .cm-nonmatchingBracket": {
+    backgroundColor: "color-mix(in srgb, var(--vs-accent) 18%, transparent)",
+    outline: "1px solid color-mix(in srgb, var(--vs-accent) 40%, transparent)",
+  },
+});
+
+export function editorTheme(dark: boolean): Extension[] {
+  return [chrome, syntaxHighlighting(dark ? darkHighlight : lightHighlight)];
+}

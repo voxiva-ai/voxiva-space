@@ -1,0 +1,140 @@
+.vs-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 30px;
+  padding: 0.32rem 0.7rem;
+  border-radius: var(--vs-radius-sm);
+  border: 1px solid var(--vs-border);
+  background: var(--vs-bg-raised);
+  color: var(--vs-text);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.14s ease, border-color 0.14s ease, transform 0.14s ease;
+}
+
+.vs-btn:hover:not(:disabled) {
+  background: var(--vs-bg-hover);
+  border-color: var(--vs-border-strong);
+}
+
+.vs-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.vs-btnPrimary {
+  border-color: transparent;
+  background: var(--vs-accent);
+  color: var(--vs-on-accent);
+  box-shadow: var(--vs-shadow);
+}
+
+.vs-btnPrimary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.vs-btnGhost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--vs-muted);
+}
+
+.vs-btnGhost:hover:not(:disabled) {
+  background: var(--vs-bg-hover);
+  color: var(--vs-text);
+}
+
+.vs-btnDanger:hover:not(:disabled) {
+  border-color: rgba(255, 122, 122, 0.4);
+  color: var(--vs-danger);
+}
+
+.vs-kicker {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--vs-muted);
+}
+
+.vs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--vs-border);
+  color: var(--vs-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.vs-badge.is-attention {
+  background: rgba(240, 193, 75, 0.12);
+  border-color: rgba(240, 193, 75, 0.28);
+  color: var(--vs-attention);
+}
+
+.vs-badge.is-ok {
+  background: rgba(62, 207, 142, 0.1);
+  border-color: rgba(62, 207, 142, 0.25);
+  color: var(--vs-ok);
+}
+
+.vs-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.vs-field span {
+  color: var(--vs-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.vs-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  color: var(--vs-muted);
+}
+
+.vs-empty h2,
+.vs-empty h3 {
+  margin: 0;
+  color: var(--vs-text);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.vs-empty p {
+  margin: 0;
+  max-width: 36rem;
+  line-height: 1.45;
+}
+
+.vs-empty .vs-btn {
+  margin-top: 0.35rem;
+}
+
+.vs-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid rgba(255, 122, 122, 0.3);
+  border-radius: var(--vs-radius-sm);
+  background: rgba(255, 122, 122, 0.08);
+  color: var(--vs-danger);
+  font-size: 0.82rem;
+}

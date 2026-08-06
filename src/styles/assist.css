@@ -1,0 +1,215 @@
+.vs-mainBody {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.vs-mainBody > .vs-content {
+  flex: 1;
+}
+
+.vs-assist {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-left: 1px solid var(--vs-border);
+  background: color-mix(in srgb, var(--vs-bg-raised) 94%, var(--vs-bg));
+  flex-shrink: 0;
+  transition: none !important;
+  animation: none !important;
+}
+
+.vs-assistResize {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  left: -3px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+}
+
+.vs-assistResize:hover,
+.vs-assistResize:active {
+  background: color-mix(in srgb, var(--vs-accent) 45%, transparent);
+}
+
+.vs-assistHead {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.45rem 0.4rem 0.55rem;
+  border-bottom: 1px solid var(--vs-border);
+  flex-shrink: 0;
+}
+
+.vs-assistTabs {
+  display: flex;
+  flex: 1;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.vs-assistTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 30px;
+  padding: 0 0.55rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--vs-muted);
+  font: 650 0.72rem/1 "DM Sans", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.vs-assistTab:hover {
+  background: var(--vs-bg-hover);
+  color: var(--vs-text);
+}
+
+.vs-assistTab.is-active {
+  background: color-mix(in srgb, var(--vs-accent) 14%, transparent);
+  color: var(--vs-accent);
+}
+
+.vs-assistBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.vs-assistEmpty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 1.25rem;
+  color: var(--vs-muted);
+  text-align: center;
+  font-size: 0.84rem;
+}
+
+.vs-assistEditor {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.vs-assistEditorToolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.45rem;
+  border-bottom: 1px solid var(--vs-border);
+  flex-shrink: 0;
+}
+
+.vs-assistEditorToolbar strong {
+  font-size: 0.78rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vs-assistEditorToolbar .vs-spacer {
+  flex: 1;
+}
+
+.vs-assistFilesToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--vs-muted);
+  cursor: pointer;
+}
+
+.vs-assistFilesToggle.is-active,
+.vs-assistFilesToggle:hover {
+  background: color-mix(in srgb, var(--vs-accent) 12%, transparent);
+  color: var(--vs-accent);
+}
+
+.vs-assistEditorBody {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.vs-assistEditorBody.has-files {
+  grid-template-columns: minmax(120px, 38%) minmax(0, 1fr);
+}
+
+.vs-assistFiles {
+  min-height: 0;
+  overflow: auto;
+  border-right: 1px solid var(--vs-border);
+  background: color-mix(in srgb, var(--vs-bg) 55%, var(--vs-bg-raised));
+}
+
+.vs-assistCode {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.vs-assistCode .vs-editorTabs {
+  flex-shrink: 0;
+}
+
+.vs-assistCode .vs-codeMirror,
+.vs-assistCode .cm-editor {
+  flex: 1;
+  min-height: 0;
+  height: 100% !important;
+}
+
+.vs-assistBrowser {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.vs-assistBrowser .vs-browser {
+  flex: 1;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.vs-topbarAssistBtn.is-active {
+  color: var(--vs-accent);
+  background: color-mix(in srgb, var(--vs-accent) 12%, transparent);
+}
+
+@media (max-width: 960px) {
+  .vs-assist {
+    position: absolute;
+    z-index: 30;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+  }
+
+  .vs-mainBody {
+    position: relative;
+  }
+}

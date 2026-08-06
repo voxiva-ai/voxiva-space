@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+dist/
+.DS_Store
+*.log
+.env
+.env.*
+
+# Tauri / Rust
+src-tauri/target/
+src-tauri/WixTools/
+src-tauri/gen/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+Thumbs.db
+Desktop.ini

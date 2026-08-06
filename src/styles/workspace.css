@@ -1,0 +1,362 @@
+.vs-space {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.vs-spaceToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid var(--vs-border);
+  background: color-mix(in srgb, var(--vs-bg-raised) 94%, transparent);
+  flex-shrink: 0;
+}
+
+.vs-spaceToolbar .vs-spaceIconBtn {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 7px;
+}
+
+.vs-spaceToolbar .vs-toolbarHint {
+  margin-left: 0.35rem;
+}
+
+/* Layout presets — floating bar only (shown while dragging a pane) */
+.vs-snapBar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+.vs-snapBar.is-floating {
+  position: absolute;
+  top: 3.1rem;
+  left: 50%;
+  z-index: 40;
+  transform: translateX(-50%);
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--vs-border-strong);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--vs-bg-raised) 92%, transparent);
+  box-shadow: var(--vs-shadow);
+  backdrop-filter: blur(10px);
+}
+
+.vs-snapOptions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.28rem;
+}
+
+.vs-snapOption {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 28px;
+  padding: 0.22rem;
+  border-radius: 7px;
+  border: 1px solid color-mix(in srgb, var(--vs-border-strong) 70%, transparent);
+  background: transparent;
+  cursor: pointer;
+}
+
+.vs-snapOption:hover:not(:disabled),
+.vs-snapOption.is-dropTarget:not(:disabled) {
+  border-color: color-mix(in srgb, var(--vs-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--vs-accent) 8%, transparent);
+}
+
+.vs-snapOption.is-dropTarget:not(:disabled) {
+  box-shadow: none;
+  outline: 1px solid color-mix(in srgb, var(--vs-accent) 45%, transparent);
+}
+
+.vs-snapOption:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.vs-snapCells {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  gap: 2px;
+}
+
+.vs-snapCells i {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 2px;
+  border: 1px solid color-mix(in srgb, var(--vs-text) 28%, transparent);
+  background: color-mix(in srgb, var(--vs-bg) 70%, var(--vs-surface));
+}
+
+.vs-snapOption:hover:not(:disabled) .vs-snapCells i {
+  border-color: color-mix(in srgb, var(--vs-accent) 55%, transparent);
+}
+
+.vs-snapCells.is-single {
+  grid-template: 1fr / 1fr;
+}
+
+.vs-snapCells.is-two {
+  grid-template: 1fr / 1fr 1fr;
+}
+
+.vs-snapCells.is-two.is-wide {
+  grid-template: 1fr / 1.45fr 0.8fr;
+}
+
+.vs-snapCells.is-mainStack {
+  grid-template: 1fr 1fr / 1.35fr 0.9fr;
+}
+
+.vs-snapCells.is-mainStack i:first-child {
+  grid-row: 1 / span 2;
+}
+
+.vs-snapCells.is-three {
+  grid-template: 1fr / 1fr 1fr 1fr;
+}
+
+.vs-snapCells.is-quad {
+  grid-template: 1fr 1fr / 1fr 1fr;
+}
+
+.vs-splitRoot {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: #000;
+}
+
+.vs-splitDivider {
+  flex: 0 0 3px;
+  position: relative;
+  background: transparent;
+  z-index: 2;
+}
+
+.vs-splitDivider::after {
+  content: "";
+  position: absolute;
+  background: color-mix(in srgb, var(--vs-border-strong) 70%, #000);
+}
+
+.vs-splitNode.is-h > .vs-splitDivider {
+  cursor: col-resize;
+  flex-basis: 3px;
+}
+
+.vs-splitNode.is-h > .vs-splitDivider::after {
+  top: 0;
+  bottom: 0;
+  left: 1px;
+  width: 1px;
+}
+
+.vs-splitNode.is-v > .vs-splitDivider {
+  cursor: row-resize;
+  flex-basis: 3px;
+}
+
+.vs-splitNode.is-v > .vs-splitDivider::after {
+  left: 0;
+  right: 0;
+  top: 1px;
+  height: 1px;
+}
+
+.vs-splitDivider:hover::after {
+  background: var(--vs-accent);
+}
+
+.vs-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: var(--vs-term-bg);
+  overflow: hidden;
+}
+
+.vs-pane.is-focused {
+  border: 0;
+  box-shadow: none;
+}
+
+.vs-pane.is-attention {
+  box-shadow: none;
+}
+
+.vs-splitNode {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.vs-splitNode.is-h {
+  flex-direction: row;
+}
+
+.vs-splitNode.is-v {
+  flex-direction: column;
+}
+
+.vs-splitChild {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.vs-splitChild > .vs-splitNode,
+.vs-splitChild > .vs-pane {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.vs-pane.is-dropTarget {
+  box-shadow: inset 0 0 0 1px rgba(77, 157, 255, 0.28);
+  position: relative;
+}
+
+.vs-pane.is-dropTarget::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background: rgba(77, 157, 255, 0.04);
+}
+
+.vs-pane.is-dropTarget.is-zone-left::after {
+  background: linear-gradient(90deg, rgba(77, 157, 255, 0.1) 0%, rgba(77, 157, 255, 0.1) 34%, transparent 34%);
+}
+
+.vs-pane.is-dropTarget.is-zone-center::after {
+  background: linear-gradient(90deg, transparent 0%, transparent 20%, rgba(77, 157, 255, 0.1) 20%, rgba(77, 157, 255, 0.1) 80%, transparent 80%);
+}
+
+.vs-pane.is-dropTarget.is-zone-right::after {
+  background: linear-gradient(90deg, transparent 0%, transparent 66%, rgba(77, 157, 255, 0.1) 66%);
+}
+
+.vs-spaceStage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.vs-space.is-snapping .vs-spaceStage {
+  outline: 1px solid rgba(77, 157, 255, 0.18);
+  outline-offset: -1px;
+}
+
+.vs-snapBar.is-floating {
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(77, 157, 255, 0.12);
+}
+
+.vs-snapBar.is-floating .vs-snapOption.is-dropTarget:not(:disabled) {
+  transform: none;
+  border-color: rgba(77, 157, 255, 0.55);
+  box-shadow: none;
+}
+
+.vs-paneEmpty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 1rem;
+  color: var(--vs-muted);
+  min-height: 0;
+}
+
+.vs-paneEmpty h3 {
+  margin: 0;
+  color: var(--vs-text);
+  font-size: 0.95rem;
+}
+
+.vs-paneLoader {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.15rem;
+}
+
+.vs-paneLoader span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--vs-accent);
+  animation: vsPanePulse 0.9s ease-in-out infinite;
+}
+
+.vs-paneLoader span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.vs-paneLoader span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes vsPanePulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+.vs-space .vs-toast {
+  position: absolute;
+  top: 3.1rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  z-index: 20;
+  margin: 0;
+}

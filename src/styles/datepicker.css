@@ -1,0 +1,165 @@
+.vs-datePicker {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.vs-datePickerTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 10.5rem;
+  height: 38px;
+  padding: 0 0.7rem;
+  border: 1px solid var(--vs-border);
+  border-radius: 10px;
+  background: var(--vs-bg-raised);
+  color: var(--vs-muted);
+  font: 600 0.82rem/1 "DM Sans", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.vs-datePickerTrigger.has-value {
+  color: var(--vs-text);
+}
+
+.vs-datePickerTrigger:hover,
+.vs-datePicker.is-open .vs-datePickerTrigger {
+  border-color: color-mix(in srgb, var(--vs-accent) 45%, transparent);
+}
+
+.vs-datePickerClear {
+  display: inline-flex;
+  margin-left: auto;
+  color: var(--vs-muted);
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.vs-datePickerClear:hover {
+  color: var(--vs-text);
+  background: var(--vs-bg-hover);
+}
+
+.vs-datePopover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 280px;
+  padding: 0.85rem;
+  border: 1px solid var(--vs-border-strong);
+  border-radius: 14px;
+  background: var(--vs-bg-raised);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.45),
+    0 0 0 1px color-mix(in srgb, var(--vs-accent) 8%, transparent);
+  animation: vs-dateIn 140ms ease-out;
+}
+
+@keyframes vs-dateIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.vs-datePopoverHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.vs-datePopoverHead strong {
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: capitalize;
+}
+
+.vs-datePopoverNav {
+  display: inline-flex;
+  gap: 0.15rem;
+}
+
+.vs-datePopoverWeek {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.2rem;
+  margin-bottom: 0.3rem;
+  color: var(--vs-muted);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.vs-datePopoverGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.25rem;
+}
+
+.vs-datePopoverEmpty {
+  aspect-ratio: 1;
+}
+
+.vs-datePopoverDay {
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--vs-text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.vs-datePopoverDay:hover {
+  background: var(--vs-bg-hover);
+}
+
+.vs-datePopoverDay.is-today {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vs-accent) 55%, transparent);
+}
+
+.vs-datePopoverDay.is-selected {
+  background: var(--vs-accent);
+  color: var(--vs-on-accent);
+  box-shadow: none;
+}
+
+.vs-datePopoverDay.is-selected:hover {
+  filter: brightness(1.05);
+  background: var(--vs-accent);
+}
+
+.vs-datePopoverFoot {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--vs-border);
+}
+
+.vs-datePopoverLink {
+  border: 0;
+  background: none;
+  padding: 0.2rem 0.1rem;
+  color: var(--vs-muted);
+  font: 650 0.78rem/1 "DM Sans", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.vs-datePopoverLink.is-accent,
+.vs-datePopoverLink:hover {
+  color: var(--vs-accent);
+}

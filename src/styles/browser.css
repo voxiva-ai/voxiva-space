@@ -1,0 +1,689 @@
+.vs-browser {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  container-type: inline-size;
+  background:
+    radial-gradient(ellipse 70% 40% at 10% 0%, color-mix(in srgb, var(--vs-accent) 12%, transparent), transparent 60%),
+    var(--vs-bg);
+}
+
+.vs-browserPaneHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0.55rem;
+  border-bottom: 1px solid var(--vs-border);
+  background: color-mix(in srgb, var(--vs-bg-raised) 92%, transparent);
+  cursor: grab;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.vs-browserPaneHeader strong {
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  color: var(--vs-text);
+}
+
+.vs-browserPaneHint {
+  flex: 1;
+  min-width: 0;
+  color: var(--vs-muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vs-browserBar {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--vs-border);
+  background: var(--vs-bg-raised);
+  flex-shrink: 0;
+}
+
+.vs-browserUrlField {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 34px;
+  padding: 0 0.75rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--vs-accent) 28%, var(--vs-border));
+  background: color-mix(in srgb, var(--vs-bg) 88%, transparent);
+}
+
+.vs-browserUrlField:focus-within {
+  border-color: color-mix(in srgb, var(--vs-accent) 70%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vs-accent) 16%, transparent);
+}
+
+.vs-browserSearchIcon {
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--vs-accent) 90%, white);
+}
+
+.vs-browserBar input,
+.vs-browserCompactBar input,
+.vs-browserUrlField input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--vs-text);
+  font-family: var(--vs-mono);
+  font-size: 0.82rem;
+}
+
+.vs-browserCompactBar {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 42px;
+  padding: 0.35rem 0.4rem;
+  border-bottom: 1px solid var(--vs-border);
+  background: var(--vs-bg-raised);
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.vs-browserCompactBar .vs-browserUrlField {
+  height: 30px;
+  padding: 0 0.55rem;
+}
+
+.vs-browserCompactBar .vs-btn {
+  min-width: 32px;
+  height: 30px;
+  padding: 0 0.5rem;
+  font-size: 0.86rem;
+}
+
+.vs-browserBar .vs-browserUtilityBtn,
+.vs-browserCompactBar .vs-browserUtilityBtn {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 32px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 7px;
+  color: var(--vs-muted);
+}
+
+.vs-browserBar .vs-browserUtilityBtn:hover,
+.vs-browserCompactBar .vs-browserUtilityBtn:hover {
+  color: var(--vs-text);
+  border-color: var(--vs-border-strong);
+  background: color-mix(in srgb, var(--vs-bg-raised) 78%, var(--vs-text) 8%);
+}
+
+.vs-browserBar .vs-browserUtilityBtn.is-primary,
+.vs-browserCompactBar .vs-browserUtilityBtn.is-primary {
+  color: var(--vs-on-accent);
+  border-color: var(--vs-accent);
+  background: var(--vs-accent);
+}
+
+.vs-browserBar .vs-browserUtilityBtn.is-active,
+.vs-browserCompactBar .vs-browserUtilityBtn.is-active {
+  color: var(--vs-accent);
+  border-color: color-mix(in srgb, var(--vs-accent) 55%, var(--vs-border));
+  background: color-mix(in srgb, var(--vs-accent) 14%, transparent);
+}
+
+.vs-browserDragHandle {
+  padding: 0 0.15rem;
+  color: var(--vs-muted);
+  font-size: 0.72rem;
+  letter-spacing: -0.18em;
+  user-select: none;
+}
+
+@media (max-width: 720px) {
+  .vs-browserCompactBar {
+    gap: 0.2rem;
+    padding-inline: 0.3rem;
+  }
+
+  .vs-browserCompactBar .vs-btn {
+    min-width: 28px;
+    padding-inline: 0.35rem;
+  }
+}
+
+.vs-browserFrameWrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--vs-bg);
+}
+
+.vs-browserViewport {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.vs-browserDevtools {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  width: 320px;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--vs-border);
+  background: color-mix(in srgb, var(--vs-bg-raised) 96%, transparent);
+  color: var(--vs-text);
+}
+
+.vs-browserDevtoolsResize {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.vs-browserDevtoolsResize:hover,
+.vs-browserDevtoolsResize:active {
+  background: color-mix(in srgb, var(--vs-accent) 45%, transparent);
+}
+
+.vs-browserDevtools > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  min-height: 38px;
+  padding: 0 0.35rem 0 0.55rem;
+  border-bottom: 1px solid var(--vs-border);
+}
+
+.vs-browserDevtoolsActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.vs-browserToolIcon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  color: var(--vs-muted);
+  background: transparent;
+}
+
+.vs-browserToolIcon:hover,
+.vs-browserToolIcon.is-active {
+  background: var(--vs-bg-hover);
+  color: var(--vs-text);
+}
+
+.vs-browserToolIcon.is-active {
+  color: var(--vs-accent);
+}
+
+.vs-browserDevtoolsTabs {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  min-height: 34px;
+}
+
+.vs-browserDevtoolsTabs button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  border-bottom: 2px solid transparent;
+  color: var(--vs-muted);
+  background: transparent;
+}
+
+.vs-browserDevtoolsTabs button.is-active {
+  border-bottom-color: var(--vs-accent);
+  color: var(--vs-text);
+  background: color-mix(in srgb, var(--vs-accent) 12%, transparent);
+}
+
+.vs-browserDevtoolsTabs button:hover {
+  color: var(--vs-text);
+}
+
+.vs-browserPickAction {
+  display: none;
+}
+
+.vs-browserDevtoolsEmpty {
+  display: grid;
+  flex: 1;
+  padding: 1.25rem;
+  place-items: center;
+  color: var(--vs-muted);
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+.vs-browserDevtoolsBody,
+.vs-browserDevtoolsStyles {
+  min-height: 0;
+  padding: 0.7rem;
+  overflow: auto;
+}
+
+.vs-browserDevtoolsBody {
+  display: grid;
+  align-content: start;
+  gap: 0.45rem;
+}
+
+.vs-browserDevtoolsBody > code,
+.vs-browserDevtoolsBody pre,
+.vs-browserDevtoolsFiles code,
+.vs-browserDevtoolsStyles code {
+  font-family: var(--vs-mono);
+  font-size: 0.67rem;
+}
+
+.vs-browserDevtoolsBody > code {
+  color: var(--vs-accent-2);
+  overflow-wrap: anywhere;
+}
+
+.vs-browserDevtoolsBody small {
+  color: var(--vs-muted);
+}
+
+.vs-browserDevtoolsBody h4 {
+  margin: 0.55rem 0 0;
+  color: var(--vs-muted);
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vs-browserDevtoolsBody pre {
+  max-height: 10rem;
+  margin: 0;
+  padding: 0.55rem;
+  overflow: auto;
+  border-radius: 7px;
+  background: var(--vs-bg);
+  border: 1px solid var(--vs-border);
+}
+
+.vs-browserDevtoolsFiles {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.vs-browserFileLink {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--vs-border);
+  border-radius: 7px;
+  text-align: left;
+  background: var(--vs-bg);
+  color: var(--vs-text);
+  cursor: pointer;
+}
+
+.vs-browserFileLink:hover {
+  border-color: var(--vs-accent);
+  background: var(--vs-accent-soft);
+}
+
+.vs-browserDevtoolsStyles {
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+}
+
+.vs-browserDevtoolsStyles > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 0.4rem;
+  font-size: 0.68rem;
+}
+
+.vs-browserDevtoolsStyles span {
+  color: var(--vs-muted);
+}
+
+.vs-browserDevtoolsStyles code {
+  color: var(--vs-text);
+  overflow-wrap: anywhere;
+}
+
+.vs-browserFrame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--vs-bg);
+  display: block;
+}
+
+.vs-browserBlocked {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: color-mix(in srgb, var(--vs-bg-raised) 94%, transparent);
+  border-top: 1px solid var(--vs-border);
+  color: var(--vs-text);
+  backdrop-filter: blur(8px);
+}
+
+.vs-browserBlocked p {
+  margin: 0;
+  max-width: 34rem;
+  color: var(--vs-muted);
+  line-height: 1.4;
+  font-size: 0.82rem;
+}
+
+.vs-browserHint,
+.vs-browserEmpty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem 1.25rem;
+  color: var(--vs-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  line-height: 1.5;
+  min-height: 0;
+}
+
+.vs-browserEmpty h3 {
+  margin: 0;
+  color: var(--vs-text);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.vs-browserEmpty p {
+  margin: 0;
+  max-width: 28rem;
+}
+
+.vs-browserStart {
+  gap: 0.85rem;
+  background:
+    radial-gradient(ellipse 55% 45% at 50% 20%, color-mix(in srgb, var(--vs-accent) 10%, transparent), transparent 70%),
+    transparent;
+}
+
+.vs-browserStartMark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  border: 1px solid var(--vs-border);
+  background: var(--vs-bg-raised);
+  color: var(--vs-accent);
+}
+
+.vs-browserStartSearch {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: min(100%, 34rem);
+  padding: 0.35rem 0.4rem 0.35rem 0.75rem;
+  border: 1px solid var(--vs-border-strong);
+  border-radius: 12px;
+  background: var(--vs-bg-raised);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+}
+
+.vs-browserStartSearch input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--vs-text);
+  font: 500 0.9rem/1.3 "DM Sans", system-ui, sans-serif;
+  outline: none;
+}
+
+.vs-browserStartGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+  width: min(100%, 34rem);
+  text-align: left;
+}
+
+.vs-browserStartGroup > span {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vs-muted);
+}
+
+.vs-browserPresets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.45rem;
+}
+
+.vs-browserPresetCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid var(--vs-border);
+  border-radius: 12px;
+  background: var(--vs-bg-raised);
+  color: var(--vs-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.vs-browserPresetCard:hover {
+  border-color: color-mix(in srgb, var(--vs-accent) 45%, transparent);
+  background: var(--vs-bg-hover);
+}
+
+.vs-browserPresetCard strong {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.vs-browserPresetCard small {
+  color: var(--vs-muted);
+  font-family: var(--vs-mono);
+  font-size: 0.68rem;
+}
+
+.vs-browserRelated {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.45rem;
+  padding: 0.4rem 0.65rem;
+  border-top: 1px solid var(--vs-border);
+  background: color-mix(in srgb, var(--vs-bg-raised) 92%, transparent);
+  font-size: 0.72rem;
+  color: var(--vs-muted);
+  min-height: 2rem;
+}
+
+.vs-browserRelatedLabel {
+  font-weight: 650;
+  color: var(--vs-text);
+  letter-spacing: 0.02em;
+}
+
+.vs-browserRelated em {
+  font-style: normal;
+  opacity: 0.85;
+}
+
+.vs-browserRelatedFile {
+  appearance: none;
+  border: 1px solid var(--vs-border-strong);
+  border-radius: 5px;
+  background: var(--vs-bg);
+  color: var(--vs-accent);
+  padding: 0.15rem 0.45rem;
+  font: inherit;
+  font-family: var(--vs-mono);
+  cursor: pointer;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vs-browserRelatedFile:hover {
+  border-color: color-mix(in srgb, var(--vs-accent) 55%, transparent);
+}
+
+.vs-browserEmptyError {
+  color: var(--vs-danger) !important;
+  font-size: 0.8rem;
+}
+
+
+.vs-browserNativeSlot {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  min-height: 160px;
+  color: var(--vs-muted);
+  font-size: 0.78rem;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 40%, color-mix(in srgb, var(--vs-accent) 12%, transparent), transparent 70%),
+    var(--vs-bg);
+}
+
+.vs-browserNativeSlot.is-covered {
+  background: transparent;
+}
+
+.vs-browserBar .vs-btn.is-active,
+.vs-browserCompactBar .vs-btn.is-active {
+  border-color: color-mix(in srgb, var(--vs-accent) 72%, var(--vs-border));
+  background: var(--vs-accent-soft);
+  color: var(--vs-accent);
+}
+
+.vs-browserLoadPulse {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--vs-border-strong) 80%, transparent);
+  background: color-mix(in srgb, var(--vs-bg-raised) 88%, transparent);
+}
+
+.vs-browserWindowState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: min(32rem, calc(100% - 2rem));
+  text-align: center;
+}
+
+.vs-browserWindowState small {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--vs-muted);
+  font-family: var(--vs-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vs-browserLoadPulse.is-busy::before {
+  content: "";
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--vs-accent) 35%, transparent);
+  border-top-color: var(--vs-accent);
+  animation: vs-browser-spin 0.7s linear infinite;
+}
+
+@keyframes vs-browser-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@container (max-width: 520px) {
+  .vs-browserBar,
+  .vs-browserCompactBar {
+    flex-wrap: wrap;
+  }
+
+  .vs-browserBar input,
+  .vs-browserCompactBar input {
+    flex-basis: calc(100% - 42px);
+  }
+
+  .vs-browserDragHandle {
+    display: none;
+  }
+
+}
+
+@container (max-width: 700px) {
+  .vs-browserViewport {
+    flex-direction: column;
+  }
+
+  .vs-browserDevtools {
+    flex: 0 0 min(42%, 300px);
+    width: 100%;
+    border-top: 1px solid var(--vs-border);
+    border-left: 0;
+  }
+}
+
+@container (max-width: 360px) {
+  .vs-browserUtilityBtn.is-external {
+    display: none;
+  }
+
+}

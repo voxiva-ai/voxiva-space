@@ -1,0 +1,60 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  font-family: var(--vs-font);
+  background: var(--vs-bg);
+  color: var(--vs-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+input:not(.xterm-helper-textarea),
+textarea:not(.xterm-helper-textarea),
+select {
+  border: 1px solid var(--vs-border);
+  border-radius: var(--vs-radius-sm);
+  background: var(--vs-bg);
+  padding: 0.5rem 0.65rem;
+  outline: none;
+}
+
+input:not(.xterm-helper-textarea):focus,
+textarea:not(.xterm-helper-textarea):focus,
+select:focus {
+  border-color: var(--vs-accent);
+}
+
+a {
+  color: var(--vs-accent);
+}

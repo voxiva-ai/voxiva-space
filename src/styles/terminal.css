@@ -1,0 +1,196 @@
+.vs-terminalShell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  background: var(--vs-term-bg);
+}
+
+.vs-terminalShell.is-dropFile::after {
+  content: "Drop file path into terminal";
+  position: absolute;
+  inset: 28px 0 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--vs-accent) 18%, transparent);
+  border: 2px dashed var(--vs-accent);
+  color: var(--vs-text);
+  font-size: 0.9rem;
+  font-weight: 650;
+  pointer-events: none;
+}
+
+.vs-terminalHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  padding: 0 0.4rem 0 0.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--vs-border) 80%, transparent);
+  background: var(--vs-term-chrome);
+  cursor: grab;
+  user-select: none;
+}
+
+.vs-terminalHeader:active {
+  cursor: grabbing;
+}
+
+.vs-terminalHeader strong {
+  color: var(--vs-term-chrome-text);
+  font-size: 0.74rem;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vs-terminalHeader small {
+  color: var(--vs-term-chrome-muted);
+  font-size: 0.66rem;
+  font-family: var(--vs-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+}
+
+.vs-terminalHeader .vs-spacer {
+  flex: 1;
+}
+
+.vs-dragHandle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  color: var(--vs-term-chrome-muted);
+  font-size: 0.7rem;
+  letter-spacing: -0.08em;
+  cursor: grab;
+  user-select: none;
+}
+
+.vs-dragHandle:hover {
+  background: var(--vs-bg-hover);
+  color: var(--vs-term-chrome-text);
+}
+
+.vs-dragHandle:active {
+  cursor: grabbing;
+}
+
+.vs-termIconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--vs-term-chrome-muted);
+}
+
+.vs-termIconBtn:hover {
+  background: var(--vs-bg-hover);
+  color: var(--vs-term-chrome-text);
+}
+
+.vs-termIconBtn.is-danger:hover {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.12);
+}
+
+.vs-xtermHost {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  cursor: text;
+  position: relative;
+  background: var(--vs-term-bg);
+}
+
+.vs-xtermHost .xterm {
+  height: 100% !important;
+  width: 100% !important;
+  max-width: 100%;
+  padding: 0 !important;
+  margin: 0 !important;
+  min-width: 0 !important;
+}
+
+/* Flush canvas — no gutter so OpenCode fills the pane edge-to-edge */
+.vs-xtermHost .xterm-viewport {
+  overflow: hidden !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  background: var(--vs-term-bg) !important;
+}
+
+.vs-xtermHost .xterm-screen {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+.vs-xtermHost .xterm-rows {
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.vs-xtermHost canvas {
+  display: block !important;
+  margin: 0 !important;
+}
+
+.vs-xtermHost .xterm-scrollable-element > .xterm-viewport::-webkit-scrollbar,
+.vs-xtermHost .xterm-viewport::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+.vs-xtermHost .xterm-helper-textarea,
+.vs-xtermHost textarea.xterm-helper-textarea {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  color: transparent !important;
+  caret-color: transparent !important;
+}
+
+.vs-terminalOverlay {
+  position: absolute;
+  inset: 28px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  background: color-mix(in srgb, var(--vs-term-bg) 88%, transparent);
+  color: #8b93a7;
+  text-align: center;
+  pointer-events: none;
+}
+
+.vs-terminalOverlay strong {
+  color: #e9edf5;
+}

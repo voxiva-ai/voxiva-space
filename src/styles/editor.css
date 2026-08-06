@@ -1,0 +1,408 @@
+.vs-editor {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  background: var(--vs-bg);
+}
+
+.vs-editorToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 48px;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--vs-border);
+  background: var(--vs-bg-raised);
+}
+
+.vs-editorToolbar > div,
+.vs-editorToolbarActions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.vs-editorToolbar strong {
+  font-size: 0.78rem;
+}
+
+.vs-editorToolbar > div > span {
+  overflow: hidden;
+  color: var(--vs-muted);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vs-editorToolbarActions > span.is-dirty {
+  color: var(--vs-attention);
+}
+
+.vs-editorToolbar kbd {
+  padding-left: 0.35rem;
+  color: currentColor;
+  font-family: var(--vs-mono);
+  font-size: 0.58rem;
+  opacity: 0.62;
+}
+
+.vs-editorBody {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.vs-editorExplorer {
+  min-width: 0;
+  overflow: auto;
+  border-right: 1px solid var(--vs-border);
+  background: var(--vs-bg-raised);
+}
+
+.vs-editorExplorerTitle {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  overflow: hidden;
+  padding: 0.65rem 0.75rem 0.55rem;
+  background: var(--vs-bg-raised);
+  color: var(--vs-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.vs-fileTree {
+  padding: 0.15rem 0 0.75rem;
+}
+
+.vs-fileTreeState {
+  padding: 0.7rem 0.75rem;
+  color: var(--vs-muted);
+  font-size: 0.74rem;
+}
+
+.vs-fileRow {
+  display: grid;
+  grid-template-columns: 14px 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-height: 26px;
+  padding: 0.1rem 0.55rem 0.1rem calc(0.45rem + var(--vs-tree-depth) * 0.78rem);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--vs-muted);
+  text-align: left;
+}
+
+.vs-fileRow:hover {
+  background: var(--vs-bg-hover);
+  color: var(--vs-text);
+}
+
+.vs-fileRow.is-active {
+  background: var(--vs-accent-soft);
+  color: var(--vs-text);
+}
+
+.vs-fileRow.is-dir .vs-fileName {
+  color: var(--vs-text);
+  font-weight: 550;
+}
+
+.vs-fileChevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  color: color-mix(in srgb, var(--vs-text) 45%, var(--vs-muted));
+  font-size: 0.62rem;
+  line-height: 1;
+}
+
+.vs-fileRow:hover .vs-fileChevron {
+  color: var(--vs-text);
+}
+
+.vs-fileChevron.is-blank {
+  visibility: hidden;
+}
+
+.vs-fileChevron svg {
+  transition: transform 120ms ease;
+}
+
+.vs-fileChevron svg.is-open {
+  transform: rotate(90deg);
+}
+
+.vs-fileChevron svg.is-loading {
+  animation: vs-browser-spin 0.7s linear infinite;
+}
+
+.vs-fileName {
+  overflow: hidden;
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vs-editorMain {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.vs-editorTabs {
+  display: flex;
+  min-height: 37px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--vs-border);
+  background: var(--vs-bg-raised);
+}
+
+.vs-editorTab {
+  display: flex;
+  align-items: stretch;
+  min-width: 120px;
+  max-width: 220px;
+  border-right: 1px solid var(--vs-border);
+  border-top: 2px solid transparent;
+  color: var(--vs-muted);
+}
+
+.vs-editorTab.is-active {
+  border-top-color: var(--vs-accent);
+  background: var(--vs-bg);
+  color: var(--vs-text);
+}
+
+.vs-editorTabSelect {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0 0.25rem 0 0.65rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.vs-editorTabSelect span:last-child {
+  overflow: hidden;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vs-editorDirty {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.vs-editorDirty.is-dirty {
+  background: var(--vs-attention);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vs-attention) 14%, transparent);
+}
+
+.vs-editorTabClose {
+  width: 27px;
+  border: 0;
+  background: transparent;
+  color: var(--vs-muted);
+}
+
+.vs-editorTabClose:hover {
+  background: var(--vs-bg-hover);
+  color: var(--vs-text);
+}
+
+.vs-editorBreadcrumb {
+  overflow: hidden;
+  min-height: 27px;
+  padding: 0.35rem 0.75rem;
+  border-bottom: 1px solid var(--vs-border);
+  color: var(--vs-muted);
+  font-family: var(--vs-mono);
+  font-size: 0.64rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vs-editorCanvas,
+.vs-codeMirror,
+.vs-codeMirror .cm-editor {
+  min-height: 0;
+  height: 100%;
+}
+
+.vs-editorEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 0;
+  padding: 2rem;
+  color: var(--vs-muted);
+  text-align: center;
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 35%, color-mix(in srgb, var(--vs-accent) 10%, transparent), transparent 70%);
+}
+
+.vs-editorEmpty strong {
+  color: var(--vs-text);
+  font-size: 0.95rem;
+}
+
+.vs-editorEmpty span {
+  max-width: 28rem;
+  color: var(--vs-muted);
+  font-family: var(--vs-mono);
+  font-size: 0.7rem;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.vs-fileIcon {
+  display: block;
+  flex-shrink: 0;
+}
+
+.vs-editorExplorerActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.vs-editorEmptyActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: center;
+  margin-top: 0.25rem;
+}
+
+.vs-editorCanvas {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--vs-bg);
+}
+
+.vs-mediaPreview {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  background:
+    linear-gradient(45deg, color-mix(in srgb, var(--vs-border) 55%, transparent) 25%, transparent 25%),
+    linear-gradient(-45deg, color-mix(in srgb, var(--vs-border) 55%, transparent) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, color-mix(in srgb, var(--vs-border) 55%, transparent) 75%),
+    linear-gradient(-45deg, transparent 75%, color-mix(in srgb, var(--vs-border) 55%, transparent) 75%);
+  background-size: 18px 18px;
+  background-position: 0 0, 0 9px, 9px -9px, -9px 0;
+  background-color: var(--vs-bg);
+}
+
+.vs-mediaPreviewMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.85rem;
+  border-bottom: 1px solid var(--vs-border);
+  background: var(--vs-bg-raised);
+}
+
+.vs-mediaPreviewMeta strong {
+  font-size: 0.82rem;
+}
+
+.vs-mediaPreviewMeta span {
+  color: var(--vs-muted);
+  font-size: 0.72rem;
+}
+
+.vs-mediaPreviewStage {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  overflow: auto;
+  padding: 1.25rem;
+}
+
+.vs-mediaPreviewStage img {
+  max-width: min(100%, 1200px);
+  max-height: calc(100vh - 220px);
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  background: #0a0e16;
+}
+
+.vs-mediaPreviewStage.is-binary {
+  place-items: stretch;
+}
+
+.vs-mediaFrame {
+  width: 100%;
+  min-height: min(70vh, 720px);
+  border: 0;
+  border-radius: 10px;
+  background: #111;
+}
+
+.vs-mediaVideo {
+  width: min(100%, 960px);
+  max-height: min(70vh, 640px);
+  margin: auto;
+  border-radius: 10px;
+  background: #000;
+}
+
+.vs-mediaBinary {
+  display: grid;
+  gap: 0.45rem;
+  place-content: center;
+  place-items: center;
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--vs-muted);
+}
+
+.vs-mediaBinary strong {
+  color: var(--vs-text);
+  font-size: 1rem;
+}
+
+.vs-editorCanvas .vs-codeMirror,
+.vs-editorCanvas .cm-editor,
+.vs-editorCanvas .cm-scroller {
+  height: 100% !important;
+  min-height: 0;
+}
+
+@media (max-width: 1050px) {
+  .vs-editorBody {
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+}
