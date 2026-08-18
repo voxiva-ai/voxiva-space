@@ -19,18 +19,19 @@ use std::{
 use tauri::{
     image::Image,
     menu::{Menu, MenuItem},
-    tray::TrayIconBuilder,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, State,
 };
 
 use browser::{
     browser_close, browser_close_all, browser_configure_inspector, browser_hide, browser_hide_all,
-    browser_navigate, browser_open, browser_open_devtools, browser_reload, browser_set_bounds,
-    browser_take_selection, browser_toggle_inspector, BrowserRegistry,
+    browser_navigate, browser_open, browser_open_devtools, browser_page_meta, browser_reload,
+    browser_set_bounds, browser_take_selection, browser_toggle_inspector, write_annotate_context,
+    BrowserRegistry,
 };
 use companion::{
-    companion_push_snapshot, companion_set_workspace, companion_start, companion_status,
-    companion_stop, empty_state,
+    companion_append_output, companion_push_snapshot, companion_set_workspace, companion_start,
+    companion_status, companion_stop, empty_state,
 };
 
 #[derive(Serialize)]
@@ -270,10 +271,55 @@ fn mime_for_path(path: &Path) -> &'static str {
         "pdf" => "application/pdf",
         "mp4" => "video/mp4",
         "webm" => "video/webm",
+        "mov" | "qt" => "video/quicktime",
+        "m4v" => "video/x-m4v",
+        "mkv" => "video/x-matroska",
+        "avi" => "video/x-msvideo",
+        "ogv" => "video/ogg",
         "mp3" => "audio/mpeg",
         "wav" => "audio/wav",
+        "ogg" => "audio/ogg",
+        "m4a" => "audio/mp4",
+        "aac" => "audio/aac",
+        "flac" => "audio/flac",
+        "opus" => "audio/opus",
         _ => "application/octet-stream",
     }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceFileInfo {
+    path: String,
+    absolute_path: String,
+    mime: String,
+    size: u64,
+}
+
+/// Absolute path + mime for WebView asset:// preview (images / video / PDF).
+#[tauri::command]
+fn workspace_file_info(
+    workspace_root: String,
+    relative_path: String,
+) -> Result<WorkspaceFileInfo, String> {
+    let (root, target) = resolve_workspace_path(&workspace_root, &relative_path)?;
+    let metadata = target
+        .metadata()
+        .map_err(|error| format!("Failed to inspect file: {error}"))?;
+    if !metadata.is_file() {
+        return Err("Workspace path is not a file".into());
+    }
+    let path = target
+        .strip_prefix(root)
+        .map_err(|_| "File escaped its workspace".to_string())?
+        .to_string_lossy()
+        .replace('\\', "/");
+    Ok(WorkspaceFileInfo {
+        size: metadata.len(),
+        mime: mime_for_path(&target).to_string(),
+        absolute_path: target.to_string_lossy().to_string(),
+        path,
+    })
 }
 
 fn encode_base64(bytes: &[u8]) -> String {
@@ -298,6 +344,89 @@ fn encode_base64(bytes: &[u8]) -> String {
         });
     }
     out
+}
+
+fn decode_base64(input: &str) -> Result<Vec<u8>, String> {
+    fn val(c: u8) -> Result<u8, String> {
+        match c {
+            b'A'..=b'Z' => Ok(c - b'A'),
+            b'a'..=b'z' => Ok(c - b'a' + 26),
+            b'0'..=b'9' => Ok(c - b'0' + 52),
+            b'+' => Ok(62),
+            b'/' => Ok(63),
+            _ => Err("Invalid base64".into()),
+        }
+    }
+    let cleaned: Vec<u8> = input
+        .bytes()
+        .filter(|b| !b.is_ascii_whitespace())
+        .collect();
+    if cleaned.len() % 4 != 0 {
+        return Err("Invalid base64 length".into());
+    }
+    let mut out = Vec::with_capacity(cleaned.len() / 4 * 3);
+    for chunk in cleaned.chunks(4) {
+        let a = val(chunk[0])?;
+        let b = val(chunk[1])?;
+        let c = if chunk[2] == b'=' {
+            0
+        } else {
+            val(chunk[2])?
+        };
+        let d = if chunk[3] == b'=' {
+            0
+        } else {
+            val(chunk[3])?
+        };
+        let n = ((a as u32) << 18) | ((b as u32) << 12) | ((c as u32) << 6) | (d as u32);
+        out.push(((n >> 16) & 0xff) as u8);
+        if chunk[2] != b'=' {
+            out.push(((n >> 8) & 0xff) as u8);
+        }
+        if chunk[3] != b'=' {
+            out.push((n & 0xff) as u8);
+        }
+    }
+    Ok(out)
+}
+
+#[derive(Deserialize)]
+struct WriteTempFileRequest {
+    #[serde(rename = "contentsBase64")]
+    contents_base64: String,
+    extension: String,
+}
+
+/// Save clipboard / drop bytes for OpenCode image paste (path handoff).
+#[tauri::command]
+fn write_temp_file(request: WriteTempFileRequest) -> Result<String, String> {
+    let ext = request
+        .extension
+        .trim()
+        .trim_start_matches('.')
+        .to_ascii_lowercase();
+    const ALLOWED: &[&str] = &[
+        "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "pdf", "txt", "md", "bin",
+    ];
+    if !ALLOWED.contains(&ext.as_str()) {
+        return Err("Unsupported temp file type".into());
+    }
+    let bytes = decode_base64(&request.contents_base64)?;
+    if bytes.is_empty() {
+        return Err("Empty file".into());
+    }
+    if bytes.len() as u64 > MAX_BINARY_FILE_SIZE {
+        return Err("File is too large".into());
+    }
+    let dir = std::env::temp_dir().join("voxiva-paste");
+    fs::create_dir_all(&dir).map_err(|e| format!("Failed to create temp dir: {e}"))?;
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let path = dir.join(format!("paste-{stamp}.{ext}"));
+    fs::write(&path, bytes).map_err(|e| format!("Failed to write temp file: {e}"))?;
+    Ok(path.display().to_string())
 }
 
 #[tauri::command]
@@ -557,17 +686,45 @@ fn get_default_terminal_cwd() -> String {
     }
 }
 
+fn pick_folder_dialog(
+    window: tauri::WebviewWindow,
+    start: Option<PathBuf>,
+) -> Result<Option<String>, String> {
+    let mut dialog = rfd::FileDialog::new().set_title("Choose project folder");
+    dialog = dialog.set_parent(&window);
+    if let Some(dir) = start {
+        dialog = dialog.set_directory(dir);
+    }
+    Ok(dialog
+        .pick_folder()
+        .map(|path| path.to_string_lossy().to_string()))
+}
+
 #[tauri::command]
-fn pick_workspace_folder(app: AppHandle) -> Result<Option<String>, String> {
+async fn pick_workspace_folder(
+    app: AppHandle,
+    start_dir: Option<String>,
+) -> Result<Option<String>, String> {
     let window = app
         .get_webview_window("main")
         .ok_or_else(|| "Main window missing".to_string())?;
-    // Parent the native dialog to the app window — without this, Windows often
-    // shows nothing / appears to "do nothing" when Browse is clicked.
-    let picked = rfd::FileDialog::new()
-        .set_parent(&window)
-        .pick_folder();
-    Ok(picked.map(|path| path.to_string_lossy().to_string()))
+
+    let start = start_dir
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_dir())
+        .or_else(|| {
+            let home = get_default_terminal_cwd();
+            let path = std::path::PathBuf::from(&home);
+            path.is_dir().then_some(path)
+        });
+
+    // Native folder dialogs block; keep them off the async command thread.
+    tauri::async_runtime::spawn_blocking(move || pick_folder_dialog(window, start))
+        .await
+        .map_err(|error| format!("Folder picker failed: {error}"))?
 }
 
 #[tauri::command]
@@ -1293,7 +1450,7 @@ pub fn run() {
                 }
             }
 
-            // System tray — same affordance as Voxiva Voice.
+            // System tray — left-click shows window; menu on right-click.
             {
                 let open = MenuItem::with_id(app, "vs_open", "Open Voxiva Space", true, None::<&str>)?;
                 let quit = MenuItem::with_id(app, "vs_quit", "Quit", true, None::<&str>)?;
@@ -1301,11 +1458,28 @@ pub fn run() {
                 let tray_icon = window_icon
                     .or_else(|| app.default_window_icon().cloned())
                     .ok_or("missing app icon for tray")?;
-                let _tray = TrayIconBuilder::new()
+                let show_main = |app: &AppHandle| {
+                    if let Some(w) = app.get_webview_window("main") {
+                        let _ = w.show();
+                        let _ = w.unminimize();
+                        let _ = w.set_focus();
+                    }
+                };
+                let tray = TrayIconBuilder::new()
                     .icon(tray_icon)
                     .tooltip("Voxiva Space")
                     .menu(&menu)
-                    .show_menu_on_left_click(true)
+                    .show_menu_on_left_click(false)
+                    .on_tray_icon_event(move |tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            show_main(tray.app_handle());
+                        }
+                    })
                     .on_menu_event(|app, event| {
                         if event.id == "vs_open" {
                             if let Some(w) = app.get_webview_window("main") {
@@ -1318,6 +1492,8 @@ pub fn run() {
                         }
                     })
                     .build(app)?;
+                // Keep tray alive for the process lifetime (dropping it removes the icon).
+                std::mem::forget(tray);
             }
 
             Ok(())
@@ -1330,7 +1506,9 @@ pub fn run() {
             list_workspace_dir,
             read_text_file,
             read_binary_file,
+            workspace_file_info,
             write_text_file,
+            write_temp_file,
             create_workspace_dir,
             find_component_files,
             check_commands,
@@ -1350,14 +1528,17 @@ pub fn run() {
             browser_hide_all,
             browser_close_all,
             browser_open_devtools,
+            browser_page_meta,
             browser_toggle_inspector,
             browser_take_selection,
             browser_configure_inspector,
+            write_annotate_context,
             companion_status,
             companion_start,
             companion_stop,
             companion_set_workspace,
             companion_push_snapshot,
+            companion_append_output,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Voxiva Space");

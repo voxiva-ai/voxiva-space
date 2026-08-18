@@ -125,9 +125,36 @@ const chrome = EditorView.theme({
     fontSize: "11.5px",
     opacity: "0.55",
   },
+  ".cm-foldGutter": {
+    width: "16px",
+  },
   ".cm-foldGutter .cm-gutterElement": {
-    padding: "0 4px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0",
     color: "var(--vs-muted)",
+  },
+  ".cm-foldGutter .vs-foldMark": {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "14px",
+    height: "14px",
+    opacity: "0.55",
+    cursor: "pointer",
+  },
+  ".cm-foldGutter .vs-foldMark svg": {
+    display: "block",
+    transformOrigin: "50% 50%",
+    transition: "transform 120ms ease",
+  },
+  ".cm-foldGutter .vs-foldMark.is-open svg": {
+    transform: "rotate(90deg)",
+  },
+  ".cm-foldGutter .vs-foldMark:hover": {
+    opacity: "1",
+    color: "var(--vs-text)",
   },
   ".cm-activeLine": {
     backgroundColor: "color-mix(in srgb, var(--vs-accent) 8%, transparent)",

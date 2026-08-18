@@ -14,12 +14,15 @@ import javascriptIcon from "material-icon-theme/icons/javascript.svg";
 import jsonIcon from "material-icon-theme/icons/json.svg";
 import licenseIcon from "material-icon-theme/icons/license.svg";
 import markdownIcon from "material-icon-theme/icons/markdown.svg";
+import pdfIcon from "material-icon-theme/icons/pdf.svg";
 import pythonIcon from "material-icon-theme/icons/python.svg";
 import reactIcon from "material-icon-theme/icons/react.svg";
 import rustIcon from "material-icon-theme/icons/rust.svg";
 import sassIcon from "material-icon-theme/icons/sass.svg";
 import svgIcon from "material-icon-theme/icons/svg.svg";
 import typescriptIcon from "material-icon-theme/icons/typescript.svg";
+import videoIcon from "material-icon-theme/icons/video.svg";
+import audioIcon from "material-icon-theme/icons/audio.svg";
 import viteIcon from "material-icon-theme/icons/vite.svg";
 import yamlIcon from "material-icon-theme/icons/yaml.svg";
 
@@ -38,6 +41,24 @@ const extensionIcons: Record<string, string> = {
   jpeg: imageIcon,
   gif: imageIcon,
   webp: imageIcon,
+  bmp: imageIcon,
+  ico: imageIcon,
+  avif: imageIcon,
+  mp4: videoIcon,
+  webm: videoIcon,
+  mov: videoIcon,
+  m4v: videoIcon,
+  mkv: videoIcon,
+  avi: videoIcon,
+  ogv: videoIcon,
+  mp3: audioIcon,
+  wav: audioIcon,
+  ogg: audioIcon,
+  m4a: audioIcon,
+  aac: audioIcon,
+  flac: audioIcon,
+  opus: audioIcon,
+  pdf: pdfIcon,
   py: pythonIcon,
   rs: rustIcon,
   sass: sassIcon,

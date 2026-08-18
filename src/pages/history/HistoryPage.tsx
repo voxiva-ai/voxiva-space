@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useSpace } from "@/features/workspace/SpaceContext";
+import { useSpace, useView } from "@/features/workspace/SpaceContext";
 import { ChevronLeft, ChevronRight, Trash01 } from "@untitledui/icons";
 
 type RangeId = "all" | "today" | "week" | "month" | "day";
@@ -46,12 +46,12 @@ export function HistoryPage() {
     recentHistory,
     workspaces,
     selectWorkspace,
-    setView,
     clearHistory,
     removeHistoryItem,
     locale,
     t,
   } = useSpace();
+  const { setView } = useView();
   const [range, setRange] = useState<RangeId>("all");
   const [cursor, setCursor] = useState(() => {
     const now = new Date();

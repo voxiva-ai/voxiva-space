@@ -5,7 +5,8 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Calendar, ChevronLeft, ChevronRight, CodeBrowser, Plus, Trash01, XClose } from "@untitledui/icons";
+import { Calendar, ChevronLeft, ChevronRight, CodeBrowser, Plus, Trash01 } from "@untitledui/icons";
+import { IconX } from "@/components/icons";
 import { DatePicker } from "@/components/DatePicker";
 import { PrioritySelect } from "@/components/PrioritySelect";
 import { TerminalPane } from "@/features/terminal/components/TerminalPane";
@@ -517,7 +518,7 @@ export function BoardPage() {
                 {t("board.ask")}
               </button>
               <button type="button" className="vs-iconBtn" title={t("assist.close")} onClick={() => void closeAssist()}>
-                <XClose size={15} aria-hidden />
+                <IconX size={15} />
               </button>
             </div>
           </header>

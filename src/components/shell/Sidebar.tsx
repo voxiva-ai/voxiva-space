@@ -1,19 +1,69 @@
-import { useSpace } from "@/features/workspace/SpaceContext";
+import { useMemo } from "react";
+import {
+  useSpace,
+  useView,
+  type AgentRun,
+} from "@/features/workspace/SpaceContext";
+import { collectSessionIds } from "@/features/workspace/layout";
 import type { ViewId } from "@/lib/types";
 import type { ComponentType } from "react";
 import {
+  Pin01,
+  ArrowUpRight,
   Calendar,
   ClockRewind,
   CodeBrowser,
   Globe02,
   LayoutGrid01,
-  LayoutLeft,
   Plus,
   Settings01,
   TerminalSquare,
+  Trash01,
   Users01,
+  XClose,
 } from "@untitledui/icons";
+import { IconSidebar } from "@/components/icons";
 import logoUrl from "@/assets/brand/voxiva-space-mark.svg";
+
+function orderWorkspaces<T extends { pinned?: boolean }>(list: T[]) {
+  return [...list].sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)));
+}
+
+const MAX_RECENT_AGENTS = 30;
+
+/** Agent ids with a dedicated brand badge class (`.vs-agentBadge.is-…`). */
+const AGENT_BADGE_IDS = new Set([
+  "opencode",
+  "claude",
+  "codex",
+  "gemini",
+  "aider",
+  "cursor-agent",
+  "amp",
+  "goose",
+  "shell",
+]);
+
+function startOfDay(ts: number) {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function localeTag(locale: string) {
+  return locale.startsWith("ru") ? "ru-RU" : "en-US";
+}
+
+function agentInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0]!.slice(0, 1).toUpperCase();
+  return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
+}
+
+function agentBadgeClass(agentId: string) {
+  return AGENT_BADGE_IDS.has(agentId) ? agentId : "default";
+}
 
 const PRIMARY_NAV: Array<{
   id: ViewId;
@@ -42,7 +92,77 @@ type SidebarProps = {
 };
 
 export function Sidebar({ collapsed, onCollapse, onExpand, onNewSpace }: SidebarProps) {
-  const { view, setView, workspaces, activeWorkspace, selectWorkspace, t } = useSpace();
+  const {
+    workspaces,
+    activeWorkspace,
+    selectWorkspace,
+    toggleWorkspacePinned,
+    sessions,
+    t,
+    locale,
+    agentRuns,
+    resumeAgentRun,
+    removeAgentRun,
+    clearAgentRuns,
+  } = useSpace();
+  const { view, setView } = useView();
+
+  const ordered = useMemo(() => orderWorkspaces(workspaces), [workspaces]);
+
+  const goNav = (id: ViewId) => {
+    setView(id);
+  };
+
+  /** Recent agent runs grouped by day (today / yesterday / date), newest first. */
+  const runGroups = useMemo(() => {
+    const runs = (agentRuns ?? []).slice(0, MAX_RECENT_AGENTS);
+    if (runs.length === 0) return [];
+    const now = Date.now();
+    const today = startOfDay(now);
+    const yesterday = startOfDay(now - 86_400_000);
+    const loc = localeTag(locale);
+    const groups: Array<{ label: string; runs: AgentRun[] }> = [];
+    let current: { label: string; runs: AgentRun[] } | null = null;
+    for (const run of runs) {
+      const day = startOfDay(run.at);
+      const label =
+        day === today
+          ? t("recentAgents.today")
+          : day === yesterday
+            ? t("recentAgents.yesterday")
+            : new Date(run.at).toLocaleDateString(loc, { day: "numeric", month: "long" });
+      if (!current || current.label !== label) {
+        current = { label, runs: [] };
+        groups.push(current);
+      }
+      current.runs.push(run);
+    }
+    return groups;
+  }, [agentRuns, t, locale]);
+
+  const resumeRun = (run: AgentRun) => {
+    if (!resumeAgentRun) return;
+    void resumeAgentRun(run).then(() => setView("space"));
+  };
+
+  const formatRunTime = (at: number) =>
+    new Date(at).toLocaleTimeString(localeTag(locale), {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+  const attentionByWs = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const ws of workspaces) {
+      const ids = collectSessionIds(ws.layout);
+      map.set(
+        ws.id,
+        ids.some((id) => sessions[id]?.needsAttention),
+      );
+    }
+    return map;
+  }, [workspaces, sessions]);
 
   if (collapsed) {
     return (
@@ -58,12 +178,14 @@ export function Sidebar({ collapsed, onCollapse, onExpand, onNewSpace }: Sidebar
         </button>
 
         <div className="vs-railWorkspaces" role="group" aria-label={t("spaces.title")}>
-          {workspaces.slice(0, 8).map((ws) => (
+          {ordered.slice(0, 8).map((ws) => (
             <button
               key={ws.id}
               type="button"
-              className={`vs-railWs${activeWorkspace?.id === ws.id ? " is-active" : ""}`}
-              title={ws.name}
+              className={`vs-railWs${activeWorkspace?.id === ws.id ? " is-active" : ""}${
+                attentionByWs.get(ws.id) ? " is-attention" : ""
+              }${ws.pinned ? " is-pinned" : ""}`}
+              title={ws.pinned ? `${ws.name} · ${t("spaces.pinned")}` : ws.name}
               aria-label={ws.name}
               onClick={() => {
                 selectWorkspace(ws.id);
@@ -71,8 +193,13 @@ export function Sidebar({ collapsed, onCollapse, onExpand, onNewSpace }: Sidebar
               }}
             >
               <span className={`vs-railWsMark is-${ws.color}`} aria-hidden>
-                <TerminalSquare size={18} />
+                <TerminalSquare size={22} strokeWidth={2.35} />
               </span>
+              {ws.pinned ? (
+                <span className="vs-railWsPin" aria-hidden>
+                  <Pin01 size={10} />
+                </span>
+              ) : null}
             </button>
           ))}
           <button
@@ -98,7 +225,7 @@ export function Sidebar({ collapsed, onCollapse, onExpand, onNewSpace }: Sidebar
                 className={`vs-railBtn${view === item.id ? " is-active" : ""}`}
                 title={t(item.labelKey)}
                 aria-label={t(item.labelKey)}
-                onClick={() => setView(item.id)}
+                onClick={() => goNav(item.id)}
               >
                 <NavIcon size={17} aria-hidden />
               </button>
@@ -125,12 +252,17 @@ export function Sidebar({ collapsed, onCollapse, onExpand, onNewSpace }: Sidebar
     <aside className="vs-sidebar">
       <div className="vs-sidebarBrand">
         <img src={logoUrl} alt="" className="vs-sidebarLogo" />
-        <div>
-          <strong>
-            Voxiva <span>Space</span>
-          </strong>
-          <small>{t("brand.sub")}</small>
-        </div>
+        <span className="vs-brandName">Voxiva Space</span>
+        <span className="vs-spacer" />
+        <button
+          type="button"
+          className="vs-iconBtn vs-addSpaceIcon"
+          title={t("spaces.add")}
+          aria-label={t("spaces.add")}
+          onClick={onNewSpace}
+        >
+          <Plus size={16} aria-hidden />
+        </button>
         <button
           type="button"
           className="vs-iconBtn is-collapse"
@@ -138,44 +270,68 @@ export function Sidebar({ collapsed, onCollapse, onExpand, onNewSpace }: Sidebar
           aria-label={t("shell.collapse")}
           onClick={onCollapse}
         >
-          <LayoutLeft size={16} aria-hidden />
+          <IconSidebar size={16} />
         </button>
       </div>
 
       <div className="vs-workspaceList">
-        <div className="vs-workspaceListHeader">
-          <span className="vs-spacesLabel">{t("spaces.title")}</span>
-          <button
-            type="button"
-            className="vs-addSpaceBtn"
-            title={t("spaces.add")}
-            aria-label={t("spaces.add")}
-            onClick={onNewSpace}
-          >
-            <Plus size={14} aria-hidden />
-            <span>{t("spaces.add")}</span>
-          </button>
-        </div>
-        {workspaces.map((ws, index) => (
-          <button
+        {ordered.map((ws, index) => (
+          <div
             key={ws.id}
-            type="button"
-            className={`vs-wsItem${activeWorkspace?.id === ws.id ? " is-active" : ""}`}
-            onClick={() => {
-              selectWorkspace(ws.id);
-              setView("space");
-            }}
+            className={`vs-wsItem${activeWorkspace?.id === ws.id ? " is-active" : ""}${
+              attentionByWs.get(ws.id) ? " is-attention" : ""
+            }${ws.pinned ? " is-pinned" : ""}`}
           >
-            <span className={`vs-wsAvatar is-${ws.color}`} aria-hidden>
-              <TerminalSquare size={17} />
-            </span>
-            <span>
-              <strong>
-                {index + 1}. {ws.name}
-              </strong>
-              <small>{ws.branch ? `${ws.branch} · ${ws.cwd}` : ws.cwd}</small>
-            </span>
-          </button>
+            <button
+              type="button"
+              className="vs-wsItemMain"
+              onClick={() => {
+                selectWorkspace(ws.id);
+                setView("space");
+              }}
+            >
+              <span className={`vs-wsAvatar is-${ws.color}`} aria-hidden>
+                <TerminalSquare size={18} strokeWidth={2.35} />
+              </span>
+              <span>
+                <strong>
+                  {index + 1}. {ws.name}
+                </strong>
+                {ws.branch ? <small>{ws.branch}</small> : null}
+              </span>
+              {attentionByWs.get(ws.id) ? (
+                <span className="vs-attnDot" title={t("term.attention")} aria-label={t("term.attention")} />
+              ) : null}
+            </button>
+            <button
+              type="button"
+              className={`vs-wsItemPin${ws.pinned ? " is-on" : ""}`}
+              title={ws.pinned ? t("spaces.unpin") : t("spaces.pin")}
+              aria-label={ws.pinned ? t("spaces.unpin") : t("spaces.pin")}
+              aria-pressed={Boolean(ws.pinned)}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleWorkspacePinned(ws.id);
+              }}
+            >
+              <Pin01 size={14} aria-hidden />
+            </button>
+            <button
+              type="button"
+              className="vs-wsItemGear"
+              title={t("space.settings.title")}
+              aria-label={t("space.settings.title")}
+              onClick={(e) => {
+                e.stopPropagation();
+                selectWorkspace(ws.id);
+                window.dispatchEvent(
+                  new CustomEvent("voxiva-space-settings", { detail: { workspaceId: ws.id } }),
+                );
+              }}
+            >
+              <Settings01 size={14} aria-hidden />
+            </button>
+          </div>
         ))}
         {workspaces.length === 0 && (
           <button type="button" className="vs-wsEmpty" onClick={onNewSpace}>
@@ -183,6 +339,86 @@ export function Sidebar({ collapsed, onCollapse, onExpand, onNewSpace }: Sidebar
           </button>
         )}
       </div>
+
+      <section className="vs-recentAgents" aria-label={t("recentAgents.title")}>
+        <div className="vs-recentAgentsHead">
+          <span className="vs-recentAgentsTitle">{t("recentAgents.title")}</span>
+          <div className="vs-recentAgentsActions">
+            {runGroups.length > 0 ? (
+              <button
+                type="button"
+                className="vs-iconBtn vs-recentAgentsClear"
+                title={t("recentAgents.clear")}
+                aria-label={t("recentAgents.clear")}
+                onClick={() => clearAgentRuns?.()}
+              >
+                <Trash01 size={13} aria-hidden />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="vs-iconBtn vs-recentAgentsOpen"
+              title={t("recentAgents.openAgents")}
+              aria-label={t("recentAgents.openAgents")}
+              onClick={() => setView("agents")}
+            >
+              <ArrowUpRight size={14} aria-hidden />
+            </button>
+          </div>
+        </div>
+
+        {runGroups.length === 0 ? (
+          <p className="vs-recentAgentsEmpty">{t("recentAgents.empty")}</p>
+        ) : (
+          <div className="vs-recentAgentsList">
+            {runGroups.map((group, gi) => (
+              <div key={`${group.label}-${gi}`} className="vs-recentAgentsGroup">
+                <div className="vs-recentAgentsGroupLabel">{group.label}</div>
+                {group.runs.map((run) => {
+                  const gone = !workspaces.some((ws) => ws.id === run.workspaceId);
+                  return (
+                    <div
+                      key={run.id}
+                      className={`vs-runItem${gone ? " is-gone" : ""}`}
+                      title={gone ? t("recentAgents.gone") : undefined}
+                    >
+                      <button
+                        type="button"
+                        className="vs-runItemMain"
+                        title={gone ? undefined : t("recentAgents.resume")}
+                        disabled={gone}
+                        onClick={() => resumeRun(run)}
+                      >
+                        <span
+                          className={`vs-agentBadge is-${agentBadgeClass(run.agentId)}`}
+                          aria-hidden
+                        >
+                          {agentInitials(run.agentName)}
+                        </span>
+                        <span className="vs-runItemBody">
+                          <strong>{run.agentName}</strong>
+                          <small>
+                            {run.workspaceName} · {formatRunTime(run.at)}
+                          </small>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="vs-runItemRemove"
+                        title={t("recentAgents.removeOne")}
+                        aria-label={t("recentAgents.removeOne")}
+                        onClick={() => removeAgentRun?.(run.id)}
+                      >
+                        <XClose size={12} aria-hidden />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <nav className="vs-nav" aria-label="Main">
         {PRIMARY_NAV.map((item) => {
@@ -192,7 +428,7 @@ export function Sidebar({ collapsed, onCollapse, onExpand, onNewSpace }: Sidebar
               key={item.id}
               type="button"
               className={`vs-navItem${view === item.id ? " is-active" : ""}`}
-              onClick={() => setView(item.id)}
+              onClick={() => goNav(item.id)}
             >
               <NavIcon size={17} className="vs-navIcon" aria-hidden />
               <span>{t(item.labelKey)}</span>

@@ -28,6 +28,7 @@ type CreateSpaceSetupProps = {
   showColor?: boolean;
   showPreview?: boolean;
   showBrowser?: boolean;
+  showAgents?: boolean;
   compact?: boolean;
 };
 
@@ -37,13 +38,15 @@ export function CreateSpaceSetup({
   showColor = true,
   showPreview = true,
   showBrowser = true,
+  showAgents = true,
   compact = false,
 }: CreateSpaceSetupProps) {
   const { agentAvailability, agentsScanned, refreshAgents, t } = useSpace();
 
   useEffect(() => {
+    if (!showAgents) return;
     void refreshAgents();
-  }, [refreshAgents]);
+  }, [refreshAgents, showAgents]);
 
   useEffect(() => {
     if (!agentsScanned) return;
@@ -110,44 +113,46 @@ export function CreateSpaceSetup({
           </div>
         </div>
 
-        <div className="vs-modalSection">
-          <span className="vs-modalLabel">
-            {t("projects.agents")}
-            <em>
-              {value.agentIds.length}/{slots}
-            </em>
-          </span>
-          <p className="vs-createAgentsHint">{t("projects.agentsHint")}</p>
-          <div className="vs-createAgentChips">
-            {selectableBots
-              .filter((bot) => isBotReady(bot, agentAvailability, agentsScanned))
-              .map((bot) => {
-              const selected = selectedSet.has(bot.id);
-              const full = !selected && value.agentIds.length >= slots;
-              return (
-                <button
-                  key={bot.id}
-                  type="button"
-                  className={`vs-createAgentChip${selected ? " is-selected" : ""}`}
-                  disabled={full}
-                  title={bot.description}
-                  onClick={() => toggleAgent(bot.id)}
-                >
-                  <strong>{bot.name}</strong>
-                  {selected ? (
-                    <span className="vs-createAgentOrder">
-                      {value.agentIds.indexOf(bot.id) + 1}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-            {agentsScanned &&
-              selectableBots.every((bot) => !isBotReady(bot, agentAvailability, agentsScanned)) && (
-                <p className="vs-createAgentsHint">{t("projects.agentsNoneInstalled")}</p>
-              )}
+        {showAgents ? (
+          <div className="vs-modalSection">
+            <span className="vs-modalLabel">
+              {t("projects.agents")}
+              <em>
+                {value.agentIds.length}/{slots}
+              </em>
+            </span>
+            <p className="vs-createAgentsHint">{t("projects.agentsHint")}</p>
+            <div className="vs-createAgentChips">
+              {selectableBots
+                .filter((bot) => isBotReady(bot, agentAvailability, agentsScanned))
+                .map((bot) => {
+                const selected = selectedSet.has(bot.id);
+                const full = !selected && value.agentIds.length >= slots;
+                return (
+                  <button
+                    key={bot.id}
+                    type="button"
+                    className={`vs-createAgentChip${selected ? " is-selected" : ""}`}
+                    disabled={full}
+                    title={bot.description}
+                    onClick={() => toggleAgent(bot.id)}
+                  >
+                    <strong>{bot.name}</strong>
+                    {selected ? (
+                      <span className="vs-createAgentOrder">
+                        {value.agentIds.indexOf(bot.id) + 1}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+              {agentsScanned &&
+                selectableBots.every((bot) => !isBotReady(bot, agentAvailability, agentsScanned)) && (
+                  <p className="vs-createAgentsHint">{t("projects.agentsNoneInstalled")}</p>
+                )}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {showBrowser && (
           <label className="vs-checkRow">

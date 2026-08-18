@@ -1,4 +1,5 @@
 :root,
+[data-theme="voxiva"],
 [data-theme="default"] {
   color-scheme: dark;
   --vs-bg: #07090e;
@@ -33,203 +34,37 @@
   --vs-term-chrome-muted: #8a93a8;
 }
 
-[data-theme="dracula"] {
-  color-scheme: dark;
-  --vs-bg: #16171f;
-  --vs-bg-raised: #1e202b;
-  --vs-bg-hover: #2a2d3b;
-  --vs-surface: #252734;
-  --vs-border: rgba(248, 248, 242, 0.07);
-  --vs-border-strong: rgba(248, 248, 242, 0.14);
-  --vs-text: #f8f8f2;
-  --vs-muted: #9ea0b5;
-  --vs-accent: #ff79c6;
-  --vs-on-accent: #1a1b24;
-  --vs-accent-2: #bd93f9;
-  --vs-accent-soft: rgba(255, 121, 198, 0.14);
-  --vs-attention: #f1fa8c;
-  --vs-attention-ring: rgba(241, 250, 140, 0.28);
-  --vs-ok: #50fa7b;
-  --vs-danger: #ff5555;
-  --vs-shadow: 0 18px 44px rgba(5, 6, 10, 0.52);
-  --vs-term-bg: #1e202b;
-  --vs-term-fg: #f8f8f2;
-  --vs-term-cursor: #ff79c6;
-  --vs-term-selection: #bd93f955;
-  --vs-term-chrome: #1e202b;
-  --vs-term-chrome-text: #f8f8f2;
-  --vs-term-chrome-muted: #9ea0b5;
-}
-
-[data-theme="dark"] {
-  color-scheme: dark;
-  --vs-bg: #000000;
-  --vs-bg-raised: #0a0a0a;
-  --vs-bg-hover: #171717;
-  --vs-surface: #111111;
-  --vs-border: rgba(255, 255, 255, 0.08);
-  --vs-border-strong: rgba(255, 255, 255, 0.16);
-  --vs-text: #f5f5f5;
-  --vs-muted: #949494;
-  --vs-accent: #ffffff;
-  --vs-on-accent: #000000;
-  --vs-accent-2: #d4d4d4;
-  --vs-accent-soft: rgba(255, 255, 255, 0.1);
-  --vs-attention: #efc35a;
-  --vs-attention-ring: rgba(239, 195, 90, 0.3);
-  --vs-ok: #3fd49a;
-  --vs-danger: #ff7b7b;
-  --vs-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
-  --vs-term-bg: #000000;
-  --vs-term-fg: #f0f0f0;
-  --vs-term-cursor: #ffffff;
-  --vs-term-selection: #ffffff33;
-  --vs-term-chrome: #000000;
-  --vs-term-chrome-text: #f5f5f5;
-  --vs-term-chrome-muted: #949494;
-}
-
-[data-theme="gruvbox"] {
-  color-scheme: dark;
-  --vs-bg: #1a1d1e;
-  --vs-bg-raised: #252525;
-  --vs-bg-hover: #3a3532;
-  --vs-surface: #2e2c2a;
-  --vs-border: rgba(235, 219, 178, 0.08);
-  --vs-border-strong: rgba(235, 219, 178, 0.16);
-  --vs-text: #ebdbb2;
-  --vs-muted: #a89984;
-  --vs-accent: #fe8019;
-  --vs-on-accent: #1a1d1e;
-  --vs-accent-2: #fabd2f;
-  --vs-accent-soft: rgba(254, 128, 25, 0.15);
-  --vs-attention: #fabd2f;
-  --vs-attention-ring: rgba(250, 189, 47, 0.3);
-  --vs-ok: #b8bb26;
-  --vs-danger: #fb4934;
-  --vs-shadow: 0 18px 44px rgba(20, 17, 15, 0.5);
-  --vs-term-bg: #252525;
-  --vs-term-fg: #ebdbb2;
-  --vs-term-cursor: #fe8019;
-  --vs-term-selection: #fe801944;
-  --vs-term-chrome: #252525;
-  --vs-term-chrome-text: #ebdbb2;
-  --vs-term-chrome-muted: #a89984;
-}
-
-[data-theme="cyber"] {
-  color-scheme: dark;
-  --vs-bg: #041316;
-  --vs-bg-raised: #081e23;
-  --vs-bg-hover: #0e2d34;
-  --vs-surface: #0a262c;
-  --vs-border: rgba(168, 238, 236, 0.07);
-  --vs-border-strong: rgba(168, 238, 236, 0.15);
-  --vs-text: #d8f3f1;
-  --vs-muted: #6f9fa2;
-  --vs-accent: #7b6ef0;
-  --vs-on-accent: #ffffff;
-  --vs-accent-2: #3ddbd9;
-  --vs-accent-soft: rgba(123, 110, 240, 0.16);
-  --vs-attention: #f7c873;
-  --vs-attention-ring: rgba(247, 200, 115, 0.28);
-  --vs-ok: #45d6a0;
-  --vs-danger: #ff6b81;
-  --vs-shadow: 0 18px 48px rgba(0, 8, 10, 0.55);
-  --vs-term-bg: #081e23;
-  --vs-term-fg: #d8f3f1;
-  --vs-term-cursor: #3ddbd9;
-  --vs-term-selection: #7b6ef044;
-  --vs-term-chrome: #081e23;
-  --vs-term-chrome-text: #d8f3f1;
-  --vs-term-chrome-muted: #6f9fa2;
-}
-
-[data-theme="light"] {
+/* Appearance-driven chrome (works for every catalog theme). */
+[data-appearance="light"] {
   color-scheme: light;
-  --vs-bg: #f1f4f9;
-  --vs-bg-raised: #ffffff;
-  --vs-bg-hover: #e6ebf4;
-  --vs-surface: #ffffff;
-  --vs-border: rgba(15, 23, 42, 0.09);
-  --vs-border-strong: rgba(15, 23, 42, 0.16);
-  --vs-text: #0f172a;
-  --vs-muted: #64748b;
-  --vs-accent: #2563eb;
-  --vs-on-accent: #ffffff;
-  --vs-accent-2: #3b82f6;
-  --vs-accent-soft: rgba(37, 99, 235, 0.11);
-  --vs-attention: #b45309;
-  --vs-attention-ring: rgba(180, 83, 9, 0.25);
-  --vs-ok: #15803d;
-  --vs-danger: #dc2626;
   --vs-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
-  --vs-term-bg: #ffffff;
-  --vs-term-fg: #0f172a;
-  --vs-term-cursor: #2563eb;
-  --vs-term-selection: #2563eb33;
-  --vs-term-chrome: #ffffff;
-  --vs-term-chrome-text: #0f172a;
-  --vs-term-chrome-muted: #64748b;
 }
 
-[data-theme="light"] .vs-settingsNavItem.is-active {
-  color: #0f172a;
+[data-appearance="light"] .vs-settingsNavItem.is-active {
+  color: var(--vs-text);
 }
 
-[data-theme="light"] .vs-badge {
-  background: rgba(15, 23, 42, 0.04);
+[data-appearance="light"] .vs-badge {
+  background: color-mix(in srgb, var(--vs-text) 6%, transparent);
 }
 
-[data-theme="glass"] {
-  color-scheme: dark;
-  --vs-bg: rgba(8, 12, 20, 0.42);
-  --vs-bg-raised: rgba(16, 22, 34, 0.55);
-  --vs-bg-hover: rgba(28, 38, 56, 0.62);
-  --vs-surface: rgba(20, 28, 42, 0.48);
-  --vs-border: rgba(255, 255, 255, 0.1);
-  --vs-border-strong: rgba(255, 255, 255, 0.18);
-  --vs-text: #f2f5fb;
-  --vs-muted: #a8b0c4;
-  --vs-accent: #6eb0ff;
-  --vs-on-accent: #031018;
-  --vs-accent-2: #9ad4ff;
-  --vs-accent-soft: rgba(110, 176, 255, 0.18);
-  --vs-attention: #efc35a;
-  --vs-attention-ring: rgba(239, 195, 90, 0.35);
-  --vs-ok: #3fd49a;
-  --vs-danger: #ff7b7b;
-  --vs-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
-  --vs-term-bg: rgba(12, 17, 25, 0.35);
-  --vs-term-fg: #e8ecf4;
-  --vs-term-cursor: #6eb0ff;
-  --vs-term-selection: #6eb0ff44;
-  --vs-term-chrome: rgba(12, 17, 25, 0.45);
-  --vs-term-chrome-text: #eef2f8;
-  --vs-term-chrome-muted: #8a93a8;
+[data-appearance="light"] .vs-pane,
+[data-appearance="light"] .vs-splitRoot,
+[data-appearance="light"] .vs-spaceStage {
+  background: var(--vs-term-bg);
 }
 
-[data-theme="glass"] body,
-[data-theme="glass"] #root,
-[data-theme="glass"] .vs-shell,
-[data-theme="glass"] .vs-sidebar,
-[data-theme="glass"] .vs-settingsNav,
-[data-theme="glass"] .vs-settingsPanel,
-[data-theme="glass"] .vs-assist,
-[data-theme="glass"] .vs-topbar {
-  backdrop-filter: blur(22px) saturate(1.35);
-  -webkit-backdrop-filter: blur(22px) saturate(1.35);
+[data-appearance="light"] .vs-paneTabBar,
+[data-appearance="light"] .vs-terminalHeader {
+  background: color-mix(in srgb, var(--vs-bg-raised) 88%, white);
+  border-bottom-color: var(--vs-border);
 }
 
-[data-theme="glass"] .vs-settingsBlock,
-[data-theme="glass"] .vs-themeChip {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
+[data-appearance="light"] .vs-iconBtn {
+  color: var(--vs-muted);
 }
 
-[data-theme="glass"] .vs-pane,
-[data-theme="glass"] .vs-terminalShell,
-[data-theme="glass"] .vs-xtermHost {
-  backdrop-filter: blur(14px) saturate(1.2);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+[data-appearance="dark"] .vs-paneTab.is-active {
+  color: var(--vs-text);
+  background: color-mix(in srgb, var(--vs-accent) 16%, transparent);
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   browserClose,
@@ -6,35 +6,52 @@ import {
   browserHide,
   browserOpen,
   browserOpenDevtools,
+  browserPageMeta,
   browserReload,
   browserSetBounds,
   browserTakeInspectorEvent,
   browserToggleInspector,
   findComponentFiles,
+  writeAnnotateContext,
   type BrowserSelection,
 } from "@/features/browser/api";
 import {
   IconCodeBrowser,
   IconExternalLink,
-  IconGrip,
   IconInspect,
   IconRefresh,
   IconSearch,
-  IconX,
 } from "@/components/icons";
 import { agentBots, isBotReady, resolveBotCommand } from "@/features/agents/bots";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import { clientError } from "@/lib/errors";
 import { openUrl, writeTerminalSession } from "@/features/terminal/api";
-import { normalizeBrowserUrl, suggestBrowserUrls } from "./url";
+import {
+  localhostAlt,
+  normalizeBrowserUrl,
+  rememberBrowserUrl,
+  resolveOmniboxInput,
+  getOmniboxSuggestions,
+} from "./url";
+
+export type BrowserTabMeta = {
+  title: string;
+  favicon: string;
+};
 
 type NativeBrowserProps = {
   url: string;
   onUrlChange: (url: string) => void;
+  /** Page title / favicon after load — for the pane tab label. */
+  onMetaChange?: (meta: BrowserTabMeta) => void;
   compact?: boolean;
+  /** When false, keep instance alive but hide the native webview (tab switch). */
+  active?: boolean;
   dragPaneId?: string;
   onClose?: () => void;
   instanceId?: string;
+  /** Extra chrome actions (unused in compact cmux chrome; kept for callers). */
+  actions?: ReactNode;
 };
 
 type Bounds = { x: number; y: number; width: number; height: number };
@@ -52,9 +69,10 @@ function sameBounds(a: Bounds | null, b: Bounds) {
 export function NativeBrowser({
   url,
   onUrlChange,
+  onMetaChange,
   compact = false,
+  active = true,
   dragPaneId,
-  onClose,
   instanceId,
 }: NativeBrowserProps) {
   const reactId = useId().replace(/:/g, "");
@@ -74,34 +92,46 @@ export function NativeBrowser({
   const suppressedRef = useRef(false);
   const lastBounds = useRef<Bounds | null>(null);
   const rafRef = useRef(0);
-  const restoredRef = useRef(false);
   const inspectorRef = useRef(false);
+  /** Last URL we intentionally applied — blocks parent↔child navigation loops. */
+  const appliedUrlRef = useRef("");
+  const navGenRef = useRef(0);
+  const sendActionRef = useRef<
+    (
+      picked: BrowserSelection,
+      instruction: string,
+      agentId: string,
+    ) => Promise<void>
+  >(async () => undefined);
   const [draft, setDraft] = useState(url || "");
   const [loadedUrl, setLoadedUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [live, setLive] = useState(false);
+  const [localError, setLocalError] = useState("");
+  const [omniboxOpen, setOmniboxOpen] = useState(false);
+  const [omniboxIndex, setOmniboxIndex] = useState(0);
   const bindHost = useCallback((node: HTMLDivElement | null) => {
     hostRef.current = node;
     setHostEl(node);
   }, []);
   const [inspector, setInspector] = useState(false);
-  const [selection, setSelection] = useState<BrowserSelection | null>(null);
   const [componentFiles, setComponentFiles] = useState<string[]>([]);
-  const [filesBusy, setFilesBusy] = useState(false);
-  const presets = useMemo(
-    () => suggestBrowserUrls(activeWorkspace?.cwd),
-    [activeWorkspace?.cwd],
+  const suggestions = useMemo(
+    () => getOmniboxSuggestions(draft, activeWorkspace?.cwd),
+    [draft, activeWorkspace?.cwd],
   );
   const availableAgents = useMemo(
     () =>
-      agentBots.filter(
-        (bot) => bot.command && (!agentsScanned || isBotReady(bot, agentAvailability, true)),
-      ),
+      agentBots.filter((bot) => {
+        if (!bot.command) return true; // Shell always available
+        return !agentsScanned || isBotReady(bot, agentAvailability, true);
+      }),
     [agentAvailability, agentsScanned],
   );
+  // Brush picker lists every agent — launch still works via “try anyway”.
   const inspectorAgents = useMemo(
-    () => availableAgents.map(({ id, name }) => ({ id, name })),
-    [availableAgents],
+    () => agentBots.map(({ id, name }) => ({ id, name })),
+    [],
   );
 
   useEffect(() => {
@@ -145,14 +175,15 @@ export function NativeBrowser({
   const openAt = useCallback(
     async (next: string, navigate = true) => {
       let bounds = readBounds();
-      for (let attempt = 0; attempt < 20 && !bounds; attempt += 1) {
-        await new Promise((resolve) => window.setTimeout(resolve, 35));
+      for (let attempt = 0; attempt < 40 && !bounds; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 25));
         if (!aliveRef.current) return;
         bounds = readBounds();
       }
       if (!bounds || !aliveRef.current) throw new Error("Browser area is not ready");
       lastBounds.current = bounds;
       setBusy(true);
+      setLocalError("");
       await browserOpen({ label, url: next, ...bounds, navigate });
       if (!aliveRef.current) {
         await browserClose(label).catch(() => undefined);
@@ -161,25 +192,32 @@ export function NativeBrowser({
       openedRef.current = true;
       setLoadedUrl(next);
       setLive(true);
-      requestAnimationFrame(() => {
-        void syncBounds();
-      });
+      // Re-apply bounds after paint — child HWND can land at 0×0 on first create.
+      await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)));
+      lastBounds.current = null;
+      await syncBounds();
       window.setTimeout(() => {
-        if (aliveRef.current) setBusy(false);
-      }, 600);
+        if (aliveRef.current) {
+          lastBounds.current = null;
+          void syncBounds();
+          setBusy(false);
+        }
+      }, 120);
     },
     [label, readBounds, syncBounds],
   );
 
   const clearBrowser = useCallback(async () => {
+    navGenRef.current += 1;
+    appliedUrlRef.current = "";
     setDraft("");
     setLoadedUrl("");
+    setLocalError("");
     onUrlChange("");
     setLive(false);
     setBusy(false);
     setInspector(false);
     inspectorRef.current = false;
-    setSelection(null);
     setComponentFiles([]);
     if (openedRef.current) {
       openedRef.current = false;
@@ -194,32 +232,59 @@ export function NativeBrowser({
         await clearBrowser();
         return;
       }
-      const next = normalizeBrowserUrl(source);
+      let next = resolveOmniboxInput(source);
       if (!next) {
         await clearBrowser();
         return;
       }
+      const gen = ++navGenRef.current;
+      appliedUrlRef.current = next;
       setDraft(next);
       setLoadedUrl(next);
+      setLocalError("");
+      setOmniboxOpen(false);
       onUrlChange(next);
+      rememberBrowserUrl(next);
       try {
         await openAt(next, true);
+        if (gen !== navGenRef.current) return;
       } catch (error) {
-        if (!aliveRef.current) return;
+        if (!aliveRef.current || gen !== navGenRef.current) return;
+        const alt = localhostAlt(next);
+        if (alt && alt !== next) {
+          try {
+            appliedUrlRef.current = alt;
+            setDraft(alt);
+            setLoadedUrl(alt);
+            onUrlChange(alt);
+            rememberBrowserUrl(alt);
+            await openAt(alt, true);
+            if (gen !== navGenRef.current) return;
+            return;
+          } catch {
+            // fall through
+          }
+        }
         setBusy(false);
         setLive(false);
-        setError(clientError(error));
+        const msg = clientError(error);
+        setLocalError(msg || t("browser.waiting"));
+        setError(msg);
       }
     },
-    [clearBrowser, draft, onUrlChange, openAt, setError],
+    [clearBrowser, draft, onUrlChange, openAt, setError, t],
   );
 
+  // Parent-driven URL (suggest toast / setPaneBrowserUrl) — never re-enter our own writes.
   useEffect(() => {
-    if (restoredRef.current) return;
-    restoredRef.current = true;
-    const initial = normalizeBrowserUrl(url || "");
-    if (initial) void go(initial);
-  }, [go, url]);
+    const next = normalizeBrowserUrl(url || "");
+    if (next === appliedUrlRef.current) return;
+    if (!next) {
+      if (appliedUrlRef.current || openedRef.current) void clearBrowser();
+      return;
+    }
+    void go(next);
+  }, [url]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!hostEl) return;
@@ -227,23 +292,21 @@ export function NativeBrowser({
     observer.observe(hostEl);
     window.addEventListener("resize", scheduleBounds);
     window.visualViewport?.addEventListener("resize", scheduleBounds);
-    window.addEventListener("transitionend", scheduleBounds);
     scheduleBounds();
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", scheduleBounds);
       window.visualViewport?.removeEventListener("resize", scheduleBounds);
-      window.removeEventListener("transitionend", scheduleBounds);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, [hostEl, scheduleBounds]);
 
   useEffect(() => {
     const onDrag = (event: Event) => {
-      const active = Boolean((event as CustomEvent<{ active?: boolean }>).detail?.active);
-      suppressedRef.current = active;
+      const dragging = Boolean((event as CustomEvent<{ active?: boolean }>).detail?.active);
+      suppressedRef.current = dragging || !active;
       if (!openedRef.current) return;
-      if (active) {
+      if (dragging || !active) {
         void browserHide(label).catch(() => undefined);
         setLive(false);
         return;
@@ -261,7 +324,29 @@ export function NativeBrowser({
     };
     window.addEventListener("voxiva-pane-drag", onDrag);
     return () => window.removeEventListener("voxiva-pane-drag", onDrag);
-  }, [draft, label, loadedUrl, openAt, syncBounds]);
+  }, [active, draft, label, loadedUrl, openAt, syncBounds]);
+
+  // Tab switch: hide native surface when this browser tab is not selected.
+  useEffect(() => {
+    if (!openedRef.current) return;
+    if (!active) {
+      suppressedRef.current = true;
+      void browserHide(label).catch(() => undefined);
+      setLive(false);
+      return;
+    }
+    suppressedRef.current = false;
+    const next = loadedUrl || normalizeBrowserUrl(draft);
+    if (!next) return;
+    lastBounds.current = null;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        void openAt(next, false)
+          .then(() => syncBounds())
+          .catch(() => undefined);
+      });
+    });
+  }, [active, draft, label, loadedUrl, openAt, syncBounds]);
 
   useEffect(() => {
     const unlisten = listen<{ label: string; url: string }>(
@@ -297,63 +382,82 @@ export function NativeBrowser({
         void browserConfigureInspector(label, inspectorAgents, componentFiles).catch(
           () => undefined,
         );
+        // Refresh tab title / favicon from the live page.
+        window.setTimeout(() => {
+          if (!aliveRef.current) return;
+          void browserPageMeta(label)
+            .then((meta) => {
+              if (!aliveRef.current) return;
+              onMetaChange?.({
+                title: meta.title || "",
+                favicon: meta.favicon || "",
+              });
+            })
+            .catch(() => undefined);
+        }, 120);
       },
     );
     return () => {
       void unlisten.then((stop) => stop());
     };
-  }, [componentFiles, inspectorAgents, label, onUrlChange]);
+  }, [componentFiles, inspectorAgents, label, onMetaChange, onUrlChange]);
 
   useEffect(() => {
-    if (!loadedUrl) return;
+    if (!loadedUrl || !active || !inspector) return;
     let stopped = false;
     let inFlight = false;
+    const filesRef = { current: componentFiles };
+    filesRef.current = componentFiles;
     const poll = async () => {
-      if (stopped || inFlight || !openedRef.current) return;
+      if (inFlight || !openedRef.current) return;
       inFlight = true;
       try {
         const event = await browserTakeInspectorEvent(label);
-        if (!event || stopped) return;
+        if (!event) return;
+        // Action must run even if this effect is tearing down (setComponentFiles race).
+        if (event.action) {
+          void sendActionRef.current(
+            event.action.selection,
+            event.action.instruction,
+            event.action.agentId,
+          ).catch((error) => setError(clientError(error)));
+        }
+        if (stopped) return;
         if (event.selection) {
           const picked = event.selection;
-          setSelection(picked);
-          setComponentFiles([]);
           lastBounds.current = null;
           requestAnimationFrame(() => requestAnimationFrame(scheduleBounds));
           if (activeWorkspace?.cwd) {
-            setFilesBusy(true);
             void findComponentFiles(activeWorkspace.cwd, picked)
               .then((files) => {
+                if (stopped) return;
                 setComponentFiles(files);
                 return browserConfigureInspector(label, inspectorAgents, files);
               })
-              .catch(() => undefined)
-              .finally(() => setFilesBusy(false));
+              .catch(() => undefined);
           } else {
             void browserConfigureInspector(label, inspectorAgents, []).catch(() => undefined);
           }
         }
-        if (event.action) {
-          void sendSelectionToAgent(
-            event.action.selection,
-            event.action.instruction,
-            event.action.agentId,
-          );
+      } catch (error) {
+        const message = clientError(error);
+        if (message && !/timed out|reject/i.test(message)) {
+          setError(message);
         }
-      } catch {
-        // Page can briefly reject evaluation while navigating.
       } finally {
         inFlight = false;
       }
     };
-    void browserConfigureInspector(label, inspectorAgents, componentFiles).catch(() => undefined);
+    void browserConfigureInspector(label, inspectorAgents, filesRef.current).catch(() => undefined);
     void poll();
-    const timer = window.setInterval(() => void poll(), 220);
+    const timer = window.setInterval(() => void poll(), 280);
     return () => {
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [activeWorkspace?.cwd, componentFiles, inspectorAgents, label, loadedUrl, scheduleBounds]);
+    // Intentionally omit componentFiles — configuring with a ref avoids dropping Send actions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, activeWorkspace?.cwd, inspector, inspectorAgents, label, loadedUrl, scheduleBounds]);
 
   function reload() {
     if (!openedRef.current) return;
@@ -365,7 +469,7 @@ export function NativeBrowser({
   }
 
   useEffect(() => {
-    const onReload = () => {
+    const onPreviewReload = () => {
       const current = loadedUrl || draft;
       if (!openedRef.current || !current) return;
       if (!/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(current) && !/^file:/i.test(current)) {
@@ -373,9 +477,21 @@ export function NativeBrowser({
       }
       reload();
     };
-    window.addEventListener("voxiva-preview-reload", onReload);
-    return () => window.removeEventListener("voxiva-preview-reload", onReload);
-  }, [draft, label, loadedUrl]);
+    const onPaneReload = (event: Event) => {
+      const detail = (event as CustomEvent<{ paneId?: string }>).detail;
+      const target = detail?.paneId;
+      if (!target) return;
+      if (target !== instanceId && target !== dragPaneId) return;
+      if (!openedRef.current) return;
+      reload();
+    };
+    window.addEventListener("voxiva-preview-reload", onPreviewReload);
+    window.addEventListener("voxiva-browser-reload", onPaneReload);
+    return () => {
+      window.removeEventListener("voxiva-preview-reload", onPreviewReload);
+      window.removeEventListener("voxiva-browser-reload", onPaneReload);
+    };
+  }, [draft, dragPaneId, instanceId, label, loadedUrl]);
 
   function openNativeDevtools() {
     if (!openedRef.current) {
@@ -387,22 +503,27 @@ export function NativeBrowser({
     });
   }
 
-  function toggleInspector() {
+  async function toggleInspector() {
     if (!openedRef.current) {
       setError(t("browser.devtoolsNeedSite"));
       return;
     }
     const next = !inspectorRef.current;
-    inspectorRef.current = next;
-    setInspector(next);
-    if (next) {
-      void browserConfigureInspector(label, inspectorAgents, componentFiles).catch(() => undefined);
-    }
-    void browserToggleInspector(label, next).catch((error) => {
+    try {
+      if (next) {
+        await browserConfigureInspector(label, inspectorAgents, componentFiles);
+      }
+      const enabled = await browserToggleInspector(label, next);
+      inspectorRef.current = enabled;
+      setInspector(enabled);
+      if (next && !enabled) {
+        setError(t("browser.devtoolsFailed"));
+      }
+    } catch (error) {
       inspectorRef.current = false;
       setInspector(false);
-      setError(clientError(error));
-    });
+      setError(clientError(error) || t("browser.devtoolsFailed"));
+    }
   }
 
   function openExternal() {
@@ -410,199 +531,313 @@ export function NativeBrowser({
     if (next) void openUrl(next).catch((error) => setError(clientError(error)));
   }
 
-  function openRelatedFile(rel: string) {
-    window.dispatchEvent(
-      new CustomEvent("voxiva-assist-open", { detail: { tab: "editor", path: rel } }),
-    );
-  }
-
   async function sendSelectionToAgent(
     picked: BrowserSelection,
     instruction: string,
     agentId: string,
   ) {
-    const bot = availableAgents.find((item) => item.id === agentId);
-    if (!bot || !instruction.trim()) return;
+    if (!instruction.trim()) return;
+
+    const full = instruction.trim();
+    let detailsPath = "";
+    try {
+      detailsPath = await writeAnnotateContext(full);
+    } catch {
+      detailsPath = "";
+    }
+
+    const pageMatch = full.match(/^Page:\s*(.+)$/m);
+    const countMatch = full.match(/^Selections:\s*(\d+)/m);
+    const headings = [...full.matchAll(/^##\s+\d+\.\s+(.+)$/gm)].map((m) => m[1].trim());
+    const noteLine =
+      full.split("\n").find((line) => line.trim() && !line.startsWith("Design-mode"))?.trim() ||
+      "Update the selected UI elements.";
+    const shortLines = [noteLine, ""];
+    if (pageMatch) shortLines.push(`Page: ${pageMatch[1].trim()}`);
+    if (countMatch || headings.length) {
+      const count = countMatch?.[1] || String(headings.length);
+      shortLines.push(
+        headings.length ? `Selections: ${count} (${headings.join(", ")})` : `Selections: ${count}`,
+      );
+    }
+    if (detailsPath) {
+      shortLines.push(`Details: ${detailsPath}`, "");
+      shortLines.push(
+        "Open the Details file for selectors, styles, and DOM snippets, then apply the change in the codebase.",
+      );
+    } else {
+      shortLines.push(full);
+    }
+    const short = shortLines.join("\n").trim();
+
+    if (agentId === "clipboard") {
+      const text = short;
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {
+          document.execCommand("copy");
+        } finally {
+          ta.remove();
+        }
+      }
+      return;
+    }
+
+    const compiled =
+      /Design-mode annotation|## \d+\. |\nselector: |\nxpath: /.test(instruction) ||
+      /\d+\. .+\n\s+page: |\n\s+selector: /.test(instruction);
+    const preferredId = agentId === "shell" ? "opencode" : agentId;
+    const bot =
+      agentBots.find((item) => item.id === preferredId) ||
+      availableAgents.find((item) => item.id === preferredId) ||
+      agentBots.find((item) => item.id === "opencode") ||
+      agentBots.find((item) => item.id === "shell");
+    if (!bot) {
+      setError(t("browser.devtoolsFailed"));
+      return;
+    }
     const sessionId = await launchAgent({
       title: bot.name,
       command: resolveBotCommand(bot, agentAvailability),
       accent: bot.accent,
     });
-    if (!sessionId) return;
+    if (!sessionId) {
+      setError(t("agents.missingHint") || t("browser.devtoolsFailed"));
+      return;
+    }
     const files = componentFiles.length ? componentFiles.join(", ") : "not detected";
-    const prompt = [
-      instruction.trim().replace(/\s+/g, " "),
-      `Selected UI: ${picked.component || picked.tag}`,
-      `selector: ${picked.selector}`,
-      `page: ${picked.pageUrl}`,
-      `likely files: ${files}`,
-      `visible text: ${picked.text.replace(/\s+/g, " ").slice(0, 240) || "none"}`,
-    ].join(". ");
-    // Short settle so the agent CLI is ready to accept the prompt.
-    window.setTimeout(() => {
-      void writeTerminalSession(sessionId, `${prompt}\r`).catch((error) =>
-        setError(clientError(error)),
-      );
-    }, 350);
+    const prompt = detailsPath
+      ? short
+      : compiled
+        ? full
+        : [
+            full,
+            "",
+            `1. ${picked.component || picked.tag}`,
+            `   page: ${picked.pageUrl}`,
+            `   selector: ${picked.selector}`,
+            picked.xpath ? `   xpath: ${picked.xpath}` : "",
+            `   files: ${files}`,
+            `   text: "${picked.text.replace(/\s+/g, " ").slice(0, 120) || "none"}"`,
+          ]
+            .filter(Boolean)
+            .join("\n");
+    const payload = `\x15\x1b[200~${prompt}\x1b[201~\r`;
+    const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+    await wait(bot.command ? 1400 : 350);
+    try {
+      await writeTerminalSession(sessionId, payload);
+    } catch {
+      await wait(1600);
+      try {
+        await writeTerminalSession(sessionId, payload);
+      } catch (error) {
+        setError(clientError(error));
+      }
+    }
   }
+
+  sendActionRef.current = sendSelectionToAgent;
+
+  useEffect(() => {
+    setOmniboxIndex(0);
+  }, [draft, omniboxOpen]);
+
+  const onOmniboxKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Escape") {
+      setOmniboxOpen(false);
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setOmniboxOpen(true);
+      setOmniboxIndex((i) => Math.min(i + 1, Math.max(0, suggestions.length - 1)));
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setOmniboxIndex((i) => Math.max(i - 1, 0));
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const pick = omniboxOpen ? suggestions[omniboxIndex] : null;
+      void go(pick?.url ?? draft);
+    }
+  };
+
+  const urlField = (compactField: boolean) => (
+    <div className={`vs-browserUrlField${omniboxOpen && suggestions.length ? " is-suggesting" : ""}`}>
+      {!compactField ? <IconSearch size={15} className="vs-browserSearchIcon" /> : null}
+      <input
+        value={draft}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          setOmniboxOpen(true);
+        }}
+        onFocus={() => setOmniboxOpen(true)}
+        onBlur={() => {
+          window.setTimeout(() => setOmniboxOpen(false), 120);
+        }}
+        onKeyDown={onOmniboxKeyDown}
+        spellCheck={false}
+        placeholder={t("browser.urlPlaceholder")}
+        aria-label="URL"
+        aria-autocomplete="list"
+        aria-expanded={omniboxOpen && suggestions.length > 0}
+      />
+      {omniboxOpen && suggestions.length > 0 ? (
+        <ul className="vs-omnibox" role="listbox">
+          {suggestions.map((item, index) => (
+            <li key={item.id} role="option" aria-selected={index === omniboxIndex}>
+              <button
+                type="button"
+                className={`vs-omniboxItem${index === omniboxIndex ? " is-active" : ""}`}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  void go(item.url);
+                }}
+                onMouseEnter={() => setOmniboxIndex(index)}
+              >
+                <span className="vs-omniboxKind">
+                  {item.kind === "search"
+                    ? t("browser.suggestSearch")
+                    : item.kind === "history"
+                      ? t("browser.suggestHistory")
+                      : item.kind === "preset"
+                        ? t("browser.suggestPreset")
+                        : t("browser.suggestUrl")}
+                </span>
+                <strong>{item.label}</strong>
+                {item.hint ? <small>{item.hint}</small> : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
 
   return (
     <div className={`vs-browser${compact ? " is-compact" : ""}`}>
-      <div
-        className={compact ? "vs-browserCompactBar" : "vs-browserBar"}
-        data-pane-drag={compact ? dragPaneId : undefined}
-        data-no-drag={compact ? undefined : true}
-      >
-        {compact && (
-          <span className="vs-browserDragHandle" title={t("term.drag")} aria-hidden>
-            <IconGrip size={14} />
-          </span>
-        )}
-        <div className="vs-browserUrlField" data-no-drag>
-          <IconSearch size={15} className="vs-browserSearchIcon" />
-          <input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") void go();
-            }}
-            spellCheck={false}
-            placeholder={t("browser.urlPlaceholder")}
-            aria-label="URL"
-          />
-        </div>
-        <button
-          type="button"
-          className="vs-btn vs-browserUtilityBtn"
-          data-no-drag
-          disabled={!loadedUrl}
-          title={t("browser.reload")}
-          aria-label={t("browser.reload")}
-          onClick={reload}
-        >
-          <IconRefresh size={15} />
-        </button>
-        <button
-          type="button"
-          className={`vs-btn vs-browserUtilityBtn${inspector ? " is-active" : ""}`}
-          data-no-drag
-          disabled={!loadedUrl}
-          title={t("browser.inspect")}
-          aria-label={t("browser.inspect")}
-          aria-pressed={inspector}
-          onClick={toggleInspector}
-        >
-          <IconInspect size={15} />
-        </button>
-        <button
-          type="button"
-          className="vs-btn vs-browserUtilityBtn"
-          data-no-drag
-          disabled={!loadedUrl}
-          title={t("browser.devtools")}
-          aria-label={t("browser.devtools")}
-          onClick={openNativeDevtools}
-        >
-          <IconCodeBrowser size={15} />
-        </button>
-        <button
-          type="button"
-          className="vs-btn vs-browserUtilityBtn is-external"
-          data-no-drag
-          title={t("browser.external")}
-          aria-label={t("browser.external")}
-          onClick={openExternal}
-        >
-          <IconExternalLink size={15} />
-        </button>
-        {compact && onClose && (
+      {compact ? (
+        <div className="vs-browserNavBar" data-no-drag>
+          {urlField(true)}
           <button
             type="button"
-            className="vs-btn vs-btnGhost vs-browserUtilityBtn"
-            data-no-drag
-            title={t("term.close")}
-            aria-label={t("term.close")}
-            onClick={onClose}
+            className={`vs-termIconBtn${inspector ? " is-active" : ""}`}
+            disabled={!loadedUrl}
+            title={t("browser.inspect")}
+            aria-label={t("browser.inspect")}
+            aria-pressed={inspector}
+            onClick={toggleInspector}
           >
-            <IconX size={14} />
+            <IconInspect size={14} />
           </button>
-        )}
-      </div>
-
-      {!loadedUrl ? (
-        <div className="vs-browserEmpty vs-browserStart" data-no-drag>
-          <div className="vs-browserStartMark" aria-hidden>
-            <IconSearch size={22} />
-          </div>
-          <h3>{t("browser.emptyTitle")}</h3>
-          <p>{t("browser.emptyBody")}</p>
-          <form
-            className="vs-browserStartSearch"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void go();
-            }}
+          <button
+            type="button"
+            className="vs-termIconBtn"
+            disabled={!loadedUrl}
+            title={t("browser.devtools")}
+            aria-label={t("browser.devtools")}
+            onClick={openNativeDevtools}
           >
-            <IconSearch size={16} className="vs-browserSearchIcon" />
-            <input
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder={t("browser.urlPlaceholder")}
-              spellCheck={false}
-              autoFocus={!compact}
-              aria-label={t("browser.urlPlaceholder")}
-            />
-          </form>
-          <div className="vs-browserStartGroup">
-            <span>{t("browser.suggestTitle")}</span>
-            <div className="vs-browserPresets">
-              {presets.map((preset) => (
-                <button
-                  key={preset.url}
-                  type="button"
-                  className="vs-browserPresetCard"
-                  onClick={() => void go(preset.url)}
-                >
-                  <strong>{preset.label}</strong>
-                  <small>{preset.url.replace(/^https?:\/\//, "")}</small>
-                </button>
-              ))}
-            </div>
-          </div>
+            <IconCodeBrowser size={14} />
+          </button>
+          <button
+            type="button"
+            className="vs-termIconBtn"
+            title={t("browser.external")}
+            aria-label={t("browser.external")}
+            onClick={openExternal}
+          >
+            <IconExternalLink size={14} />
+          </button>
         </div>
       ) : (
-        <div className="vs-browserViewport">
-          <div className="vs-browserFrameWrap" ref={bindHost}>
-            <div className={`vs-browserNativeSlot${live && !busy ? " is-covered" : ""}`}>
-              {(busy || !live) && (
-                <span className={`vs-browserLoadPulse${busy ? " is-busy" : ""}`}>
-                  {busy ? t("browser.loading") : t("browser.waiting")}
-                </span>
-              )}
-            </div>
-          </div>
-          {(inspector && (selection || filesBusy || componentFiles.length > 0)) && (
-            <div className="vs-browserRelated" data-no-drag>
-              <span className="vs-browserRelatedLabel">{t("browser.relatedFiles")}</span>
-              {filesBusy && <em>{t("browser.findingFiles")}</em>}
-              {!filesBusy && componentFiles.length === 0 && (
-                <em>{t("browser.filesNotFound")}</em>
-              )}
-              {componentFiles.map((file) => (
-                <button
-                  key={file}
-                  type="button"
-                  className="vs-browserRelatedFile"
-                  title={file}
-                  onClick={() => openRelatedFile(file)}
-                >
-                  {file.replace(/^.*[\\/]/, "")}
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="vs-browserBar" data-no-drag>
+          {urlField(false)}
+          <button
+            type="button"
+            className="vs-btn vs-browserUtilityBtn"
+            disabled={!loadedUrl}
+            title={t("browser.reload")}
+            aria-label={t("browser.reload")}
+            onClick={reload}
+          >
+            <IconRefresh size={15} />
+          </button>
+          <button
+            type="button"
+            className={`vs-btn vs-browserUtilityBtn${inspector ? " is-active" : ""}`}
+            disabled={!loadedUrl}
+            title={t("browser.inspect")}
+            aria-label={t("browser.inspect")}
+            aria-pressed={inspector}
+            onClick={toggleInspector}
+          >
+            <IconInspect size={15} />
+          </button>
+          <button
+            type="button"
+            className="vs-btn vs-browserUtilityBtn"
+            disabled={!loadedUrl}
+            title={t("browser.devtools")}
+            aria-label={t("browser.devtools")}
+            onClick={openNativeDevtools}
+          >
+            <IconCodeBrowser size={15} />
+          </button>
+          <button
+            type="button"
+            className="vs-btn vs-browserUtilityBtn is-external"
+            title={t("browser.external")}
+            aria-label={t("browser.external")}
+            onClick={openExternal}
+          >
+            <IconExternalLink size={15} />
+          </button>
         </div>
       )}
+
+      {/* Host is always mounted so WebView2 bounds exist before the first navigate. */}
+      <div className="vs-browserViewport">
+        <div className="vs-browserFrameWrap" ref={bindHost}>
+          <div
+            className={`vs-browserNativeSlot${loadedUrl && live && !busy ? " is-covered" : ""}`}
+          >
+            {loadedUrl && (busy || !live) ? (
+              <span className={`vs-browserLoadPulse${busy ? " is-busy" : ""}`}>
+                {busy ? t("browser.loading") : localError || t("browser.waiting")}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        {!loadedUrl ? (
+          <div
+            className={`vs-browserEmpty vs-browserStart${compact ? " is-compact" : ""}`}
+            data-no-drag
+          >
+            {!compact ? (
+              <>
+                <div className="vs-browserStartMark" aria-hidden>
+                  <IconSearch size={22} />
+                </div>
+                <h3>{t("browser.emptyTitle")}</h3>
+                <p>{t("browser.emptyBody")}</p>
+              </>
+            ) : null}
+            {localError ? <p className="vs-browserEmptyError">{localError}</p> : null}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

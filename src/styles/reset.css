@@ -32,6 +32,17 @@ button {
   border: 0;
   background: none;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Mouse click: no sticky focus ring. Keyboard: keep focus-visible. */
+button:focus {
+  outline: none;
+}
+
+button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--vs-accent) 70%, transparent);
+  outline-offset: 2px;
 }
 
 button:disabled {

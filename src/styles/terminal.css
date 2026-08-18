@@ -11,7 +11,7 @@
 }
 
 .vs-terminalShell.is-dropFile::after {
-  content: "Drop file path into terminal";
+  content: attr(data-drop-label);
   position: absolute;
   inset: 28px 0 0;
   z-index: 5;
@@ -29,13 +29,13 @@
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  min-height: 28px;
-  height: 28px;
+  min-height: 26px;
+  height: 26px;
   flex-shrink: 0;
   padding: 0 0.4rem 0 0.5rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--vs-border) 80%, transparent);
+  border-bottom: 0;
   background: var(--vs-term-chrome);
-  cursor: grab;
+  cursor: default;
   user-select: none;
 }
 
@@ -70,14 +70,18 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
   color: var(--vs-term-chrome-muted);
-  font-size: 0.7rem;
-  letter-spacing: -0.08em;
   cursor: grab;
   user-select: none;
+  flex-shrink: 0;
+}
+
+.vs-dragHandle svg {
+  display: block;
+  opacity: 0.85;
 }
 
 .vs-dragHandle:hover {
@@ -85,8 +89,16 @@
   color: var(--vs-term-chrome-text);
 }
 
+.vs-dragHandle:hover svg {
+  opacity: 1;
+}
+
 .vs-dragHandle:active {
   cursor: grabbing;
+}
+
+.vs-pane.is-attention .vs-terminalHeader {
+  box-shadow: none;
 }
 
 .vs-termIconBtn {
@@ -131,24 +143,25 @@
   min-width: 0 !important;
 }
 
-/* Flush canvas — no gutter so OpenCode fills the pane edge-to-edge */
+/* Flush canvas — no gutter so OpenCode fills the pane edge-to-edge.
+   Keep overflow-y scrollable so wheel/scrollback works; hide the bar. */
 .vs-xtermHost .xterm-viewport {
-  overflow: hidden !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
   left: 0 !important;
   right: 0 !important;
   width: 100% !important;
   max-width: 100% !important;
   background: var(--vs-term-bg) !important;
+  scrollbar-width: none;
 }
 
 .vs-xtermHost .xterm-screen {
   min-width: 0 !important;
   max-width: 100% !important;
-  overflow: hidden !important;
 }
 
 .vs-xtermHost .xterm-rows {
-  overflow: hidden !important;
   margin: 0 !important;
   padding: 0 !important;
 }
@@ -179,18 +192,221 @@
 
 .vs-terminalOverlay {
   position: absolute;
-  inset: 28px 0 0;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
   background: color-mix(in srgb, var(--vs-term-bg) 88%, transparent);
-  color: #8b93a7;
+  color: var(--vs-term-chrome-muted);
   text-align: center;
   pointer-events: none;
 }
 
+.vs-terminalShell:has(.vs-terminalHeader) .vs-terminalOverlay {
+  inset: 26px 0 0;
+}
+
+.vs-paneTerminalStack {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  width: 100%;
+}
+
+.vs-paneTabBar {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  padding: 0 0.3rem 0 0.35rem;
+  background: var(--vs-term-chrome);
+}
+
+.vs-paneTabs {
+  display: flex;
+  align-items: center;
+  gap: 0.12rem;
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.vs-paneTabs::-webkit-scrollbar {
+  display: none;
+}
+
+.vs-paneTab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 9.5rem;
+  min-height: 22px;
+  padding: 0 0.35rem 0 0.3rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--vs-term-chrome-muted);
+  font: 650 0.72rem/1 var(--vs-font);
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.vs-paneTab:hover {
+  background: var(--vs-bg-hover);
+  color: var(--vs-term-chrome-text);
+}
+
+.vs-paneTab.is-active {
+  background: color-mix(in srgb, var(--vs-accent) 12%, transparent);
+  color: var(--vs-term-chrome-text);
+}
+
+/* Attention lives on the whole pane ring — tab only gets a quiet dot. */
+.vs-paneTab.is-attention::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  margin-left: 0.05rem;
+  border-radius: 999px;
+  background: var(--vs-attention);
+  flex-shrink: 0;
+}
+
+.vs-paneTab.is-dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+.vs-paneTab.is-drop {
+  background: color-mix(in srgb, var(--vs-accent) 10%, transparent);
+}
+
+.vs-paneTabDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: var(--vs-accent);
+}
+
+.vs-paneTabDot.is-green { background: #3dd68c; }
+.vs-paneTabDot.is-blue { background: #5aa6ff; }
+.vs-paneTabDot.is-gold { background: #efc35a; }
+.vs-paneTabDot.is-violet { background: #a78bfa; }
+
+.vs-paneTabLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vs-paneTabRename {
+  width: 6.5rem;
+  min-width: 0;
+  height: 18px;
+  margin: 0;
+  padding: 0 0.25rem;
+  border: 1px solid color-mix(in srgb, var(--vs-accent) 45%, transparent);
+  border-radius: 4px;
+  background: var(--vs-bg);
+  color: var(--vs-term-chrome-text);
+  font: 650 0.72rem/1 var(--vs-font);
+  outline: none;
+}
+
+.vs-paneActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.05rem;
+  margin-left: auto;
+  flex-shrink: 0;
+  padding-left: 0.15rem;
+}
+
+.vs-paneTabGlyph {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.vs-paneTabIcon {
+  flex-shrink: 0;
+  opacity: 0.7;
+  color: inherit;
+}
+
+.vs-paneTab.is-active .vs-paneTabIcon {
+  opacity: 1;
+}
+
+.vs-paneTabFavicon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  object-fit: contain;
+  background: transparent;
+}
+
+.vs-paneTabClose {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vs-term-chrome-muted);
+  line-height: 0;
+  opacity: 0;
+}
+
+.vs-paneTabClose svg {
+  display: block;
+}
+
+.vs-paneTab:hover .vs-paneTabClose,
+.vs-paneTab.is-active .vs-paneTabClose {
+  opacity: 1;
+}
+
+.vs-paneTabClose:hover {
+  background: color-mix(in srgb, var(--vs-danger) 18%, transparent);
+  color: var(--vs-danger);
+}
+
+.vs-paneTabBodies {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+
+.vs-paneTabBody {
+  position: absolute;
+  inset: 0;
+  display: none;
+}
+
+.vs-paneTabBody.is-visible {
+  display: flex;
+  flex-direction: column;
+}
+
 .vs-terminalOverlay strong {
-  color: #e9edf5;
+  color: var(--vs-term-chrome-text);
 }

@@ -1,30 +1,33 @@
-import { useEffect, useRef, useState } from "react";
-import { browserCloseAll } from "@/features/browser/api";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Check } from "@untitledui/icons";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import type { Locale } from "@/i18n";
-import type { ThemeId } from "@/features/workspace/persist";
-import { Check } from "@untitledui/icons";
+import {
+  appearanceForFamilyCard,
+  familyOf,
+  getTheme,
+  loadFamilyAppearancePrefs,
+  listThemeFamilies,
+  previewForFamily,
+  saveFamilyAppearancePrefs,
+  themeIdForAppearance,
+  type FamilyAppearancePrefs,
+  type ThemeAppearance,
+} from "@/features/theme";
 import {
   HOTKEY_GROUPS,
   HOTKEY_LABELS,
   bindingFromEvent,
+  bindingsEqual,
   formatHotkey,
   loadHotkeys,
   saveHotkeys,
+  setCapturingHotkey,
   type HotkeyAction,
   type HotkeyMap,
   DEFAULT_HOTKEYS,
 } from "@/features/hotkeys/bindings";
-import {
-  companionStart,
-  companionStatus,
-  companionStop,
-  type CompanionStatus,
-} from "@/features/companion/api";
-import { CompanionQrCode } from "@/features/companion/QrCode";
-import { loadCompanionToken, rotateCompanionToken } from "@/features/companion/pairing";
 import { clientError } from "@/lib/errors";
-import { listen } from "@tauri-apps/api/event";
 import {
   DEFAULT_SOUND_PREFS,
   loadSoundPrefs,
@@ -34,6 +37,12 @@ import {
   type SoundPrefs,
   type SoundPreset,
 } from "@/features/sounds/prefs";
+import {
+  ATTENTION_COLORS,
+  loadAttentionPrefs,
+  saveAttentionPrefs,
+  type AttentionPrefs,
+} from "@/features/attention/prefs";
 
 type SectionId = "general" | "appearance" | "sounds" | "hotkeys" | "mobile" | "welcome";
 
@@ -61,60 +70,49 @@ function Toggle({
 
 export function SettingsPage() {
   const {
-    resetOnboarding,
+    showWelcomeScreen,
+    skipWelcome,
+    setSkipWelcome,
     locale,
     setLocale,
     theme,
     setTheme,
     t,
-    activeWorkspace,
     workspaces,
     setError,
   } = useSpace();
   const [hotkeys, setHotkeys] = useState<HotkeyMap>(() => loadHotkeys());
   const [listening, setListening] = useState<HotkeyAction | null>(null);
-  const [section, setSection] = useState<SectionId>("appearance");
-  const [token, setToken] = useState(() => loadCompanionToken());
-  const [status, setStatus] = useState<CompanionStatus | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [section, setSection] = useState<SectionId>("general");
   const [sounds, setSounds] = useState<SoundPrefs>(() => loadSoundPrefs());
+  const [attention, setAttention] = useState<AttentionPrefs>(() => loadAttentionPrefs());
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    void browserCloseAll().catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    void companionStatus()
-      .then(setStatus)
-      .catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    if (section !== "mobile") return;
-    const timer = window.setInterval(() => {
-      void companionStatus()
-        .then(setStatus)
-        .catch(() => undefined);
-    }, 2000);
-    const unlisten = listen("companion://paired", () => {
-      void companionStatus().then(setStatus).catch(() => undefined);
-    });
-    return () => {
-      window.clearInterval(timer);
-      void unlisten.then((u) => u());
-    };
-  }, [section]);
+    setCapturingHotkey(Boolean(listening));
+    return () => setCapturingHotkey(false);
+  }, [listening]);
 
   useEffect(() => {
     if (!listening) return;
     const onKey = (event: KeyboardEvent) => {
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation();
+      if (event.key === "Escape") {
+        setListening(null);
+        return;
+      }
       const next = bindingFromEvent(event);
       if (!next) return;
       setHotkeys((current) => {
-        const updated = { ...current, [listening]: next };
+        const updated = { ...current };
+        for (const action of Object.keys(updated) as HotkeyAction[]) {
+          if (action !== listening && bindingsEqual(updated[action], next)) {
+            updated[action] = current[listening];
+          }
+        }
+        updated[listening] = next;
         saveHotkeys(updated);
         window.dispatchEvent(new Event("voxiva-hotkeys-changed"));
         return updated;
@@ -133,55 +131,65 @@ export function SettingsPage() {
     });
   }
 
-  const themes: Array<{
-    id: ThemeId;
-    label: string;
-    hint: string;
-    colors: [string, string, string, string];
-  }> = [
-    {
-      id: "default",
-      label: t("settings.themeDefault"),
-      hint: t("settings.themeDefaultHint"),
-      colors: ["#080a0f", "#10151e", "#4d9dff", "#e9edf5"],
-    },
-    {
-      id: "dracula",
-      label: t("settings.themeDracula"),
-      hint: t("settings.themeDraculaHint"),
-      colors: ["#181a24", "#282a36", "#ff79c6", "#f8f8f2"],
-    },
-    {
-      id: "dark",
-      label: t("settings.themeDark"),
-      hint: t("settings.themeDarkHint"),
-      colors: ["#000000", "#111111", "#ffffff", "#f5f5f5"],
-    },
-    {
-      id: "gruvbox",
-      label: t("settings.themeGruvbox"),
-      hint: t("settings.themeGruvboxHint"),
-      colors: ["#1d2021", "#3c3836", "#fe8019", "#ebdbb2"],
-    },
-    {
-      id: "cyber",
-      label: t("settings.themeCyber"),
-      hint: t("settings.themeCyberHint"),
-      colors: ["#06171b", "#0b2a30", "#7567e8", "#d8f3f1"],
-    },
-    {
-      id: "glass",
-      label: t("settings.themeGlass"),
-      hint: t("settings.themeGlassHint"),
-      colors: ["#1a2233aa", "#2a3548aa", "#6eb0ff", "#f2f5fb"],
-    },
-    {
-      id: "light",
-      label: t("settings.themeLight"),
-      hint: t("settings.themeLightHint"),
-      colors: ["#f3f5f9", "#ffffff", "#2563eb", "#0f172a"],
-    },
-  ];
+  function patchAttention(patch: Partial<AttentionPrefs>) {
+    setAttention((current) => {
+      const next = { ...current, ...patch };
+      saveAttentionPrefs(next);
+      return next;
+    });
+  }
+
+  const themeFamilies = useMemo(() => listThemeFamilies(), []);
+  const activeFamily = familyOf(theme);
+  const activeAppearance = getTheme(theme).appearance;
+  const [familyPrefs, setFamilyPrefs] = useState<FamilyAppearancePrefs>(() =>
+    loadFamilyAppearancePrefs(),
+  );
+
+  useEffect(() => {
+    // Keep memory in sync when theme is applied (incl. Light/Dark of this pack).
+    setFamilyPrefs((current) => {
+      if (current[activeFamily.familyId] === activeAppearance) return current;
+      const next = { ...current, [activeFamily.familyId]: activeAppearance };
+      saveFamilyAppearancePrefs(next);
+      return next;
+    });
+  }, [activeAppearance, activeFamily.familyId]);
+
+  function rememberFamilyAppearance(familyId: string, appearance: ThemeAppearance) {
+    setFamilyPrefs((current) => {
+      const next = { ...current, [familyId]: appearance };
+      saveFamilyAppearancePrefs(next);
+      return next;
+    });
+  }
+
+  /** Click card body → open that pack (restore its last Light/Dark). */
+  function selectFamily(familyId: string) {
+    const family = themeFamilies.find((f) => f.familyId === familyId);
+    if (!family) return;
+    const appearance = appearanceForFamilyCard(
+      family,
+      familyPrefs,
+      activeFamily.familyId,
+      activeAppearance,
+    );
+    // If selecting the already-active family via body, keep current appearance.
+    const nextAppearance =
+      family.familyId === activeFamily.familyId
+        ? activeAppearance
+        : appearance;
+    rememberFamilyAppearance(family.familyId, nextAppearance);
+    setTheme(themeIdForAppearance(family, nextAppearance));
+  }
+
+  /** Light / Dark on a dual pack → switch THAT pack only. */
+  function selectFamilyAppearance(familyId: string, appearance: ThemeAppearance) {
+    const family = themeFamilies.find((f) => f.familyId === familyId);
+    if (!family || !family.appearances.includes(appearance)) return;
+    rememberFamilyAppearance(family.familyId, appearance);
+    setTheme(themeIdForAppearance(family, appearance));
+  }
 
   const nav: Array<{ id: SectionId; title: string }> = [
     { id: "general", title: t("settings.language") },
@@ -191,55 +199,6 @@ export function SettingsPage() {
     { id: "mobile", title: t("settings.mobile") },
     { id: "welcome", title: t("settings.welcome") },
   ];
-
-  async function enableCompanion() {
-    setBusy(true);
-    try {
-      const next = await companionStart(token, activeWorkspace?.id ?? null);
-      setStatus(next);
-    } catch (error) {
-      setError(clientError(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function disableCompanion() {
-    setBusy(true);
-    try {
-      const next = await companionStop();
-      setStatus(next);
-    } catch (error) {
-      setError(clientError(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function rotateCode() {
-    const nextToken = rotateCompanionToken();
-    setToken(nextToken);
-    if (status?.running) {
-      setBusy(true);
-      try {
-        const next = await companionStart(nextToken, activeWorkspace?.id ?? null);
-        setStatus(next);
-      } catch (error) {
-        setError(clientError(error));
-      } finally {
-        setBusy(false);
-      }
-    }
-  }
-
-  const pairUrl = status?.pairUrl ?? status?.deepLink ?? "";
-  const installPageUrl =
-    status?.installPageUrl ?? "https://voxivaai.vercel.app/products/voxiva-space/mobile";
-  const stateLabel = !status?.running
-    ? t("settings.mobileOff")
-    : status.paired
-      ? t("settings.mobilePaired")
-      : t("settings.mobileWaiting");
 
   const presets: Array<{ id: SoundPreset; label: string }> = [
     { id: "bell", label: t("settings.soundBell") },
@@ -300,37 +259,144 @@ export function SettingsPage() {
             <h2>{t("settings.theme")}</h2>
             <p className="vs-settingsHint">{t("settings.themeHint")}</p>
             <div className="vs-themeRow">
-              {themes.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`vs-themeChip${theme === item.id ? " is-active" : ""}`}
-                  onClick={() => setTheme(item.id)}
-                >
-                  <span
-                    className="vs-themePreview"
-                    style={{
-                      background: item.colors[0],
-                      color: item.colors[3],
-                      borderColor: item.colors[1],
-                    }}
+              {themeFamilies.map((family) => {
+                const dual = family.appearances.length > 1;
+                const active = activeFamily.familyId === family.familyId;
+                const cardAppearance = appearanceForFamilyCard(
+                  family,
+                  familyPrefs,
+                  activeFamily.familyId,
+                  activeAppearance,
+                );
+                const def = previewForFamily(family, cardAppearance);
+                const { tokens } = def;
+                const [canvas, surface, accent, text] = tokens.preview;
+                return (
+                  <article
+                    key={family.familyId}
+                    className={`vs-themeChip${active ? " is-active" : ""}${dual ? " has-modes" : ""}`}
+                    data-appearance={cardAppearance}
+                    style={
+                      {
+                        "--chip-canvas": canvas,
+                        "--chip-surface": surface,
+                        "--chip-accent": accent,
+                        "--chip-text": text,
+                        "--chip-muted": tokens.muted,
+                        "--chip-on-accent": tokens.onAccent,
+                        "--chip-border": tokens.border,
+                      } as CSSProperties
+                    }
                   >
-                    <i className="vs-themePreviewDots">•••</i>
-                    <i style={{ background: item.colors[1] }} />
-                    <i style={{ background: item.colors[1] }} />
-                    <i style={{ background: item.colors[2] }} />
-                  </span>
-                  <span className="vs-themeCopy">
-                    <strong>{item.label}</strong>
-                    <small>{item.hint}</small>
-                  </span>
-                  {theme === item.id && (
-                    <span className="vs-themeCheck" aria-hidden>
-                      <Check size={14} />
-                    </span>
-                  )}
-                </button>
-              ))}
+                    <button
+                      type="button"
+                      className="vs-themeChipHit"
+                      onClick={() => selectFamily(family.familyId)}
+                      aria-pressed={active}
+                      aria-label={family.label}
+                    >
+                      <span className="vs-themeChipPreview" aria-hidden>
+                        <span className="vs-themeChipPreviewDots">•••</span>
+                        <span className="vs-themeChipPreviewBars">
+                          <i />
+                          <i />
+                        </span>
+                        <span className="vs-themeChipPreviewAccent" />
+                      </span>
+
+                      <span className="vs-themeChipMeta">
+                        <strong className="vs-themeChipName">{family.label}</strong>
+                        {active ? (
+                          <span className="vs-themeChipCheck" aria-hidden>
+                            <Check size={12} />
+                          </span>
+                        ) : (
+                          <span className="vs-themeChipCheckSpacer" aria-hidden />
+                        )}
+                      </span>
+                    </button>
+
+                    {dual ? (
+                      <div className="vs-themeChipModes" role="group" aria-label={t("settings.themeMode")}>
+                        {family.appearances.includes("light") ? (
+                          <button
+                            type="button"
+                            className={
+                              active && activeAppearance === "light" ? "is-active" : undefined
+                            }
+                            aria-pressed={active && activeAppearance === "light"}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              selectFamilyAppearance(family.familyId, "light");
+                            }}
+                          >
+                            Light
+                          </button>
+                        ) : null}
+                        {family.appearances.includes("dark") ? (
+                          <button
+                            type="button"
+                            className={
+                              active && activeAppearance === "dark" ? "is-active" : undefined
+                            }
+                            aria-pressed={active && activeAppearance === "dark"}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              selectFamilyAppearance(family.familyId, "dark");
+                            }}
+                          >
+                            Dark
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+            <h2 style={{ marginTop: "2rem" }}>{t("settings.attentionRing")}</h2>
+            <p className="vs-settingsHint">{t("settings.attentionRingHint")}</p>
+            <div className="vs-soundCard">
+              <div className="vs-soundRow">
+                <div>
+                  <strong>{t("settings.attentionRing")}</strong>
+                  <small>{t("settings.attentionRingHint")}</small>
+                </div>
+                <Toggle
+                  on={attention.ringEnabled}
+                  label={t("settings.attentionRing")}
+                  onClick={() => patchAttention({ ringEnabled: !attention.ringEnabled })}
+                />
+              </div>
+              <div className="vs-soundRow">
+                <div>
+                  <strong>{t("settings.attentionNotify")}</strong>
+                  <small>{t("settings.attentionNotifyHint")}</small>
+                </div>
+                <Toggle
+                  on={attention.notifyEnabled}
+                  label={t("settings.attentionNotify")}
+                  onClick={() => patchAttention({ notifyEnabled: !attention.notifyEnabled })}
+                />
+              </div>
+              <div className="vs-soundSection">
+                <div className="vs-hotkeyGroupTitle">{t("settings.attentionColor")}</div>
+                <div className="vs-attentionSwatches">
+                  {ATTENTION_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className={`vs-attentionSwatch${attention.ringColor === color ? " is-active" : ""}`}
+                      style={{ background: color }}
+                      title={color}
+                      aria-label={color}
+                      onClick={() => patchAttention({ ringColor: color })}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
             <h2 style={{ marginTop: "2rem" }}>{t("settings.zoom")}</h2>
             <p className="vs-settingsHint">{t("settings.zoomHint")}</p>
@@ -461,56 +527,11 @@ export function SettingsPage() {
 
             <div className="vs-companionCard">
               <div className="vs-companionMeta">
-                <span
-                  className={`vs-companionBadge${status?.paired ? " is-on" : status?.running ? " is-wait" : ""}`}
-                >
-                  {stateLabel}
-                </span>
-                <p>{t("settings.mobileScan")}</p>
-                <div className="vs-companionActions">
-                  <a
-                    className="vs-btn vs-btnGhost"
-                    href={installPageUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {t("settings.mobileDownload")}
-                  </a>
-                  {status?.running ? (
-                    <button
-                      type="button"
-                      className="vs-btn"
-                      disabled={busy}
-                      onClick={() => void disableCompanion()}
-                    >
-                      {t("settings.mobileDisable")}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="vs-btn vs-btnPrimary"
-                      disabled={busy}
-                      onClick={() => void enableCompanion()}
-                    >
-                      {t("settings.mobileEnable")}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="vs-btn vs-btnGhost"
-                    disabled={busy || !status?.running}
-                    onClick={() => void rotateCode()}
-                  >
-                    {t("settings.mobileRotate")}
-                  </button>
-                </div>
+                <span className="vs-companionBadge is-wait">{t("settings.mobileDev")}</span>
+                <p>{t("settings.mobileDevBody")}</p>
               </div>
               <div className="vs-companionQrWrap">
-                {pairUrl ? (
-                  <CompanionQrCode value={pairUrl} size={196} label={t("settings.mobile")} />
-                ) : (
-                  <div className="vs-companionQrPlaceholder">{t("settings.mobileOff")}</div>
-                )}
+                <div className="vs-companionQrPlaceholder">{t("settings.mobileDevShort")}</div>
               </div>
             </div>
           </section>
@@ -539,18 +560,32 @@ export function SettingsPage() {
               <div key={group.id} className="vs-hotkeyGroup">
                 <div className="vs-hotkeyGroupTitle">{t(group.labelKey)}</div>
                 <ul className="vs-hotkeyRows">
-                  {group.actions.map((id) => (
-                    <li key={id}>
-                      <span>{t(HOTKEY_LABELS[id])}</span>
-                      <button
-                        type="button"
-                        className={`vs-hotkeyEdit${listening === id ? " is-listening" : ""}`}
-                        onClick={() => setListening(id)}
-                      >
-                        {listening === id ? t("settings.hk.press") : formatHotkey(hotkeys[id])}
-                      </button>
-                    </li>
-                  ))}
+                  {group.actions.map((id) => {
+                    const conflict = (Object.keys(hotkeys) as HotkeyAction[]).find(
+                      (other) => other !== id && bindingsEqual(hotkeys[other], hotkeys[id]),
+                    );
+                    return (
+                      <li key={id}>
+                        <span>
+                          {t(HOTKEY_LABELS[id])}
+                          {conflict ? (
+                            <small className="vs-hotkeyConflict">
+                              {t("settings.hk.conflict")} {t(HOTKEY_LABELS[conflict])}
+                            </small>
+                          ) : null}
+                        </span>
+                        <button
+                          type="button"
+                          className={`vs-hotkeyEdit${listening === id ? " is-listening" : ""}${
+                            conflict ? " is-conflict" : ""
+                          }`}
+                          onClick={() => setListening((cur) => (cur === id ? null : id))}
+                        >
+                          {listening === id ? t("settings.hk.press") : formatHotkey(hotkeys[id])}
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}
@@ -560,9 +595,30 @@ export function SettingsPage() {
         {section === "welcome" && (
           <section className="vs-settingsPanelBody">
             <h2>{t("settings.welcome")}</h2>
-            <button type="button" className="vs-btn vs-btnPrimary" onClick={() => void resetOnboarding()}>
-              {t("settings.showWelcome")}
-            </button>
+            <p className="vs-settingsHint">{t("settings.welcomeHint")}</p>
+            <div className="vs-soundCard">
+              <div className="vs-soundRow">
+                <div>
+                  <strong>{t("settings.skipWelcome")}</strong>
+                  <small>{t("settings.skipWelcomeHint")}</small>
+                </div>
+                <Toggle
+                  on={skipWelcome}
+                  label={t("settings.skipWelcome")}
+                  onClick={() => setSkipWelcome(!skipWelcome)}
+                />
+              </div>
+            </div>
+            <div className="vs-settingsActions">
+              <button
+                type="button"
+                className="vs-btn vs-btnPrimary vs-settingsWelcomeBtn"
+                onClick={() => showWelcomeScreen()}
+              >
+                {t("settings.showWelcome")}
+              </button>
+              <p className="vs-settingsHint">{t("settings.showWelcomeHint")}</p>
+            </div>
           </section>
         )}
       </div>

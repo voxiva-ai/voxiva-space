@@ -1,8 +1,10 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { ChevronRight, Loading01 } from "@untitledui/icons";
+import { Loading01 } from "@untitledui/icons";
+import { IconChevronRight } from "@/components/icons";
 import { listDirectory } from "./api";
 import { MaterialFileIcon } from "./MaterialFileIcon";
 import type { FileEntry } from "./types";
+import { joinWorkspacePath, VOXIVA_PATH_MIME } from "@/features/terminal/drop";
 
 function EntryRow({
   root,
@@ -56,8 +58,9 @@ function EntryRow({
         draggable={!entry.isDir}
         onDragStart={(event) => {
           if (entry.isDir) return;
-          event.dataTransfer.setData("text/plain", entry.path);
-          event.dataTransfer.setData("application/x-voxiva-path", entry.path);
+          const abs = joinWorkspacePath(root, entry.path);
+          event.dataTransfer.setData(VOXIVA_PATH_MIME, abs);
+          event.dataTransfer.setData("text/plain", abs);
           event.dataTransfer.effectAllowed = "copy";
         }}
       >
@@ -66,7 +69,7 @@ function EntryRow({
             (loading ? (
               <Loading01 size={13} className="is-loading" />
             ) : (
-              <ChevronRight size={13} className={expanded ? "is-open" : ""} />
+              <IconChevronRight size={14} className={expanded ? "is-open" : ""} />
             ))}
         </span>
         <MaterialFileIcon name={entry.name} isDir={entry.isDir} open={expanded} />

@@ -8,6 +8,13 @@ export type BinaryFile = {
   size: number;
 };
 
+export type WorkspaceFileInfo = {
+  path: string;
+  absolutePath: string;
+  mime: string;
+  size: number;
+};
+
 export function listDirectory(root: string, path = "") {
   return invoke<FileEntry[]>("list_workspace_dir", {
     workspaceRoot: root,
@@ -17,6 +24,14 @@ export function listDirectory(root: string, path = "") {
 
 export function readTextFile(root: string, path: string) {
   return invoke<TextFile>("read_text_file", {
+    workspaceRoot: root,
+    relativePath: path,
+  });
+}
+
+/** Metadata + absolute path for asset:// media preview (no file bytes). */
+export function getWorkspaceFileInfo(root: string, path: string) {
+  return invoke<WorkspaceFileInfo>("workspace_file_info", {
     workspaceRoot: root,
     relativePath: path,
   });

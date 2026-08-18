@@ -3,6 +3,7 @@
 
 use serde::Serialize;
 use std::{
+    collections::{HashMap, VecDeque},
     io::{Read, Write},
     net::{TcpListener, TcpStream, UdpSocket},
     sync::{
@@ -49,11 +50,53 @@ struct CompanionInputPayload {
     text: String,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CompanionSpawnPayload {
+    workspace_id: String,
+    agent_id: Option<String>,
+    title: Option<String>,
+    command: Option<String>,
+}
+
+struct TailBuf {
+    next_seq: u64,
+    chunks: VecDeque<(u64, String)>,
+    bytes: usize,
+}
+
+impl TailBuf {
+    fn push(&mut self, text: String) {
+        let len = text.len();
+        self.chunks.push_back((self.next_seq, text));
+        self.next_seq += 1;
+        self.bytes += len;
+        while self.bytes > 180_000 || self.chunks.len() > 500 {
+            if let Some((_, old)) = self.chunks.pop_front() {
+                self.bytes = self.bytes.saturating_sub(old.len());
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn since(&self, since: u64) -> (u64, Vec<(u64, String)>) {
+        let out: Vec<(u64, String)> = self
+            .chunks
+            .iter()
+            .filter(|(seq, _)| *seq >= since)
+            .cloned()
+            .collect();
+        (self.next_seq, out)
+    }
+}
+
 struct Inner {
     token: String,
     paired: bool,
     workspace_id: Option<String>,
     snapshot: serde_json::Value,
+    tails: HashMap<String, TailBuf>,
     stop: Arc<AtomicBool>,
 }
 
@@ -74,7 +117,7 @@ fn lan_ip() -> Option<String> {
 
 fn cors_ok(body: &str, status: &str, content_type: &str) -> String {
     format!(
-        "HTTP/1.1 {status}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, X-Voxiva-Token\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        "HTTP/1.1 {status}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, PATCH, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, X-Voxiva-Token\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len()
     )
 }
@@ -114,6 +157,73 @@ fn parse_request(raw: &str) -> (String, String, String) {
 
 fn path_only(path: &str) -> &str {
     path.split('?').next().unwrap_or(path)
+}
+
+fn query_param(path_full: &str, key: &str) -> Option<String> {
+    let q = path_full.split('?').nth(1)?;
+    for pair in q.split('&') {
+        let mut it = pair.splitn(2, '=');
+        let k = it.next()?;
+        let v = it.next().unwrap_or("");
+        if k == key {
+            return Some(urlencoding_decode(v));
+        }
+    }
+    None
+}
+
+fn urlencoding_decode(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let bytes = raw.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'+' => {
+                out.push(' ');
+                i += 1;
+            }
+            b'%' if i + 2 < bytes.len() => {
+                let hex = &raw[i + 1..i + 3];
+                if let Ok(v) = u8::from_str_radix(hex, 16) {
+                    out.push(v as char);
+                    i += 3;
+                } else {
+                    out.push('%');
+                    i += 1;
+                }
+            }
+            c => {
+                out.push(c as char);
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+fn session_id_from_tail_path(path: &str) -> Option<&str> {
+    let rest = path.strip_prefix("/api/sessions/")?;
+    let (id, tail) = rest.split_once('/')?;
+    if tail == "tail" && !id.is_empty() {
+        Some(id)
+    } else {
+        None
+    }
+}
+
+fn session_id_from_session_path(path: &str) -> Option<&str> {
+    let rest = path.strip_prefix("/api/sessions/")?;
+    if rest.is_empty() || rest.contains('/') {
+        return None;
+    }
+    Some(rest)
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CompanionRenamePayload {
+    session_id: String,
+    title: String,
 }
 
 fn chrono_millis() -> u128 {
@@ -221,8 +331,43 @@ fn handle(
                 .lock()
                 .ok()
                 .and_then(|g| g.as_ref().map(|i| i.snapshot.clone()))
-                .unwrap_or_else(|| serde_json::json!({ "spaces": [], "sessions": [] }));
+                .unwrap_or_else(|| serde_json::json!({ "spaces": [], "sessions": [], "boards": {} }));
             cors_ok(&snap.to_string(), "200 OK", "application/json")
+        }
+    } else if method == "GET" && session_id_from_tail_path(path).is_some() {
+        if !authorize(&state, header_token.as_deref()) {
+            cors_ok(
+                r#"{"error":"Unauthorized"}"#,
+                "401 Unauthorized",
+                "application/json",
+            )
+        } else {
+            let session_id = session_id_from_tail_path(path).unwrap_or("");
+            let since = query_param(&path_full, "since")
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(0);
+            let (next, chunks) = state
+                .inner
+                .lock()
+                .ok()
+                .and_then(|g| {
+                    g.as_ref().map(|inner| {
+                        inner
+                            .tails
+                            .get(session_id)
+                            .map(|buf| buf.since(since))
+                            .unwrap_or((0, Vec::new()))
+                    })
+                })
+                .unwrap_or((0, Vec::new()));
+            let payload = serde_json::json!({
+                "next": next,
+                "chunks": chunks.iter().map(|(seq, text)| serde_json::json!({
+                    "seq": seq,
+                    "text": text,
+                })).collect::<Vec<_>>(),
+            });
+            cors_ok(&payload.to_string(), "200 OK", "application/json")
         }
     } else if method == "GET" && path == "/api/tasks" {
         if !authorize(&state, header_token.as_deref()) {
@@ -232,7 +377,36 @@ fn handle(
                 "application/json",
             )
         } else {
-            let tasks = recent.lock().map(|g| g.clone()).unwrap_or_default();
+            let workspace_id = query_param(&path_full, "workspaceId");
+            let tasks = {
+                let snap = state
+                    .inner
+                    .lock()
+                    .ok()
+                    .and_then(|g| g.as_ref().map(|i| i.snapshot.clone()));
+                if let Some(snap) = snap {
+                    let boards = snap.get("boards").cloned().unwrap_or(serde_json::json!({}));
+                    if let Some(ws) = workspace_id.as_deref() {
+                        boards
+                            .get(ws)
+                            .cloned()
+                            .unwrap_or_else(|| serde_json::json!([]))
+                    } else {
+                        // Flatten all boards when no workspace filter.
+                        let mut all = Vec::new();
+                        if let Some(map) = boards.as_object() {
+                            for value in map.values() {
+                                if let Some(arr) = value.as_array() {
+                                    all.extend(arr.iter().cloned());
+                                }
+                            }
+                        }
+                        serde_json::Value::Array(all)
+                    }
+                } else {
+                    serde_json::json!([])
+                }
+            };
             cors_ok(
                 &serde_json::json!({ "tasks": tasks }).to_string(),
                 "200 OK",
@@ -267,17 +441,23 @@ fn handle(
                     .and_then(|v| v.as_str())
                     .unwrap_or("medium")
                     .to_string();
-                let workspace_id = {
-                    state
-                        .inner
-                        .lock()
-                        .ok()
-                        .and_then(|g| g.as_ref().and_then(|i| i.workspace_id.clone()))
-                };
+                let workspace_id = parsed
+                    .get("workspaceId")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .or_else(|| {
+                        state
+                            .inner
+                            .lock()
+                            .ok()
+                            .and_then(|g| g.as_ref().and_then(|i| i.workspace_id.clone()))
+                    });
                 let entry = serde_json::json!({
                     "title": title,
                     "priority": priority,
                     "at": chrono_millis(),
+                    "workspaceId": workspace_id,
                 });
                 if let Ok(mut g) = recent.lock() {
                     g.push(entry);
@@ -292,6 +472,54 @@ fn handle(
                     workspace_id,
                 };
                 let _ = app.emit("companion://task", payload);
+                cors_ok(r#"{"ok":true}"#, "200 OK", "application/json")
+            }
+        }
+    } else if method == "POST" && path == "/api/spawn" {
+        if !authorize(&state, header_token.as_deref()) {
+            cors_ok(
+                r#"{"error":"Unauthorized"}"#,
+                "401 Unauthorized",
+                "application/json",
+            )
+        } else {
+            let parsed: serde_json::Value =
+                serde_json::from_str(&body).unwrap_or_else(|_| serde_json::json!({}));
+            let workspace_id = parsed
+                .get("workspaceId")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if workspace_id.is_empty() {
+                cors_ok(
+                    r#"{"error":"workspaceId required"}"#,
+                    "400 Bad Request",
+                    "application/json",
+                )
+            } else {
+                let agent_id = parsed
+                    .get("agentId")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty());
+                let title = parsed
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty());
+                let command = parsed
+                    .get("command")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty());
+                let payload = CompanionSpawnPayload {
+                    workspace_id,
+                    agent_id,
+                    title,
+                    command,
+                };
+                let _ = app.emit("companion://spawn", payload);
                 cors_ok(r#"{"ok":true}"#, "200 OK", "application/json")
             }
         }
@@ -325,6 +553,44 @@ fn handle(
             } else {
                 let payload = CompanionInputPayload { session_id, text };
                 let _ = app.emit("companion://input", payload);
+                cors_ok(r#"{"ok":true}"#, "200 OK", "application/json")
+            }
+        }
+    } else if method == "PATCH" && session_id_from_session_path(path).is_some() {
+        if !authorize(&state, header_token.as_deref()) {
+            cors_ok(
+                r#"{"error":"Unauthorized"}"#,
+                "401 Unauthorized",
+                "application/json",
+            )
+        } else {
+            let session_id = session_id_from_session_path(path)
+                .unwrap_or("")
+                .to_string();
+            let parsed: serde_json::Value =
+                serde_json::from_str(&body).unwrap_or_else(|_| serde_json::json!({}));
+            let title = parsed
+                .get("title")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if session_id.is_empty() {
+                cors_ok(
+                    r#"{"error":"sessionId required"}"#,
+                    "400 Bad Request",
+                    "application/json",
+                )
+            } else {
+                let payload = CompanionRenamePayload {
+                    session_id,
+                    title: if title.is_empty() {
+                        "Shell".into()
+                    } else {
+                        title
+                    },
+                };
+                let _ = app.emit("companion://rename", payload);
                 cors_ok(r#"{"ok":true}"#, "200 OK", "application/json")
             }
         }
@@ -402,7 +668,8 @@ pub fn companion_start(
                 token: token.clone(),
                 paired: false,
                 workspace_id,
-                snapshot: serde_json::json!({ "spaces": [], "sessions": [] }),
+                snapshot: serde_json::json!({ "spaces": [], "sessions": [], "boards": {} }),
+                tails: HashMap::new(),
                 stop: stop.clone(),
             });
         }
@@ -476,6 +743,30 @@ pub fn companion_push_snapshot(
     let mut guard = state.inner.lock().map_err(|e| e.to_string())?;
     if let Some(inner) = guard.as_mut() {
         inner.snapshot = snapshot;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn companion_append_output(
+    state: State<'_, Arc<CompanionState>>,
+    session_id: String,
+    data: String,
+) -> Result<(), String> {
+    if session_id.trim().is_empty() || data.is_empty() {
+        return Ok(());
+    }
+    let mut guard = state.inner.lock().map_err(|e| e.to_string())?;
+    if let Some(inner) = guard.as_mut() {
+        inner
+            .tails
+            .entry(session_id)
+            .or_insert_with(|| TailBuf {
+                next_seq: 0,
+                chunks: VecDeque::new(),
+                bytes: 0,
+            })
+            .push(data);
     }
     Ok(())
 }

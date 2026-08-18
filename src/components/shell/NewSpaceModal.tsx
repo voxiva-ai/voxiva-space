@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CreateSpaceSetup,
   type CreateSpaceSetupValue,
 } from "@/components/shell/CreateSpaceSetup";
-import { pickWorkspaceFolder } from "@/features/terminal";
+import { useFolderBrowse } from "@/features/workspace/useFolderBrowse";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import { clientError } from "@/lib/errors";
 import { SPACE_COLORS, type SpaceColor } from "@/lib/types";
@@ -14,28 +14,58 @@ type NewSpaceModalProps = {
   onClose: () => void;
 };
 
+function nextColor(used: Set<string>, count: number): SpaceColor {
+  return (
+    SPACE_COLORS.find((c) => !used.has(c)) ?? SPACE_COLORS[count % SPACE_COLORS.length]
+  );
+}
+
 export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
   const { workspaces, createWorkspace, setError, t } = useSpace();
   const [name, setName] = useState("");
   const [cwd, setCwd] = useState("");
   const [busy, setBusy] = useState(false);
-  const [setup, setSetup] = useState<CreateSpaceSetupValue>(() => {
+  const browseFolder = useFolderBrowse();
+  const [setup, setSetup] = useState<CreateSpaceSetupValue>({
+    grid: 2,
+    agentIds: [],
+    includeBrowser: false,
+    color: "green",
+  });
+
+  useEffect(() => {
+    if (!open) return;
     const used = new Set(workspaces.map((ws) => ws.color));
-    const free =
-      SPACE_COLORS.find((c) => !used.has(c)) ?? SPACE_COLORS[workspaces.length % SPACE_COLORS.length];
-    return {
-      grid: 4,
+    setName("");
+    setCwd("");
+    setBusy(false);
+    setSetup({
+      grid: 2,
       agentIds: [],
       includeBrowser: false,
-      color: free as SpaceColor,
+      color: nextColor(used, workspaces.length),
+    });
+    // Only reset when the modal opens — not on every workspaces update (that felt like lag).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
     };
-  });
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   if (!open) return null;
 
   async function browse() {
     try {
-      const picked = await pickWorkspaceFolder();
+      const picked = await browseFolder(cwd.trim() || null);
       if (!picked) return;
       setCwd(picked);
       if (!name.trim()) {
@@ -60,7 +90,7 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
         grid: setup.grid,
         includeBrowser: setup.includeBrowser,
         color: setup.color,
-        agentIds: setup.agentIds,
+        agentIds: [],
       });
       setName("");
       setCwd("");
@@ -73,7 +103,7 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
   }
 
   return (
-    <div className="vs-modalScrim" role="presentation" onClick={onClose}>
+    <div className="vs-modalScrim vs-modalScrimFast" role="presentation" onClick={onClose}>
       <div
         className="vs-modal vs-modalNewSpace"
         role="dialog"
@@ -109,7 +139,11 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
               placeholder="D:\\projects\\app"
               spellCheck={false}
             />
-            <button type="button" className="vs-modalBrowse" onClick={() => void browse()}>
+            <button
+              type="button"
+              className="vs-modalBrowse"
+              onClick={() => void browse()}
+            >
               {t("projects.browse")}
             </button>
           </div>
@@ -122,6 +156,7 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
           showPreview={false}
           showBrowser
           showColor
+          showAgents={false}
         />
 
         <div className="vs-modalActions">

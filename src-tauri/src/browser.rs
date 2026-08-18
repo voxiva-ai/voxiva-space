@@ -21,278 +21,13 @@ struct BrowserLoadPayload {
     state: &'static str,
 }
 
-const INSPECTOR_SCRIPT: &str = r#"
-(() => {
-  if (window.__voxivaInspector) return;
+#[derive(Clone, Serialize)]
+pub struct BrowserPageMeta {
+    pub title: String,
+    pub favicon: String,
+}
 
-  const state = {
-    enabled: false,
-    hovered: null,
-    selected: null,
-    pending: null,
-    pendingAction: null,
-    agents: [],
-    files: []
-  };
-  const root = document.createElement("div");
-  root.id = "__voxiva-inspector";
-  root.style.cssText = "all:initial;display:none;position:fixed;inset:0;pointer-events:none;z-index:2147483647;font-family:Inter,Segoe UI,sans-serif;color:#eef2ff";
-
-  const box = document.createElement("div");
-  box.style.cssText = "display:none;position:fixed;pointer-events:none;border:1px solid rgba(100,168,255,.55);background:rgba(77,157,255,.06);box-sizing:border-box;border-radius:3px";
-
-  const badge = document.createElement("div");
-  badge.style.cssText = "display:none;position:fixed;pointer-events:none;padding:3px 7px;border-radius:5px;background:rgba(20,28,42,.92);color:#dce6f5;font:600 11px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace;border:1px solid rgba(100,168,255,.28);box-shadow:none;white-space:nowrap";
-
-  const panel = document.createElement("div");
-  panel.style.cssText = "display:none;position:fixed;right:12px;bottom:12px;width:min(340px,calc(100vw - 24px));max-height:min(420px,calc(100vh - 24px));overflow:auto;pointer-events:auto;padding:12px;border:1px solid rgba(100,168,255,.22);border-radius:14px;background:rgba(7,9,13,.97);color:#f4f7fb;box-shadow:0 18px 55px rgba(0,0,0,.5);font:13px/1.4 Inter,Segoe UI,sans-serif";
-
-  root.append(box, badge, panel);
-
-  function mount() {
-    if (!document.documentElement) {
-      document.addEventListener("DOMContentLoaded", mount, { once: true });
-      return;
-    }
-    if (!document.documentElement.contains(root)) document.documentElement.appendChild(root);
-  }
-
-  function elementName(el) {
-    if (!el) return "";
-    let component = "";
-    try {
-      const key = Object.keys(el).find((name) => name.startsWith("__reactFiber$"));
-      let fiber = key ? el[key] : null;
-      while (fiber && !component) {
-        const type = fiber.type;
-        if (typeof type === "function") component = type.displayName || type.name || "";
-        else if (type && typeof type === "object") component = type.displayName || type.render?.displayName || type.render?.name || "";
-        fiber = fiber.return;
-      }
-    } catch (_) {}
-    return component || el.tagName?.toLowerCase() || "element";
-  }
-
-  function selector(el) {
-    if (!el || el.nodeType !== 1) return "";
-    if (el.id) return `#${CSS.escape(el.id)}`;
-    const parts = [];
-    let node = el;
-    while (node && node.nodeType === 1 && parts.length < 5) {
-      let part = node.tagName.toLowerCase();
-      const classes = [...node.classList].slice(0, 3);
-      if (classes.length) part += "." + classes.map((name) => CSS.escape(name)).join(".");
-      const parent = node.parentElement;
-      if (parent) {
-        const siblings = [...parent.children].filter((item) => item.tagName === node.tagName);
-        if (siblings.length > 1) part += `:nth-of-type(${siblings.indexOf(node) + 1})`;
-      }
-      parts.unshift(part);
-      node = parent;
-    }
-    return parts.join(" > ");
-  }
-
-  function contextFor(el) {
-    const rect = el.getBoundingClientRect();
-    const style = getComputedStyle(el);
-    const styles = {};
-    for (const name of ["display","position","width","height","margin","padding","gap","color","background","font-family","font-size","font-weight","line-height","border","border-radius","box-shadow","align-items","justify-content","grid-template-columns"]) {
-      styles[name] = style.getPropertyValue(name);
-    }
-    return {
-      pageUrl: location.href,
-      component: elementName(el),
-      selector: selector(el),
-      tag: el.tagName.toLowerCase(),
-      id: el.id || "",
-      classes: [...el.classList],
-      text: (el.innerText || el.textContent || "").trim().slice(0, 800),
-      boundingBox: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
-      computedStyles: styles,
-      html: el.outerHTML.slice(0, 20000)
-    };
-  }
-
-  function position(el) {
-    if (!el || !el.isConnected) {
-      box.style.display = badge.style.display = "none";
-      return;
-    }
-    const rect = el.getBoundingClientRect();
-    box.style.display = "block";
-    box.style.left = `${rect.left}px`;
-    box.style.top = `${rect.top}px`;
-    box.style.width = `${rect.width}px`;
-    box.style.height = `${rect.height}px`;
-    badge.textContent = `${elementName(el)}  ${Math.round(rect.width)}×${Math.round(rect.height)}`;
-    badge.style.display = "block";
-    badge.style.left = `${Math.max(4, Math.min(rect.left, innerWidth - badge.offsetWidth - 4))}px`;
-    badge.style.top = `${rect.top > 28 ? rect.top - 26 : Math.min(innerHeight - 24, rect.bottom + 4)}px`;
-  }
-
-  function showSelection(el) {
-    state.selected = el;
-    state.files = [];
-    const data = contextFor(el);
-    state.pending = data;
-    panel.innerHTML = "";
-    const heading = document.createElement("div");
-    heading.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px";
-    const title = document.createElement("strong");
-    title.style.cssText = "font:700 14px/1.3 Inter,Segoe UI,sans-serif;color:#fff";
-    title.textContent = data.component;
-    const close = document.createElement("button");
-    close.textContent = "×";
-    close.title = "Close";
-    close.style.cssText = "all:initial;cursor:pointer;color:#8b93a7;font:22px/1 Inter,Segoe UI,sans-serif;padding:2px 5px";
-    close.onclick = () => {
-      state.selected = null;
-      panel.style.display = box.style.display = badge.style.display = "none";
-    };
-    heading.append(title, close);
-
-    const meta = document.createElement("div");
-    meta.style.cssText = "color:#8b93a7;font:11px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace;word-break:break-all;margin-bottom:10px";
-    meta.textContent = data.selector;
-
-    const size = document.createElement("div");
-    size.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;color:#c8d0e0;font:12px/1.35 Inter,Segoe UI,sans-serif";
-    size.textContent = `${data.boundingBox.width} × ${data.boundingBox.height}  ·  ${data.tag}`;
-
-    const files = document.createElement("div");
-    files.id = "__voxiva-inspector-files";
-    files.style.cssText = "margin-bottom:9px;color:#8b93a7;font:11px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;word-break:break-word";
-    files.textContent = state.files.length ? state.files.join(" · ") : "Finding related file…";
-
-    const prompt = document.createElement("textarea");
-    prompt.placeholder = "What should change in this component?";
-    prompt.style.cssText = "all:initial;display:block;box-sizing:border-box;width:100%;min-height:64px;padding:9px 10px;border:1px solid rgba(100,168,255,.28);border-radius:10px;background:#0c1017;color:#f4f7fb;font:13px/1.4 Inter,Segoe UI,sans-serif;resize:vertical";
-
-    const actions = document.createElement("div");
-    actions.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:10px";
-    const agent = document.createElement("select");
-    agent.style.cssText = "box-sizing:border-box;min-width:0;height:34px;padding:0 10px;border:1px solid rgba(100,168,255,.28);border-radius:9px;background:#0c1017;color:#f4f7fb;font:12px Inter,Segoe UI,sans-serif";
-    const renderAgents = () => {
-      agent.innerHTML = "";
-      for (const item of state.agents) {
-        const option = document.createElement("option");
-        option.value = item.id;
-        option.textContent = item.name;
-        agent.append(option);
-      }
-    };
-    renderAgents();
-    state.renderAgents = renderAgents;
-    const send = document.createElement("button");
-    send.textContent = "Send";
-    send.style.cssText = "all:initial;cursor:pointer;padding:9px 14px;border-radius:9px;background:#2d5bff;color:white;font:600 12px/1 Inter,Segoe UI,sans-serif;box-shadow:none";
-    send.onclick = () => {
-      const instruction = prompt.value.trim();
-      if (!instruction || !agent.value) {
-        prompt.focus();
-        return;
-      }
-      state.pendingAction = { selection: data, instruction, agentId: agent.value };
-      send.textContent = "Sent";
-      setTimeout(() => { send.textContent = "Send"; }, 1200);
-    };
-    const copy = document.createElement("button");
-    copy.textContent = "Copy context";
-    copy.style.cssText = "all:initial;grid-column:1/-1;cursor:pointer;color:#64a8ff;font:600 11px/1 Inter,Segoe UI,sans-serif";
-    copy.onclick = async () => {
-      const payload = JSON.stringify({ ...data, instruction: prompt.value.trim() }, null, 2);
-      try {
-        await navigator.clipboard.writeText(payload);
-        copy.textContent = "Copied";
-      } catch (_) {
-        prompt.value = payload;
-        prompt.select();
-        document.execCommand("copy");
-        copy.textContent = "Copied";
-      }
-      setTimeout(() => { copy.textContent = "Copy context"; }, 1200);
-    };
-    actions.append(agent, send, copy);
-    panel.append(heading, meta, size, files, prompt, actions);
-    panel.style.display = "block";
-    prompt.focus();
-  }
-
-  function targetAt(x, y) {
-    const el = document.elementFromPoint(x, y);
-    return el && !root.contains(el) ? el : null;
-  }
-
-  function onMove(event) {
-    if (!state.enabled || panel.contains(event.target)) return;
-    if (state.selected) return;
-    state.hovered = targetAt(event.clientX, event.clientY);
-    position(state.hovered);
-  }
-
-  function onClick(event) {
-    if (!state.enabled || panel.contains(event.target)) return;
-    const el = targetAt(event.clientX, event.clientY);
-    if (!el) return;
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
-    position(el);
-    showSelection(el);
-  }
-
-  function onKey(event) {
-    if (event.key === "F12") {
-      event.preventDefault();
-      event.stopPropagation();
-      api.toggle();
-      return;
-    }
-    if (state.enabled && event.key === "Escape") api.setEnabled(false);
-  }
-
-  const api = {
-    setEnabled(enabled) {
-      mount();
-      state.enabled = Boolean(enabled);
-      root.style.display = state.enabled ? "block" : "none";
-      if (!state.enabled) {
-        state.hovered = state.selected = null;
-        box.style.display = badge.style.display = panel.style.display = "none";
-      }
-      return state.enabled;
-    },
-    toggle() { return api.setEnabled(!state.enabled); },
-    configure(agents, files) {
-      state.agents = Array.isArray(agents) ? agents : state.agents;
-      state.files = Array.isArray(files) ? files : state.files;
-      if (state.renderAgents) state.renderAgents();
-      const filesNode = document.getElementById("__voxiva-inspector-files");
-      if (filesNode) {
-        filesNode.textContent = state.files.length
-          ? state.files.join(" · ")
-          : "Related file not found";
-      }
-    },
-    takeEvent() {
-      if (!state.pending && !state.pendingAction) return null;
-      const value = { selection: state.pending, action: state.pendingAction };
-      state.pending = null;
-      state.pendingAction = null;
-      return value;
-    }
-  };
-
-  document.addEventListener("mousemove", onMove, true);
-  document.addEventListener("click", onClick, true);
-  document.addEventListener("keydown", onKey, true);
-  addEventListener("scroll", () => position(state.selected || state.hovered), true);
-  addEventListener("resize", () => position(state.selected || state.hovered), true);
-  window.__voxivaInspector = api;
-  mount();
-})();
-"#;
+const INSPECTOR_SCRIPT: &str = include_str!("inspector/inject.js");
 
 fn parse_external_url(raw: &str) -> Result<url::Url, String> {
     let trimmed = raw.trim();
@@ -310,8 +45,16 @@ fn parse_external_url(raw: &str) -> Result<url::Url, String> {
         trimmed.to_string()
     } else {
         let host = trimmed.split('/').next().unwrap_or(trimmed);
-        let host_only = host.split(':').next().unwrap_or(host);
-        let local = matches!(host_only, "localhost" | "127.0.0.1" | "[::1]" | "::1");
+        let host_only = host
+            .split(':')
+            .next()
+            .unwrap_or(host)
+            .trim_matches(|c| c == '[' || c == ']');
+        let local = host_only.eq_ignore_ascii_case("localhost")
+            || host_only == "127.0.0.1"
+            || host_only == "::1"
+            || host_only.to_ascii_lowercase().ends_with(".localhost")
+            || host_only.starts_with("127.");
         format!("{}://{trimmed}", if local { "http" } else { "https" })
     };
     let parsed = with_scheme
@@ -366,9 +109,12 @@ pub async fn browser_open(
     let load_label = label.clone();
     let popup_app = app.clone();
     let popup_label = label.clone();
+    // Start on about:blank then navigate — more reliable for localhost on WebView2
+    // than creating the child already pointed at a loopback URL.
+    let blank = url::Url::parse("about:blank").map_err(|e| e.to_string())?;
     let webview = main
         .add_child(
-            WebviewBuilder::new(&label, WebviewUrl::External(parsed))
+            WebviewBuilder::new(&label, WebviewUrl::External(blank))
                 .initialization_script(INSPECTOR_SCRIPT)
                 // Real Chromium DevTools (separate OS window). In-app side panel
                 // is the Simux-style dock; WebView2 cannot embed DevTools UI.
@@ -419,7 +165,14 @@ pub async fn browser_open(
         .map_err(|e| format!("Failed to embed browser: {e}"))?;
 
     mark_visible(&registry, &label, true)?;
+    webview.set_position(position).map_err(|e| e.to_string())?;
+    webview.set_size(size).map_err(|e| e.to_string())?;
     webview.show().map_err(|e| e.to_string())?;
+    if should_navigate {
+        webview
+            .navigate(parsed)
+            .map_err(|e| format!("Navigate failed: {e}"))?;
+    }
     Ok(())
 }
 
@@ -519,19 +272,95 @@ pub async fn browser_open_devtools(app: AppHandle, label: String) -> Result<(), 
 }
 
 #[tauri::command]
+pub async fn browser_page_meta(app: AppHandle, label: String) -> Result<BrowserPageMeta, String> {
+    let webview = app
+        .get_webview(&label)
+        .ok_or_else(|| "Browser not open".to_string())?;
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    webview
+        .eval_with_callback(
+            r#"(function(){
+              try {
+                const icon = document.querySelector('link[rel="icon"]')
+                  || document.querySelector('link[rel="shortcut icon"]')
+                  || document.querySelector('link[rel*="icon"]');
+                return JSON.stringify({
+                  title: (document.title || "").trim(),
+                  favicon: icon && icon.href ? String(icon.href) : ""
+                });
+              } catch (e) {
+                return JSON.stringify({ title: "", favicon: "" });
+              }
+            })()"#,
+            move |value| {
+                let _ = sender.send(value);
+            },
+        )
+        .map_err(|e| e.to_string())?;
+    let raw = tauri::async_runtime::spawn_blocking(move || {
+        receiver.recv_timeout(std::time::Duration::from_millis(800))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|_| "Page meta timed out".to_string())?;
+    let value: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|e| format!("Invalid page meta: {e}"))?;
+    Ok(BrowserPageMeta {
+        title: value
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        favicon: value
+            .get("favicon")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+    })
+}
+
+async fn eval_js_bool(webview: &tauri::Webview, script: &str) -> Result<bool, String> {
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    webview
+        .eval_with_callback(script, move |value| {
+            let _ = sender.send(value);
+        })
+        .map_err(|e| e.to_string())?;
+    let raw = tauri::async_runtime::spawn_blocking(move || {
+        receiver.recv_timeout(std::time::Duration::from_millis(800))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|_| "Inspector script timed out".to_string())?;
+    let trimmed = raw.trim();
+    Ok(trimmed == "true" || trimmed == "1")
+}
+
+fn ensure_inspector_script(webview: &tauri::Webview) -> Result<(), String> {
+    webview
+        .eval(INSPECTOR_SCRIPT)
+        .map_err(|e| format!("Failed to inject brush inspector: {e}"))
+}
+
+#[tauri::command]
 pub async fn browser_toggle_inspector(
     app: AppHandle,
     label: String,
     enabled: bool,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     let webview = app
         .get_webview(&label)
         .ok_or_else(|| "Browser not open — open a site first".to_string())?;
+    ensure_inspector_script(&webview)?;
+    let flag = if enabled { "true" } else { "false" };
     let script = format!(
-        "window.__voxivaInspector?.setEnabled({});",
-        if enabled { "true" } else { "false" }
+        "(function(){{ if (!window.__voxivaInspector) return false; return Boolean(window.__voxivaInspector.setEnabled({flag})); }})()"
     );
-    webview.eval(&script).map_err(|e| e.to_string())
+    let ok = eval_js_bool(&webview, &script).await?;
+    if enabled && !ok {
+        return Err("Brush inspector failed to activate — reload the page and try again".into());
+    }
+    Ok(ok)
 }
 
 #[tauri::command]
@@ -557,7 +386,7 @@ pub async fn browser_take_selection(
     .await
     .map_err(|e| e.to_string())?
     .map_err(|_| "Element selection timed out".to_string())?;
-    if raw.len() > 100_000 {
+    if raw.len() > 250_000 {
         return Err("Selected element context is too large".into());
     }
     let value: serde_json::Value =
@@ -575,11 +404,12 @@ pub async fn browser_configure_inspector(
     let webview = app
         .get_webview(&label)
         .ok_or_else(|| "Browser not open".to_string())?;
+    ensure_inspector_script(&webview)?;
     let agents = serde_json::to_string(&agents).map_err(|e| e.to_string())?;
     let files = serde_json::to_string(&files).map_err(|e| e.to_string())?;
     webview
         .eval(format!(
-            "window.__voxivaInspector?.configure?.({agents}, {files})"
+            "(function(){{ if (!window.__voxivaInspector) return; window.__voxivaInspector.configure({agents}, {files}); }})()"
         ))
         .map_err(|e| e.to_string())
 }
@@ -638,4 +468,24 @@ pub async fn browser_close_all(
         let _ = registry.labels.lock().map(|mut m| m.remove(&label));
     }
     Ok(())
+}
+
+/// Persist a design-mode handoff (cmux-style Details file) and return its path.
+#[tauri::command]
+pub fn write_annotate_context(content: String) -> Result<String, String> {
+    if content.trim().is_empty() {
+        return Err("Empty annotation".into());
+    }
+    if content.len() > 500_000 {
+        return Err("Annotation too large".into());
+    }
+    let dir = std::env::temp_dir().join("voxiva-annotate");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create annotate dir: {e}"))?;
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let path = dir.join(format!("annotate-{stamp}.md"));
+    std::fs::write(&path, content).map_err(|e| format!("Failed to write annotation: {e}"))?;
+    Ok(path.display().to_string())
 }

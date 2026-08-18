@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
@@ -8,6 +8,12 @@ import type { TerminalSession } from "@/lib/types";
 import { clientError } from "@/lib/errors";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import { resizeTerminalSession, writeTerminalSession } from "../api";
+import {
+  formatPathsForPty,
+  payloadFromDataTransfer,
+  registerTerminalOsDropTarget,
+} from "../drop";
+import { bracketedPaste, payloadFromClipboardSnapshot, payloadFromFileList, snapshotClipboard } from "../paste";
 import { nextXtermMountDelay } from "../spawnQueue";
 import type { TerminalExitEvent, TerminalOutputEvent } from "../types";
 import { readXtermTheme } from "../xtermTheme";
@@ -17,6 +23,8 @@ function keyEventToPty(event: KeyboardEvent): string | null {
   if (event.altKey || event.metaKey) return null;
 
   if (event.ctrlKey) {
+    // Let the paste handler own Ctrl/Cmd+V (text + images for OpenCode).
+    if (event.key === "v" || event.key === "V") return null;
     if (event.key.length === 1) {
       const code = event.key.toUpperCase().charCodeAt(0) - 64;
       if (code >= 1 && code <= 26) return String.fromCharCode(code);
@@ -78,17 +86,19 @@ function fitHostToPty(
 ): { cols: number; rows: number } | null {
   if (host.clientWidth < 8 || host.clientHeight < 8) return null;
 
-  // Measure cell size with scrollback briefly disabled so FitAddon doesn’t reserve 14px.
-  const prevScrollback = terminal.options.scrollback;
-  terminal.options.scrollback = 0;
-  try {
-    fitAddon.fit();
-  } catch {
-    // ignore
+  let cell = readCellMetrics(terminal);
+  if (!cell) {
+    // Measure cell size with scrollback briefly disabled so FitAddon doesn’t reserve 14px.
+    const prevScrollback = terminal.options.scrollback;
+    terminal.options.scrollback = 0;
+    try {
+      fitAddon.fit();
+    } catch {
+      // ignore
+    }
+    terminal.options.scrollback = prevScrollback;
+    cell = readCellMetrics(terminal);
   }
-  terminal.options.scrollback = prevScrollback;
-
-  const cell = readCellMetrics(terminal);
   if (!cell) {
     return { cols: terminal.cols, rows: terminal.rows };
   }
@@ -105,6 +115,7 @@ export function TerminalPane({
   isActive,
   session,
   paneId,
+  chrome = "full",
   onClose,
   onRestart,
   onFocus,
@@ -112,23 +123,36 @@ export function TerminalPane({
   isActive: boolean;
   session: TerminalSession;
   paneId: string;
+  /** full = header+body; body = xterm only (parent owns tab bar). */
+  chrome?: "full" | "body";
   onClose: () => void;
   onRestart: () => void;
   onFocus: () => void;
 }) {
-  const { setError, t, theme } = useSpace();
+  const { setError, t, theme, activeWorkspace } = useSpace();
   const [dropping, setDropping] = useState(false);
   const [xtermReady, setXtermReady] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const resizeFnRef = useRef<(() => void) | null>(null);
   const sessionIdRef = useRef(session.id);
   const writeFailNotified = useRef(false);
+  const writeBufRef = useRef("");
+  const writeFlushTimerRef = useRef(0);
+  const pendingOutputRef = useRef("");
   sessionIdRef.current = session.id;
 
-  const sendToPty = (data: string) => {
-    void writeTerminalSession(sessionIdRef.current, data).catch((err) => {
+  const flushPtyWrites = () => {
+    if (writeFlushTimerRef.current) {
+      window.clearTimeout(writeFlushTimerRef.current);
+      writeFlushTimerRef.current = 0;
+    }
+    const chunk = writeBufRef.current;
+    writeBufRef.current = "";
+    if (!chunk) return;
+    void writeTerminalSession(sessionIdRef.current, chunk).catch((err) => {
       if (!writeFailNotified.current) {
         writeFailNotified.current = true;
         setError(clientError(err) || t("term.writeError"));
@@ -136,13 +160,60 @@ export function TerminalPane({
     });
   };
 
+  /** Coalesce bursty TUI mouse/key reports (OpenCode scroll) into fewer IPC writes. */
+  const sendToPty = (data: string) => {
+    if (!data) return;
+    writeBufRef.current += data;
+    if (writeFlushTimerRef.current) return;
+    writeFlushTimerRef.current = window.setTimeout(() => {
+      writeFlushTimerRef.current = 0;
+      flushPtyWrites();
+    }, 8);
+  };
+
+  const insertIntoPty = (data: string) => {
+    if (!data || session.status !== "online") return;
+    onFocus();
+    terminalRef.current?.focus();
+    sendToPty(data);
+  };
+
   useEffect(() => {
     writeFailNotified.current = false;
   }, [session.id]);
 
+  // OS Explorer → absolute paths via Tauri drag-drop (HTML5 only gets basenames).
   useEffect(() => {
+    const el = shellRef.current;
+    if (!el || session.status !== "online") return;
+    const dropId = `${paneId}:${session.id}`;
+    return registerTerminalOsDropTarget({
+      id: dropId,
+      el,
+      setHighlight: setDropping,
+      onPaths: (paths) => {
+        const payload = formatPathsForPty(paths);
+        if (!payload) return;
+        onFocus();
+        terminalRef.current?.focus();
+        void writeTerminalSession(sessionIdRef.current, bracketedPaste(payload)).catch((err) => {
+          if (!writeFailNotified.current) {
+            writeFailNotified.current = true;
+            setError(clientError(err) || t("term.writeError"));
+          }
+        });
+      },
+    });
+  }, [paneId, session.id, session.status, onFocus, setError, t]);
+
+  useEffect(() => {
+    pendingOutputRef.current = "";
     setXtermReady(false);
     const delay = nextXtermMountDelay();
+    if (delay <= 0) {
+      setXtermReady(true);
+      return;
+    }
     const timer = window.setTimeout(() => setXtermReady(true), delay);
     return () => window.clearTimeout(timer);
   }, [session.id]);
@@ -152,7 +223,7 @@ export function TerminalPane({
     const host = containerRef.current;
     if (!host) return;
 
-    const { theme: xtermTheme, allowTransparency } = readXtermTheme();
+    const { theme: xtermTheme, allowTransparency } = readXtermTheme(theme);
     const terminal = new XTerm({
       cursorBlink: true,
       // TUIs (OpenCode) break with convertEol — absolute cursor addressing gets double-advanced
@@ -163,14 +234,30 @@ export function TerminalPane({
       fontSize: 13,
       lineHeight: 1,
       letterSpacing: 0,
-      scrollback: 5000,
+      scrollback: 4000,
+      scrollOnUserInput: true,
+      scrollSensitivity: 1,
       theme: xtermTheme,
     });
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.open(host);
 
+    if (pendingOutputRef.current) {
+      const buffered = pendingOutputRef.current;
+      pendingOutputRef.current = "";
+      terminal.write(buffered);
+    }
+
     const dataDisposable = terminal.onData((data) => sendToPty(data));
+
+    // Prefer focusing so wheel / mouse mode reach the PTY, not parent panes.
+    const onWheel = () => {
+      if (document.activeElement !== terminal.textarea) {
+        terminal.focus();
+      }
+    };
+    host.addEventListener("wheel", onWheel, { passive: true });
 
     let lastCols = 0;
     let lastRows = 0;
@@ -211,8 +298,10 @@ export function TerminalPane({
       window.clearTimeout(t1);
       if (resizeRaf) window.cancelAnimationFrame(resizeRaf);
       observer.disconnect();
+      host.removeEventListener("wheel", onWheel);
       dataDisposable.dispose();
       resizeFnRef.current = null;
+      flushPtyWrites();
       terminal.dispose();
       terminalRef.current = null;
       fitAddonRef.current = null;
@@ -220,12 +309,24 @@ export function TerminalPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id, xtermReady]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const terminal = terminalRef.current;
     if (!terminal) return;
-    const { theme: xtermTheme, allowTransparency } = readXtermTheme();
+    const { theme: xtermTheme, allowTransparency } = readXtermTheme(theme);
     terminal.options.allowTransparency = allowTransparency;
     terminal.options.theme = xtermTheme;
+    const bg = String(xtermTheme.background || "#000000");
+    const fg = String(xtermTheme.foreground || "#f0f0f0");
+    // Sync default PTY colors for shells that honor OSC 10/11 (hex only).
+    if (bg.startsWith("#") && (bg.length === 7 || bg.length === 9)) {
+      terminal.write(`\x1b]11;${bg.slice(0, 7)}\x07`);
+      terminal.write(`\x1b]10;${fg.startsWith("#") ? fg.slice(0, 7) : fg}\x07`);
+    }
+    try {
+      terminal.refresh(0, Math.max(0, terminal.rows - 1));
+    } catch {
+      // ignore
+    }
   }, [theme]);
 
   useEffect(() => {
@@ -280,10 +381,21 @@ export function TerminalPane({
       ) {
         return;
       }
-      const text = event.clipboardData?.getData("text");
-      if (!text) return;
+      // Snapshot + preventDefault must stay synchronous (clipboardData expires).
+      const snap = snapshotClipboard(event);
       event.preventDefault();
-      sendToPty(text);
+      event.stopPropagation();
+      void payloadFromClipboardSnapshot(snap)
+        .then((payload) => {
+          if (!payload) return;
+          insertIntoPty(bracketedPaste(payload));
+        })
+        .catch((err) => {
+          if (!writeFailNotified.current) {
+            writeFailNotified.current = true;
+            setError(clientError(err) || t("term.writeError"));
+          }
+        });
     };
 
     window.addEventListener("keydown", onKeyDown, true);
@@ -297,14 +409,23 @@ export function TerminalPane({
 
   useEffect(() => {
     const unlistenOutput = listen<TerminalOutputEvent>("terminal://output", (event) => {
-      if (event.payload.id === session.id) {
-        terminalRef.current?.write(event.payload.data);
+      if (event.payload.id !== session.id) return;
+      const term = terminalRef.current;
+      if (term) {
+        term.write(event.payload.data);
+        return;
+      }
+      pendingOutputRef.current += event.payload.data;
+      if (pendingOutputRef.current.length > 180_000) {
+        pendingOutputRef.current = pendingOutputRef.current.slice(-90_000);
       }
     });
     const unlistenExit = listen<TerminalExitEvent>("terminal://exit", (event) => {
-      if (event.payload.id === session.id) {
-        terminalRef.current?.writeln(`\r\n[${event.payload.message}]`);
-      }
+      if (event.payload.id !== session.id) return;
+      const message = `\r\n[${event.payload.message}]`;
+      const term = terminalRef.current;
+      if (term) term.writeln(message);
+      else pendingOutputRef.current += message;
     });
     return () => {
       void unlistenOutput.then((u) => u());
@@ -316,7 +437,10 @@ export function TerminalPane({
 
   return (
     <div
+      ref={shellRef}
+      data-term-drop={`${paneId}:${session.id}`}
       className={`vs-terminalShell${isActive ? " is-active" : ""}${dropping ? " is-dropFile" : ""}`}
+      data-drop-label={t("term.dropHint")}
       onMouseDown={() => {
         onFocus();
         terminalRef.current?.focus();
@@ -337,62 +461,75 @@ export function TerminalPane({
       onDrop={(event) => {
         event.preventDefault();
         setDropping(false);
-        onFocus();
-        const path =
-          event.dataTransfer.getData("application/x-voxiva-path") ||
-          event.dataTransfer.getData("text/plain");
-        if (path && !path.includes("\n")) {
-          const quoted = /\s/.test(path) ? `"${path.replace(/"/g, '\\"')}"` : path;
-          sendToPty(quoted);
+        const cwd = session.cwd || activeWorkspace?.cwd || null;
+        const payload = payloadFromDataTransfer(event.dataTransfer, { cwd });
+        if (payload) {
+          insertIntoPty(bracketedPaste(payload));
           return;
         }
         const files = event.dataTransfer.files;
         if (files?.length) {
-          const names = Array.from(files)
-            .map((f) => f.name)
-            .join(" ");
-          if (names) sendToPty(names);
+          void payloadFromFileList(files)
+            .then((fromFiles) => {
+              if (fromFiles) insertIntoPty(bracketedPaste(fromFiles));
+            })
+            .catch((err) => {
+              if (!writeFailNotified.current) {
+                writeFailNotified.current = true;
+                setError(clientError(err) || t("term.writeError"));
+              }
+            });
         }
       }}
     >
-      <div className="vs-terminalHeader" data-pane-drag={paneId} title={t("term.drag")}>
-        <span className="vs-dragHandle" aria-hidden>
-          <IconGrip size={14} />
-        </span>
-        <strong>{session.title}</strong>
-        <small>
-          {session.shell.replace(/^.*[\\/]/, "").replace(/\.exe$/i, "") || session.shell}
-        </small>
-        <span className="vs-spacer" />
-        <button
-          type="button"
-          className="vs-termIconBtn"
-          data-no-drag
-          title={t("term.restart")}
-          aria-label={t("term.restart")}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onRestart();
-          }}
-        >
-          <IconRefresh size={14} />
-        </button>
-        <button
-          type="button"
-          className="vs-termIconBtn is-danger"
-          data-no-drag
-          title={t("term.close")}
-          aria-label={t("term.close")}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-        >
-          <IconX size={14} />
-        </button>
-      </div>
+      {chrome === "full" ? (
+        <div className="vs-terminalHeader">
+          <span
+            className="vs-dragHandle"
+            data-pane-drag={paneId}
+            title={t("term.drag")}
+            aria-hidden
+          >
+            <IconGrip size={14} />
+          </span>
+          <strong>{session.title}</strong>
+          <small>
+            {session.shell.replace(/^.*[\\/]/, "").replace(/\.exe$/i, "") || session.shell}
+          </small>
+          {session.needsAttention ? (
+            <span className="vs-attnDot" data-no-drag title={t("term.attention")} aria-label={t("term.attention")} />
+          ) : null}
+          <span className="vs-spacer" />
+          <button
+            type="button"
+            className="vs-termIconBtn"
+            data-no-drag
+            title={t("term.restart")}
+            aria-label={t("term.restart")}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRestart();
+            }}
+          >
+            <IconRefresh size={14} />
+          </button>
+          <button
+            type="button"
+            className="vs-termIconBtn is-danger"
+            data-no-drag
+            title={t("term.close")}
+            aria-label={t("term.close")}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+          >
+            <IconX size={14} />
+          </button>
+        </div>
+      ) : null}
       <div className="vs-xtermHost" ref={containerRef} />
       {isOffline && (
         <div className={`vs-terminalOverlay is-${session.status}`}>

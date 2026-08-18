@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Calendar, ChevronLeft, ChevronRight, XClose } from "@untitledui/icons";
+import { Calendar, ChevronLeft, ChevronRight } from "@untitledui/icons";
+import { IconX } from "@/components/icons";
 import { useSpace } from "@/features/workspace/SpaceContext";
 
 function parseIso(value: string): Date | null {
@@ -130,7 +131,7 @@ export function DatePicker({ value, onChange, label }: DatePickerProps) {
               }
             }}
           >
-            <XClose size={12} aria-hidden />
+            <IconX size={12} />
           </span>
         ) : null}
       </button>

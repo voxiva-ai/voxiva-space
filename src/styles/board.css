@@ -147,6 +147,9 @@
   border-radius: 12px;
   background: var(--vs-bg-raised);
   box-shadow: 0 14px 32px rgba(0, 0, 0, 0.4);
+  max-height: min(240px, 42vh);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .vs-priorityMenu li {

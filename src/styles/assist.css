@@ -17,8 +17,6 @@
   border-left: 1px solid var(--vs-border);
   background: color-mix(in srgb, var(--vs-bg-raised) 94%, var(--vs-bg));
   flex-shrink: 0;
-  transition: none !important;
-  animation: none !important;
 }
 
 .vs-assistResize {

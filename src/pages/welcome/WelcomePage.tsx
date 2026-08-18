@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import logoUrl from "@/assets/brand/voxiva-space-mark.svg";
 import { LiveGridPreview } from "@/components/shell/LiveGridPreview";
-import { getDefaultTerminalCwd, pickWorkspaceFolder } from "@/features/terminal";
+import { WindowControls } from "@/components/shell/WindowControls";
+import { getDefaultTerminalCwd } from "@/features/terminal";
+import { useFolderBrowse } from "@/features/workspace/useFolderBrowse";
 import type { GridPreset } from "@/features/workspace/layout";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import type { MsgKey } from "@/i18n";
@@ -27,6 +29,7 @@ export function WelcomePage() {
   const [name, setName] = useState(last?.name || "My Space");
   const [cwd, setCwd] = useState(last?.cwd || "");
   const [grid, setGrid] = useState<GridPreset>(2);
+  const browseFolder = useFolderBrowse();
 
   useEffect(() => {
     if (cwd.trim()) return;
@@ -35,8 +38,25 @@ export function WelcomePage() {
       .catch(() => undefined);
   }, [cwd]);
 
+  async function browseFolderClick() {
+    try {
+      const picked = await browseFolder(cwd.trim() || null);
+      if (picked) {
+        setCwd(picked);
+        const base = picked.replace(/[\\/]+$/, "").split(/[\\/]/).pop();
+        if (base && (!name.trim() || name === "My Space")) setName(base);
+      }
+    } catch {
+      // cancelled
+    }
+  }
+
   return (
     <div className="vs-welcome">
+      <div className="vs-welcomeWin">
+        <WindowControls />
+      </div>
+
       <div className="vs-welcomeStage">
         <div className="vs-welcomeCopy">
           <img src={logoUrl} alt="" className="vs-welcomeLogo" />
@@ -58,20 +78,7 @@ export function WelcomePage() {
                 <button
                   type="button"
                   className="vs-btn"
-                  onClick={() =>
-                    void (async () => {
-                      try {
-                        const picked = await pickWorkspaceFolder();
-                        if (picked) {
-                          setCwd(picked);
-                          const base = picked.replace(/[\\/]+$/, "").split(/[\\/]/).pop();
-                          if (base && (!name.trim() || name === "My Space")) setName(base);
-                        }
-                      } catch {
-                        // cancelled
-                      }
-                    })()
-                  }
+                  onClick={() => void browseFolderClick()}
                 >
                   {t("welcome.browse")}
                 </button>
@@ -100,14 +107,14 @@ export function WelcomePage() {
               </div>
             </div>
 
-            {error && (
+            {error ? (
               <div className="vs-error">
                 {error}
                 <button type="button" className="vs-btn vs-btnGhost" onClick={() => setError("")}>
                   {t("toast.ok")}
                 </button>
               </div>
-            )}
+            ) : null}
 
             <button
               type="button"
@@ -120,7 +127,9 @@ export function WelcomePage() {
           </div>
         </div>
 
-        <LiveGridPreview panes={grid} />
+        <div className="vs-welcomePreviewSlot">
+          <LiveGridPreview panes={grid} />
+        </div>
       </div>
     </div>
   );

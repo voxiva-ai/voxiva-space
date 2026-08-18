@@ -48,6 +48,8 @@
   border-radius: 14px;
   background: var(--vs-bg-raised);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+  max-height: calc(100vh - 7rem);
+  overflow: auto;
 }
 
 .vs-historyCalHead {
@@ -142,6 +144,9 @@
   flex-direction: column;
   gap: 0.35rem;
   max-width: none;
+  max-height: calc(100vh - 11rem);
+  overflow: auto;
+  padding-right: 0.15rem;
 }
 
 @media (max-width: 860px) {

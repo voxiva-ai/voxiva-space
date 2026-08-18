@@ -5,6 +5,7 @@ dist/
 *.log
 .env
 .env.*
+_t3themes/
 
 # Tauri / Rust
 src-tauri/target/

@@ -22,8 +22,9 @@
   border-color: var(--vs-border-strong);
 }
 
-.vs-btn:active:not(:disabled) {
-  transform: translateY(1px);
+.vs-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--vs-accent) 70%, transparent);
+  outline-offset: 1px;
 }
 
 .vs-btnPrimary {
@@ -48,8 +49,15 @@
   color: var(--vs-text);
 }
 
+.vs-btnDanger {
+  border-color: color-mix(in srgb, var(--vs-danger) 35%, var(--vs-border));
+  background: color-mix(in srgb, var(--vs-danger) 14%, transparent);
+  color: var(--vs-danger);
+}
+
 .vs-btnDanger:hover:not(:disabled) {
-  border-color: rgba(255, 122, 122, 0.4);
+  border-color: color-mix(in srgb, var(--vs-danger) 55%, transparent);
+  background: color-mix(in srgb, var(--vs-danger) 22%, transparent);
   color: var(--vs-danger);
 }
 
@@ -137,4 +145,53 @@
   background: rgba(255, 122, 122, 0.08);
   color: var(--vs-danger);
   font-size: 0.82rem;
+}
+
+/* Thin rounded scrollbars (History, lists, menus) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(190, 194, 204, 0.45) rgba(255, 255, 255, 0.06);
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  margin: 3px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(190, 194, 204, 0.42);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(210, 214, 224, 0.58);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+[data-appearance="light"] * {
+  scrollbar-color: color-mix(in srgb, var(--vs-text) 28%, transparent)
+    color-mix(in srgb, var(--vs-text) 6%, transparent);
+}
+
+[data-appearance="light"] *::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--vs-text) 5%, transparent);
+}
+
+[data-appearance="light"] *::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--vs-text) 28%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }

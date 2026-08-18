@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { IconFilePlus, IconFolderPlus } from "@/components/icons";
+import { IconFilePlus, IconFolderPlus, IconRefresh, IconSave, IconSaveAll } from "@/components/icons";
+import { ConfirmDialog, PromptDialog } from "@/components/PromptDialog";
 import type { ThemeId } from "@/features/workspace/persist";
+import { getTheme } from "@/features/theme";
 import { CodeEditor } from "@/features/editor/CodeEditor";
 import { EditorTabs } from "@/features/editor/EditorTabs";
 import { FileTree } from "@/features/editor/FileTree";
-import { createDirectory, readBinaryFile, readTextFile, writeTextFile } from "@/features/editor/api";
+import { createDirectory, getWorkspaceFileInfo, readTextFile, writeTextFile } from "@/features/editor/api";
 import { MediaPreview } from "@/features/editor/MediaPreview";
+import { MarkdownEditor } from "@/features/editor/MarkdownEditor";
 import { loadEditorSession, saveEditorSession } from "@/features/editor/session";
 import {
+  editorKindForPath,
   isBinaryPreviewPath,
-  isImagePath,
+  isMarkdownPath,
   type EditorTab,
 } from "@/features/editor/types";
 import { useSpace } from "@/features/workspace/SpaceContext";
@@ -42,6 +46,8 @@ function EditorWorkspace({
   const [activePath, setActivePath] = useState<string | null>(() => saved?.activePath ?? null);
   const [opening, setOpening] = useState<string | null>(null);
   const [treeKey, setTreeKey] = useState(0);
+  const [promptKind, setPromptKind] = useState<"file" | "folder" | null>(null);
+  const [confirmClosePath, setConfirmClosePath] = useState<string | null>(null);
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.path === activePath) ?? null,
     [tabs, activePath],
@@ -78,18 +84,18 @@ function EditorWorkspace({
       setOpening(path);
       try {
         if (isBinaryPreviewPath(path)) {
-          const file = await readBinaryFile(root, path);
-          const kind = isImagePath(path) ? "image" : "binary";
+          const file = await getWorkspaceFileInfo(root, path);
           setTabs((current) => [
             ...current,
             {
               path: file.path,
-              content: file.base64,
-              savedContent: file.base64,
+              content: "",
+              savedContent: "",
               dirty: false,
-              kind,
+              kind: editorKindForPath(file.path),
               mime: file.mime,
               size: file.size,
+              absPath: file.absolutePath,
             },
           ]);
           setActivePath(file.path);
@@ -155,50 +161,52 @@ function EditorWorkspace({
     }
   }, [saveTab, showError, t, tabs]);
 
-  const createFile = useCallback(async () => {
-    const raw = window.prompt(t("editor.newFilePrompt"), "untitled.txt");
-    if (raw == null) return;
-    const path = normalizeRelPath(raw);
-    if (!path || path.endsWith("/")) {
-      setError(t("editor.writeError"));
-      return;
-    }
-    try {
-      const created = await writeTextFile(root, path, "");
-      setTreeKey((n) => n + 1);
-      setTabs((current) => {
-        if (current.some((tab) => tab.path === created.path)) return current;
-        return [
-          ...current,
-          {
-            path: created.path,
-            content: "",
-            savedContent: "",
-            dirty: false,
-          },
-        ];
-      });
-      setActivePath(created.path);
-    } catch (error) {
-      showError(t("editor.writeError"), error);
-    }
-  }, [root, setError, showError, t]);
+  const createFile = useCallback(
+    async (raw: string) => {
+      const path = normalizeRelPath(raw);
+      if (!path || path.endsWith("/")) {
+        setError(t("editor.writeError"));
+        return;
+      }
+      try {
+        const created = await writeTextFile(root, path, "");
+        setTreeKey((n) => n + 1);
+        setTabs((current) => {
+          if (current.some((tab) => tab.path === created.path)) return current;
+          return [
+            ...current,
+            {
+              path: created.path,
+              content: "",
+              savedContent: "",
+              dirty: false,
+            },
+          ];
+        });
+        setActivePath(created.path);
+      } catch (error) {
+        showError(t("editor.writeError"), error);
+      }
+    },
+    [root, setError, showError, t],
+  );
 
-  const createFolder = useCallback(async () => {
-    const raw = window.prompt(t("editor.newFolderPrompt"), "src");
-    if (raw == null) return;
-    const path = normalizeRelPath(raw).replace(/\/+$/, "");
-    if (!path) {
-      setError(t("editor.writeError"));
-      return;
-    }
-    try {
-      await createDirectory(root, path);
-      setTreeKey((n) => n + 1);
-    } catch (error) {
-      showError(t("editor.writeError"), error);
-    }
-  }, [root, setError, showError, t]);
+  const createFolder = useCallback(
+    async (raw: string) => {
+      const path = normalizeRelPath(raw).replace(/\/+$/, "");
+      if (!path) {
+        setError(t("editor.writeError"));
+        return;
+      }
+      try {
+        await createDirectory(root, path);
+        setTreeKey((n) => n + 1);
+      } catch (error) {
+        showError(t("editor.writeError"), error);
+      }
+    },
+    [root, setError, showError, t],
+  );
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -224,7 +232,14 @@ function EditorWorkspace({
 
   function closeTab(path: string) {
     const closing = tabs.find((tab) => tab.path === path);
-    if (closing?.dirty && !window.confirm(t("editor.closeDirty"))) return;
+    if (closing?.dirty) {
+      setConfirmClosePath(path);
+      return;
+    }
+    finishCloseTab(path);
+  }
+
+  function finishCloseTab(path: string) {
     const index = tabs.findIndex((tab) => tab.path === path);
     const remaining = tabs.filter((tab) => tab.path !== path);
     setTabs(remaining);
@@ -252,6 +267,26 @@ function EditorWorkspace({
           <span>{baseName(root)}</span>
         </div>
         <div className="vs-editorToolbarActions">
+          <button
+            type="button"
+            className="vs-iconBtn"
+            title={`${t("editor.save")} (Ctrl+S)`}
+            aria-label={t("editor.save")}
+            disabled={!activeTab?.dirty || (activeTab.kind != null && activeTab.kind !== "text")}
+            onClick={() => void saveActive()}
+          >
+            <IconSave size={15} />
+          </button>
+          <button
+            type="button"
+            className="vs-iconBtn"
+            title={`${t("editor.saveAll")} (Ctrl+Shift+S)`}
+            aria-label={t("editor.saveAll")}
+            disabled={dirtyCount === 0}
+            onClick={() => void saveAll()}
+          >
+            <IconSaveAll size={15} />
+          </button>
           <span className={dirtyCount ? "is-dirty" : ""}>
             {dirtyCount
               ? `${t("editor.unsaved")} (${dirtyCount})`
@@ -270,9 +305,18 @@ function EditorWorkspace({
               <button
                 type="button"
                 className="vs-iconBtn"
+                title={t("editor.refresh")}
+                aria-label={t("editor.refresh")}
+                onClick={() => setTreeKey((n) => n + 1)}
+              >
+                <IconRefresh size={14} />
+              </button>
+              <button
+                type="button"
+                className="vs-iconBtn"
                 title={t("editor.newFile")}
                 aria-label={t("editor.newFile")}
-                onClick={() => void createFile()}
+                onClick={() => setPromptKind("file")}
               >
                 <IconFilePlus size={14} />
               </button>
@@ -281,7 +325,7 @@ function EditorWorkspace({
                 className="vs-iconBtn"
                 title={t("editor.newFolder")}
                 aria-label={t("editor.newFolder")}
-                onClick={() => void createFolder()}
+                onClick={() => setPromptKind("folder")}
               >
                 <IconFolderPlus size={14} />
               </button>
@@ -307,22 +351,33 @@ function EditorWorkspace({
           />
           {activeTab ? (
             <>
-              <div className="vs-editorBreadcrumb">{activeTab.path}</div>
+              {!isMarkdownPath(activeTab.path) ? (
+                <div className="vs-editorBreadcrumb">{activeTab.path}</div>
+              ) : null}
               <div className="vs-editorCanvas">
                 {activeTab.kind === "image" || activeTab.kind === "binary" ? (
                   <MediaPreview
                     path={activeTab.path}
                     mime={activeTab.mime || "application/octet-stream"}
-                    base64={activeTab.content}
                     size={activeTab.size}
                     kind={activeTab.kind}
+                    workspaceRoot={root}
+                    absPath={activeTab.absPath}
+                  />
+                ) : isMarkdownPath(activeTab.path) ? (
+                  <MarkdownEditor
+                    key={`${activeTab.path}:${theme}`}
+                    path={activeTab.path}
+                    value={activeTab.content}
+                    dark={getTheme(theme).appearance !== "light"}
+                    onChange={changeActive}
                   />
                 ) : (
                   <CodeEditor
                     key={`${activeTab.path}:${theme}`}
                     path={activeTab.path}
                     value={activeTab.content}
-                    dark={theme !== "light"}
+                    dark={getTheme(theme).appearance !== "light"}
                     onChange={changeActive}
                   />
                 )}
@@ -334,10 +389,10 @@ function EditorWorkspace({
               <span>{opening ? root : t("editor.emptyHint")}</span>
               {!opening && (
                 <div className="vs-editorEmptyActions">
-                  <button type="button" className="vs-btn vs-btnPrimary" onClick={() => void createFile()}>
+                  <button type="button" className="vs-btn vs-btnPrimary" onClick={() => setPromptKind("file")}>
                     {t("editor.newFile")}
                   </button>
-                  <button type="button" className="vs-btn" onClick={() => void createFolder()}>
+                  <button type="button" className="vs-btn" onClick={() => setPromptKind("folder")}>
                     {t("editor.newFolder")}
                   </button>
                 </div>
@@ -346,6 +401,46 @@ function EditorWorkspace({
           )}
         </div>
       </div>
+
+      <PromptDialog
+        open={promptKind === "file"}
+        title={t("editor.newFile")}
+        label={t("editor.newFilePrompt")}
+        initialValue="untitled.txt"
+        confirmLabel={t("toast.ok")}
+        cancelLabel={t("projects.cancel")}
+        onCancel={() => setPromptKind(null)}
+        onConfirm={(value) => {
+          setPromptKind(null);
+          void createFile(value);
+        }}
+      />
+      <PromptDialog
+        open={promptKind === "folder"}
+        title={t("editor.newFolder")}
+        label={t("editor.newFolderPrompt")}
+        initialValue="src"
+        confirmLabel={t("toast.ok")}
+        cancelLabel={t("projects.cancel")}
+        onCancel={() => setPromptKind(null)}
+        onConfirm={(value) => {
+          setPromptKind(null);
+          void createFolder(value);
+        }}
+      />
+      <ConfirmDialog
+        open={Boolean(confirmClosePath)}
+        title={t("editor.closeDirty")}
+        body={t("editor.closeDirty")}
+        confirmLabel={t("toast.ok")}
+        cancelLabel={t("projects.cancel")}
+        onCancel={() => setConfirmClosePath(null)}
+        onConfirm={() => {
+          const path = confirmClosePath;
+          setConfirmClosePath(null);
+          if (path) finishCloseTab(path);
+        }}
+      />
     </section>
   );
 }

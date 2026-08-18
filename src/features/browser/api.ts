@@ -58,8 +58,17 @@ export function browserOpenDevtools(label: string) {
   return invoke("browser_open_devtools", { label });
 }
 
+export type BrowserPageMeta = {
+  title: string;
+  favicon: string;
+};
+
+export function browserPageMeta(label: string) {
+  return invoke<BrowserPageMeta>("browser_page_meta", { label });
+}
+
 export function browserToggleInspector(label: string, enabled: boolean) {
-  return invoke("browser_toggle_inspector", { label, enabled });
+  return invoke<boolean>("browser_toggle_inspector", { label, enabled });
 }
 
 export type BrowserSelection = {
@@ -73,6 +82,7 @@ export type BrowserSelection = {
   boundingBox: { x: number; y: number; width: number; height: number };
   computedStyles: Record<string, string>;
   html: string;
+  xpath?: string;
 };
 
 export type BrowserInspectorAction = {
@@ -96,6 +106,10 @@ export function browserConfigureInspector(
   files: string[] = [],
 ) {
   return invoke("browser_configure_inspector", { label, agents, files });
+}
+
+export function writeAnnotateContext(content: string) {
+  return invoke<string>("write_annotate_context", { content });
 }
 
 export function findComponentFiles(

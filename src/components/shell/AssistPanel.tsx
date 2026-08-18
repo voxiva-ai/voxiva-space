@@ -12,17 +12,18 @@ import {
   Folder,
   Globe02,
   LayoutRight,
-  XClose,
 } from "@untitledui/icons";
-import { IconFilePlus, IconFolderPlus } from "@/components/icons";
+import { IconFilePlus, IconFolderPlus, IconRefresh, IconX } from "@/components/icons";
+import { PromptDialog } from "@/components/PromptDialog";
 import { NativeBrowser } from "@/features/browser/NativeBrowser";
 import { EditorTabs } from "@/features/editor/EditorTabs";
 import { FileTree } from "@/features/editor/FileTree";
-import { createDirectory, readBinaryFile, readTextFile, writeTextFile } from "@/features/editor/api";
+import { createDirectory, getWorkspaceFileInfo, readTextFile, writeTextFile } from "@/features/editor/api";
 import { MediaPreview } from "@/features/editor/MediaPreview";
 import type { EditorTab } from "@/features/editor/types";
-import { isBinaryPreviewPath, isImagePath } from "@/features/editor/types";
+import { editorKindForPath, isBinaryPreviewPath } from "@/features/editor/types";
 import { useSpace } from "@/features/workspace/SpaceContext";
+import { getTheme } from "@/features/theme";
 import { clientError } from "@/lib/errors";
 import {
   fileUrlFromWorkspace,
@@ -81,8 +82,9 @@ export function AssistPanel({
   const [treeKey, setTreeKey] = useState(0);
   const [assistUrl, setAssistUrl] = useState("");
   const [filesOpen, setFilesOpen] = useState(true);
+  const [promptKind, setPromptKind] = useState<"file" | "folder" | null>(null);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
-  const dark = theme !== "light";
+  const dark = getTheme(theme).appearance !== "light";
   const activeTab = tabs.find((item) => item.path === activePath) ?? null;
 
   useEffect(() => {
@@ -113,18 +115,18 @@ export function AssistPanel({
       }
       try {
         if (isBinaryPreviewPath(rel)) {
-          const file = await readBinaryFile(activeWorkspace.cwd, rel);
-          const kind = isImagePath(rel) ? "image" : "binary";
+          const file = await getWorkspaceFileInfo(activeWorkspace.cwd, rel);
           setTabs((current) => [
             ...current,
             {
               path: file.path,
-              content: file.base64,
-              savedContent: file.base64,
+              content: "",
+              savedContent: "",
               dirty: false,
-              kind,
+              kind: editorKindForPath(file.path),
               mime: file.mime,
               size: file.size,
+              absPath: file.absolutePath,
             },
           ]);
           setActivePath(file.path);
@@ -165,16 +167,6 @@ export function AssistPanel({
     onTabChange("browser");
     onPendingUrlConsumed?.();
   }, [open, pendingUrl, onPendingUrlConsumed, onTabChange]);
-
-  useEffect(() => {
-    const active = open && tab === "browser";
-    window.dispatchEvent(new CustomEvent("voxiva-pane-drag", { detail: { active } }));
-    return () => {
-      if (active) {
-        window.dispatchEvent(new CustomEvent("voxiva-pane-drag", { detail: { active: false } }));
-      }
-    };
-  }, [open, tab]);
 
   function onResizeStart(event: ReactPointerEvent<HTMLDivElement>) {
     event.preventDefault();
@@ -226,11 +218,10 @@ export function AssistPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, tab, activeTab, activeWorkspace]);
 
-  async function createFile() {
+  async function createFile(name: string) {
     if (!activeWorkspace) return;
-    const name = window.prompt(t("editor.newFilePrompt"), "untitled.ts");
-    if (!name?.trim()) return;
     const rel = name.trim().replace(/\\/g, "/").replace(/^\/+/, "");
+    if (!rel) return;
     try {
       await writeTextFile(activeWorkspace.cwd, rel, "");
       setTreeKey((k) => k + 1);
@@ -240,12 +231,12 @@ export function AssistPanel({
     }
   }
 
-  async function createFolder() {
+  async function createFolder(name: string) {
     if (!activeWorkspace) return;
-    const name = window.prompt(t("editor.newFolderPrompt"), "new-folder");
-    if (!name?.trim()) return;
+    const rel = name.trim().replace(/\\/g, "/").replace(/^\/+/, "");
+    if (!rel) return;
     try {
-      await createDirectory(activeWorkspace.cwd, name.trim());
+      await createDirectory(activeWorkspace.cwd, rel);
       setTreeKey((k) => k + 1);
     } catch (error) {
       setError(clientError(error));
@@ -309,7 +300,7 @@ export function AssistPanel({
           aria-label={t("assist.close")}
           onClick={onClose}
         >
-          <XClose size={15} aria-hidden />
+          <IconX size={15} />
         </button>
       </header>
 
@@ -334,14 +325,22 @@ export function AssistPanel({
                 </button>
                 <strong title={activeWorkspace.cwd}>{baseName(activeWorkspace.cwd)}</strong>
                 <span className="vs-spacer" />
-                <button type="button" className="vs-iconBtn" title={t("editor.newFile")} onClick={() => void createFile()}>
+                <button
+                  type="button"
+                  className="vs-iconBtn"
+                  title={t("editor.refresh")}
+                  onClick={() => setTreeKey((k) => k + 1)}
+                >
+                  <IconRefresh size={14} />
+                </button>
+                <button type="button" className="vs-iconBtn" title={t("editor.newFile")} onClick={() => setPromptKind("file")}>
                   <IconFilePlus size={14} />
                 </button>
                 <button
                   type="button"
                   className="vs-iconBtn"
                   title={t("editor.newFolder")}
-                  onClick={() => void createFolder()}
+                  onClick={() => setPromptKind("folder")}
                 >
                   <IconFolderPlus size={14} />
                 </button>
@@ -375,9 +374,10 @@ export function AssistPanel({
                         <MediaPreview
                           path={activeTab.path}
                           mime={activeTab.mime || "application/octet-stream"}
-                          base64={activeTab.content}
                           size={activeTab.size}
                           kind={activeTab.kind}
+                          workspaceRoot={activeWorkspace.cwd}
+                          absPath={activeTab.absPath}
                         />
                       ) : (
                         <CodeEditor
@@ -421,6 +421,33 @@ export function AssistPanel({
           )}
         </div>
       )}
+
+      <PromptDialog
+        open={promptKind === "file"}
+        title={t("editor.newFile")}
+        label={t("editor.newFilePrompt")}
+        initialValue="untitled.ts"
+        confirmLabel={t("toast.ok")}
+        cancelLabel={t("projects.cancel")}
+        onCancel={() => setPromptKind(null)}
+        onConfirm={(value) => {
+          setPromptKind(null);
+          void createFile(value);
+        }}
+      />
+      <PromptDialog
+        open={promptKind === "folder"}
+        title={t("editor.newFolder")}
+        label={t("editor.newFolderPrompt")}
+        initialValue="src"
+        confirmLabel={t("toast.ok")}
+        cancelLabel={t("projects.cancel")}
+        onCancel={() => setPromptKind(null)}
+        onConfirm={(value) => {
+          setPromptKind(null);
+          void createFolder(value);
+        }}
+      />
     </aside>
   );
 }

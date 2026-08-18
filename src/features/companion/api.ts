@@ -15,13 +15,42 @@ export type CompanionStatus = {
 };
 
 export type CompanionSnapshot = {
-  spaces: Array<{ id: string; name: string; cwd: string; color?: string }>;
+  spaces: Array<{ id: string; name: string; cwd: string; color?: string; branch?: string | null }>;
   sessions: Array<{
     id: string;
     title: string;
     status: string;
     needsAttention?: boolean;
     workspaceId?: string | null;
+  }>;
+  boards?: Record<
+    string,
+    Array<{
+      id: string;
+      title: string;
+      column: string;
+      priority: string;
+      due: string | null;
+      createdAt: number;
+    }>
+  >;
+  history?: Array<{
+    workspaceId: string;
+    workspaceName: string;
+    cwd: string;
+    at: number;
+  }>;
+  browsers?: Array<{
+    workspaceId: string;
+    paneId: string;
+    url: string;
+    title?: string;
+  }>;
+  agents?: Array<{
+    id: string;
+    name: string;
+    command?: string | null;
+    ready: boolean;
   }>;
 };
 
@@ -48,6 +77,10 @@ export function companionPushSnapshot(snapshot: CompanionSnapshot) {
   return invoke<void>("companion_push_snapshot", { snapshot });
 }
 
+export function companionAppendOutput(sessionId: string, data: string) {
+  return invoke<void>("companion_append_output", { sessionId, data });
+}
+
 export type CompanionTaskEvent = {
   title: string;
   priority: string;
@@ -57,4 +90,16 @@ export type CompanionTaskEvent = {
 export type CompanionInputEvent = {
   sessionId: string;
   text: string;
+};
+
+export type CompanionSpawnEvent = {
+  workspaceId: string;
+  agentId?: string | null;
+  title?: string | null;
+  command?: string | null;
+};
+
+export type CompanionRenameEvent = {
+  sessionId: string;
+  title: string;
 };

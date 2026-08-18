@@ -24,12 +24,18 @@ export const DEFAULT_SOUND_PREFS: SoundPrefs = {
 
 const STORAGE_KEY = "voxiva-space-sounds-v1";
 
+let cachedSoundPrefs: SoundPrefs | null = null;
+
 export function loadSoundPrefs(): SoundPrefs {
+  if (cachedSoundPrefs) return cachedSoundPrefs;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_SOUND_PREFS };
+    if (!raw) {
+      cachedSoundPrefs = { ...DEFAULT_SOUND_PREFS };
+      return cachedSoundPrefs;
+    }
     const parsed = JSON.parse(raw) as Partial<SoundPrefs>;
-    return {
+    cachedSoundPrefs = {
       ...DEFAULT_SOUND_PREFS,
       ...parsed,
       mutedWorkspaces: Array.isArray(parsed.mutedWorkspaces)
@@ -38,12 +44,15 @@ export function loadSoundPrefs(): SoundPrefs {
       customDataUrl:
         typeof parsed.customDataUrl === "string" ? parsed.customDataUrl : null,
     };
+    return cachedSoundPrefs;
   } catch {
-    return { ...DEFAULT_SOUND_PREFS };
+    cachedSoundPrefs = { ...DEFAULT_SOUND_PREFS };
+    return cachedSoundPrefs;
   }
 }
 
 export function saveSoundPrefs(prefs: SoundPrefs) {
+  cachedSoundPrefs = prefs;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
     window.dispatchEvent(new Event("voxiva-sounds-changed"));
@@ -53,11 +62,30 @@ export function saveSoundPrefs(prefs: SoundPrefs) {
 }
 
 let audioCtx: AudioContext | null = null;
+let unlockBound = false;
+
+function ensureAudioUnlocked() {
+  if (unlockBound || typeof window === "undefined") return;
+  unlockBound = true;
+  const unlock = () => {
+    try {
+      const c = ctx();
+      if (c.state === "suspended") void c.resume();
+    } catch {
+      // ignore
+    }
+  };
+  window.addEventListener("pointerdown", unlock, { once: true, capture: true });
+  window.addEventListener("keydown", unlock, { once: true, capture: true });
+}
 
 function ctx() {
   if (!audioCtx) audioCtx = new AudioContext();
+  if (audioCtx.state === "suspended") void audioCtx.resume();
   return audioCtx;
 }
+
+ensureAudioUnlocked();
 
 function tone(freqs: number[], duration = 0.35, gain = 0.12) {
   const c = ctx();
@@ -98,6 +126,11 @@ function playPreset(preset: SoundPreset, customDataUrl: string | null) {
 
 export type SoundEvent = "attention" | "exit";
 
+/** Global coalesce — burst of bots → one soft ping, not five. */
+const COALESCE_MS = 650;
+let lastPlayAt = 0;
+let lastPlayEvent: SoundEvent | null = null;
+
 export function playNotifySound(
   event: SoundEvent,
   opts?: { workspaceId?: string | null; activeWorkspaceId?: string | null },
@@ -112,6 +145,13 @@ export function playNotifySound(
   if (prefs.activeWorkspaceOnly) {
     if (!ws || ws !== opts?.activeWorkspaceId) return;
   }
+
+  const now = Date.now();
+  // Same or any event within the window: skip (one pleasant chime for a burst).
+  if (lastPlayAt && now - lastPlayAt < COALESCE_MS) return;
+  lastPlayAt = now;
+  lastPlayEvent = event;
+  void lastPlayEvent;
 
   try {
     playPreset(prefs.preset, prefs.customDataUrl);

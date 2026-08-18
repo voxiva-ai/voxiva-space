@@ -106,3 +106,38 @@ export function resolveBotCommand(bot: AgentBot, availability: AgentAvailability
   const names = botCommandNames(bot);
   return names.find((name) => availability[name] === true) ?? bot.command ?? names[0];
 }
+
+/**
+ * Rebuild the launch command so the agent resumes its last session where possible.
+ * Falls back to the raw command when the bot is unknown or has no resume flag.
+ */
+export function resumeCommandFor(
+  bot: AgentBot | undefined,
+  rawCommand: string | undefined,
+  availability: AgentAvailability,
+): string | undefined {
+  if (!bot) return rawCommand;
+  const cmd = resolveBotCommand(bot, availability) ?? rawCommand;
+  if (!cmd) return undefined;
+  switch (bot.id) {
+    case "opencode":
+      return `${cmd} --continue`;
+    case "claude":
+      return `${cmd} --continue`;
+    case "codex":
+      return `${cmd} resume --last`;
+    case "gemini":
+      return `${cmd} -r "latest"`;
+    case "aider":
+      return `${cmd} --restore-chat-history`;
+    case "goose":
+      return `${cmd} session --resume`;
+    case "cursor-agent":
+      return `${cmd} --continue`;
+    case "amp":
+      // amp has no single-binary resume flag; run the non-interactive threads subcommand.
+      return "amp threads continue";
+    default:
+      return cmd;
+  }
+}

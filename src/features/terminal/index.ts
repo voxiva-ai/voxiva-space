@@ -3,4 +3,5 @@
  */
 export * from "./api";
 export * from "./types";
+export * from "./drop";
 export { TerminalPane } from "./components/TerminalPane";

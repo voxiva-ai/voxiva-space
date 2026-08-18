@@ -13,12 +13,14 @@ export function createLeaf(
     paneId: uid("pane"),
     kind,
     sessionId: kind === "terminal" ? sessionId : null,
-    browserUrl: kind === "browser" ? browserUrl : null,
+    sessionIds: kind === "terminal" && sessionId ? [sessionId] : [],
+    // null = no browser tab; "" / url = browser tab present (cmux-style).
+    browserUrl: kind === "browser" ? (browserUrl ?? "") : null,
   };
 }
 
 export function createBrowserLeaf(url: string | null = null): LeafNode {
-  return createLeaf(null, "browser", url);
+  return createLeaf(null, "browser", url ?? "");
 }
 
 export function countLeaves(node: SplitNode): number {
@@ -40,20 +42,230 @@ export function mapLeaves(node: SplitNode, fn: (leaf: LeafNode) => LeafNode): Sp
   };
 }
 
+/** Sentinel id for the browser surface inside `tabOrder`. */
+export const BROWSER_TAB = "__browser__";
+
+/** Terminal tabs — kept even while the browser tab is active. */
+export function leafTabIds(leaf: LeafNode): string[] {
+  const ids = leaf.sessionIds?.filter(Boolean) ?? [];
+  if (ids.length) return ids;
+  return leaf.sessionId ? [leaf.sessionId] : [];
+}
+
+/** Browser tab exists in this pane (alongside shells). */
+export function leafHasBrowser(leaf: LeafNode): boolean {
+  return leaf.browserUrl !== null;
+}
+
+/** Ordered tab keys: session ids + optional browser sentinel. */
+export function leafTabOrder(leaf: LeafNode): string[] {
+  const sessions = leafTabIds(leaf);
+  const hasBrowser = leafHasBrowser(leaf);
+  const valid = new Set<string>([...sessions, ...(hasBrowser ? [BROWSER_TAB] : [])]);
+  const kept = (leaf.tabOrder ?? []).filter((id) => valid.has(id));
+  const missing = [...sessions, ...(hasBrowser ? [BROWSER_TAB] : [])].filter(
+    (id) => !kept.includes(id),
+  );
+  return [...kept, ...missing];
+}
+
+function withTabOrder(leaf: LeafNode, order: string[]): LeafNode {
+  const sessions = order.filter((id) => id !== BROWSER_TAB);
+  const hasBrowser = order.includes(BROWSER_TAB);
+  return {
+    ...leaf,
+    sessionIds: sessions,
+    sessionId:
+      leaf.sessionId && sessions.includes(leaf.sessionId) ? leaf.sessionId : sessions[0] ?? null,
+    tabOrder: order,
+    browserUrl: hasBrowser ? (leaf.browserUrl ?? "") : null,
+  };
+}
+
+/** Open / focus browser tab in-pane without destroying shells (cmux). */
+export function openBrowserTab(node: SplitNode, paneId: string): SplitNode {
+  return mapLeaves(node, (leaf) => {
+    if (leaf.paneId !== paneId) return leaf;
+    const order = leafTabOrder({ ...leaf, browserUrl: leaf.browserUrl ?? "" });
+    const nextOrder = order.includes(BROWSER_TAB) ? order : [...order, BROWSER_TAB];
+    return {
+      ...withTabOrder({ ...leaf, browserUrl: leaf.browserUrl ?? "" }, nextOrder),
+      kind: "browser",
+      browserUrl: leaf.browserUrl ?? "",
+    };
+  });
+}
+
+export function focusBrowserTab(node: SplitNode, paneId: string): SplitNode {
+  return openBrowserTab(node, paneId);
+}
+
+export function closeBrowserTab(node: SplitNode, paneId: string): SplitNode {
+  return mapLeaves(node, (leaf) => {
+    if (leaf.paneId !== paneId) return leaf;
+    const order = leafTabOrder(leaf).filter((id) => id !== BROWSER_TAB);
+    const tabs = order.filter((id) => id !== BROWSER_TAB);
+    return {
+      ...withTabOrder({ ...leaf, browserUrl: null }, order),
+      browserUrl: null,
+      kind: "terminal",
+      sessionId: leaf.sessionId && tabs.includes(leaf.sessionId) ? leaf.sessionId : tabs[0] ?? null,
+      sessionIds: tabs,
+    };
+  });
+}
+
+/** Reorder a tab (session id or `BROWSER_TAB`) within a pane strip. */
+export function reorderLeafTabs(
+  node: SplitNode,
+  paneId: string,
+  fromId: string,
+  toId: string,
+): SplitNode {
+  return mapLeaves(node, (leaf) => {
+    if (leaf.paneId !== paneId) return leaf;
+    const order = leafTabOrder(leaf);
+    const from = order.indexOf(fromId);
+    const to = order.indexOf(toId);
+    if (from < 0 || to < 0 || from === to) return leaf;
+    const next = [...order];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item!);
+    return withTabOrder(leaf, next);
+  });
+}
+
 export function setLeafSession(node: SplitNode, paneId: string, sessionId: string | null): SplitNode {
   return mapLeaves(node, (leaf) =>
-    leaf.paneId === paneId ? { ...leaf, kind: "terminal", sessionId, browserUrl: null } : leaf,
+    leaf.paneId === paneId
+      ? {
+          ...leaf,
+          kind: "terminal",
+          sessionId,
+          sessionIds: sessionId ? [sessionId] : [],
+          browserUrl: null,
+        }
+      : leaf,
   );
+}
+
+/** Copy terminal/browser content (including all tabs) onto a target pane id. */
+export function setLeafContents(node: SplitNode, paneId: string, source: LeafNode): SplitNode {
+  return mapLeaves(node, (leaf) => {
+    if (leaf.paneId !== paneId) return leaf;
+    if (source.kind === "browser") {
+      return {
+        ...leaf,
+        kind: "browser",
+        sessionId: null,
+        sessionIds: [],
+        browserUrl: source.browserUrl,
+      };
+    }
+    const sessionIds = leafTabIds(source);
+    const sessionId =
+      source.sessionId && sessionIds.includes(source.sessionId)
+        ? source.sessionId
+        : sessionIds[0] ?? null;
+    return {
+      ...leaf,
+      kind: "terminal",
+      sessionId,
+      sessionIds,
+      browserUrl: null,
+    };
+  });
+}
+
+/** Append a terminal tab; make it active. Keeps existing tabs alive. */
+export function addLeafSession(node: SplitNode, paneId: string, sessionId: string): SplitNode {
+  return mapLeaves(node, (leaf) => {
+    if (leaf.paneId !== paneId) return leaf;
+    const order = leafTabOrder(leaf);
+    const nextOrder = order.includes(sessionId) ? order : [...order, sessionId];
+    return {
+      ...withTabOrder(leaf, nextOrder),
+      kind: "terminal",
+      sessionId,
+    };
+  });
+}
+
+export function activateLeafSession(node: SplitNode, paneId: string, sessionId: string): SplitNode {
+  return mapLeaves(node, (leaf) => {
+    if (leaf.paneId !== paneId) return leaf;
+    const sessionIds = leafTabIds(leaf);
+    if (!sessionIds.includes(sessionId)) return leaf;
+    return { ...leaf, kind: "terminal", sessionId, sessionIds, tabOrder: leafTabOrder(leaf) };
+  });
+}
+
+export function removeLeafSession(node: SplitNode, paneId: string, sessionId: string): SplitNode {
+  return mapLeaves(node, (leaf) => {
+    if (leaf.paneId !== paneId) return leaf;
+    const order = leafTabOrder(leaf).filter((id) => id !== sessionId);
+    const sessionIds = order.filter((id) => id !== BROWSER_TAB);
+    const nextActive =
+      leaf.sessionId === sessionId ? sessionIds[sessionIds.length - 1] ?? null : leaf.sessionId;
+    return {
+      ...withTabOrder({ ...leaf, browserUrl: order.includes(BROWSER_TAB) ? leaf.browserUrl : null }, order),
+      sessionIds,
+      sessionId: nextActive && sessionIds.includes(nextActive) ? nextActive : sessionIds[0] ?? null,
+      kind: leaf.kind === "browser" && order.includes(BROWSER_TAB) ? "browser" : "terminal",
+    };
+  });
 }
 
 export function setLeafBrowser(node: SplitNode, paneId: string, browserUrl: string | null): SplitNode {
   return mapLeaves(node, (leaf) =>
-    leaf.paneId === paneId ? { ...leaf, kind: "browser", sessionId: null, browserUrl } : leaf,
+    leaf.paneId === paneId
+      ? {
+          ...leaf,
+          kind: "browser",
+          // Keep terminal tabs — browser is a sibling tab, not a replacement.
+          browserUrl: browserUrl ?? "",
+        }
+      : leaf,
   );
 }
 
+/** Move a shell tab or the browser tab from one pane to another (keeps session id / URL). */
+export function moveTabToPane(
+  layout: SplitNode,
+  fromPaneId: string,
+  toPaneId: string,
+  tabId: string,
+): SplitNode {
+  if (fromPaneId === toPaneId) return layout;
+  const from = findLeaf(layout, fromPaneId);
+  const to = findLeaf(layout, toPaneId);
+  if (!from || !to) return layout;
+
+  if (tabId === BROWSER_TAB) {
+    if (!leafHasBrowser(from)) return layout;
+    const fromUrl = from.browserUrl ?? "";
+    if (leafHasBrowser(to)) {
+      const toUrl = to.browserUrl ?? "";
+      let next = setLeafBrowser(layout, fromPaneId, toUrl);
+      next = setLeafBrowser(next, toPaneId, fromUrl);
+      next = openBrowserTab(next, fromPaneId);
+      next = openBrowserTab(next, toPaneId);
+      return next;
+    }
+    let next = closeBrowserTab(layout, fromPaneId);
+    next = openBrowserTab(next, toPaneId);
+    next = setLeafBrowser(next, toPaneId, fromUrl);
+    return next;
+  }
+
+  if (!leafTabIds(from).includes(tabId)) return layout;
+  let next = removeLeafSession(layout, fromPaneId, tabId);
+  next = addLeafSession(next, toPaneId, tabId);
+  return next;
+}
+
 export function collectSessionIds(node: SplitNode): string[] {
-  if (node.type === "leaf") return node.sessionId ? [node.sessionId] : [];
+  if (node.type === "leaf") return leafTabIds(node);
   return [...collectSessionIds(node.first), ...collectSessionIds(node.second)];
 }
 
@@ -83,6 +295,279 @@ export function splitPane(
     ...node,
     first: splitPane(node.first, paneId, direction, newSessionId),
     second: splitPane(node.second, paneId, direction, newSessionId),
+  };
+}
+
+/** Split a leaf and put `secondLeaf` as the new sibling (browser / moved pane). */
+export function splitPaneWith(
+  node: SplitNode,
+  paneId: string,
+  direction: SplitDirection,
+  secondLeaf: LeafNode,
+  secondFirst = false,
+): SplitNode {
+  if (node.type === "leaf") {
+    if (node.paneId !== paneId) return node;
+    return {
+      type: "split",
+      id: uid("split"),
+      direction,
+      ratio: 0.5,
+      first: secondFirst ? secondLeaf : node,
+      second: secondFirst ? node : secondLeaf,
+    };
+  }
+  return {
+    ...node,
+    first: splitPaneWith(node.first, paneId, direction, secondLeaf, secondFirst),
+    second: splitPaneWith(node.second, paneId, direction, secondLeaf, secondFirst),
+  };
+}
+
+export type DropZone = "left" | "right" | "top" | "bottom" | "center";
+
+type SplitParent = Extract<SplitNode, { type: "split" }>;
+
+function sameBranch(a: SplitNode, b: SplitNode): boolean {
+  if (a.type === "leaf" && b.type === "leaf") return a.paneId === b.paneId;
+  if (a.type === "split" && b.type === "split") return a.id === b.id;
+  return false;
+}
+
+function replaceChild(parent: SplitParent, oldChild: SplitNode, nextChild: SplitNode): SplitParent {
+  if (sameBranch(parent.first, oldChild)) return { ...parent, first: nextChild };
+  return { ...parent, second: nextChild };
+}
+
+/** Walk tree; return parent split of `paneId` or null if root leaf. */
+function findParent(
+  node: SplitNode,
+  paneId: string,
+  parent: SplitParent | null = null,
+): { parent: SplitParent | null; child: SplitNode } | null {
+  if (node.type === "leaf") {
+    return node.paneId === paneId ? { parent, child: node } : null;
+  }
+  return findParent(node.first, paneId, node) || findParent(node.second, paneId, node);
+}
+
+/**
+ * Insert `leaf` next to `toId` on the given edge.
+ * Prefers becoming a sibling in an existing matching-direction split (so you can
+ * pull a pane between two others and get three equal columns/rows).
+ */
+export function insertBeside(
+  layout: SplitNode,
+  toId: string,
+  leaf: LeafNode,
+  zone: Exclude<DropZone, "center">,
+): SplitNode {
+  const direction: SplitDirection = zone === "left" || zone === "right" ? "h" : "v";
+  const before = zone === "left" || zone === "top";
+  const found = findParent(layout, toId);
+  if (!found) return layout;
+
+  const { parent, child } = found;
+
+  // Target is root leaf — simple wrap.
+  if (!parent) {
+    return {
+      type: "split",
+      id: uid("split"),
+      direction,
+      ratio: 0.5,
+      first: before ? leaf : child,
+      second: before ? child : leaf,
+    };
+  }
+
+  // Parent already splits on the same axis — nest beside the target child.
+  if (parent.direction === direction) {
+    const wrapped: SplitParent = {
+      type: "split",
+      id: uid("split"),
+      direction,
+      ratio: 0.5,
+      first: before ? leaf : child,
+      second: before ? child : leaf,
+    };
+    const nextParent = replaceChild(parent, child, wrapped);
+    return mapReplaceSplit(layout, parent.id, equalizeLayout(nextParent));
+  }
+
+  // Different axis — split the leaf itself.
+  return splitPaneWith(layout, toId, direction, leaf, before);
+}
+
+function mapReplaceSplit(node: SplitNode, splitId: string, next: SplitNode): SplitNode {
+  if (node.type === "leaf") return node;
+  if (node.id === splitId) return next;
+  return {
+    ...node,
+    first: mapReplaceSplit(node.first, splitId, next),
+    second: mapReplaceSplit(node.second, splitId, next),
+  };
+}
+
+/** Detach a pane and dock it beside/onto another (or swap on center). */
+export function movePane(
+  layout: SplitNode,
+  fromId: string,
+  toId: string,
+  zone: DropZone,
+): SplitNode {
+  if (fromId === toId) return layout;
+  if (zone === "center") return swapPaneContents(layout, fromId, toId);
+
+  const fromLeaf = findLeaf(layout, fromId);
+  if (!fromLeaf || !findLeaf(layout, toId)) return layout;
+
+  const detached: LeafNode = { ...fromLeaf };
+  const rest = removePane(layout, fromId);
+  if (!rest) return layout;
+
+  return clampLayoutRatios(equalizeLayout(insertBeside(rest, toId, detached, zone)));
+}
+
+function leafSurfaceCount(leaf: LeafNode) {
+  return leafTabIds(leaf).length + (leafHasBrowser(leaf) ? 1 : 0);
+}
+
+/**
+ * Dock a tab onto another pane: center merges into that pane's tabs;
+ * edge splits the target (or moves a single-surface pane).
+ * Returns the pane that should receive focus after the dock.
+ */
+export function dockTab(
+  layout: SplitNode,
+  fromPaneId: string,
+  toPaneId: string,
+  tabId: string,
+  zone: DropZone,
+): { layout: SplitNode; focusPaneId: string } {
+  const from = findLeaf(layout, fromPaneId);
+  const to = findLeaf(layout, toPaneId);
+  if (!from || !to) return { layout, focusPaneId: fromPaneId };
+
+  if (zone === "center") {
+    if (fromPaneId === toPaneId) return { layout, focusPaneId: fromPaneId };
+    let next = moveTabToPane(layout, fromPaneId, toPaneId, tabId);
+    const emptied = findLeaf(next, fromPaneId);
+    if (emptied && leafSurfaceCount(emptied) === 0) {
+      const rest = removePane(next, fromPaneId);
+      if (rest) next = clampLayoutRatios(equalizeLayout(rest));
+    }
+    return {
+      layout: next,
+      focusPaneId: findLeaf(next, toPaneId)?.paneId ?? firstPaneId(next),
+    };
+  }
+
+  // Sole surface on a different pane → move the whole pane (keeps pane id / chrome).
+  if (fromPaneId !== toPaneId && leafSurfaceCount(from) === 1) {
+    return {
+      layout: movePane(layout, fromPaneId, toPaneId, zone),
+      focusPaneId: fromPaneId,
+    };
+  }
+
+  let extracted: LeafNode;
+  let next = layout;
+  if (tabId === BROWSER_TAB) {
+    if (!leafHasBrowser(from)) return { layout, focusPaneId: fromPaneId };
+    extracted = createBrowserLeaf(from.browserUrl ?? "");
+    next = closeBrowserTab(next, fromPaneId);
+  } else {
+    if (!leafTabIds(from).includes(tabId)) return { layout, focusPaneId: fromPaneId };
+    extracted = createLeaf(tabId);
+    next = removeLeafSession(next, fromPaneId, tabId);
+  }
+
+  const after = findLeaf(next, fromPaneId);
+  if (after && leafSurfaceCount(after) === 0) {
+    if (fromPaneId === toPaneId) return { layout, focusPaneId: fromPaneId };
+    const rest = removePane(next, fromPaneId);
+    if (!rest || !findLeaf(rest, toPaneId)) return { layout, focusPaneId: fromPaneId };
+    next = rest;
+  }
+
+  if (!findLeaf(next, toPaneId)) return { layout, focusPaneId: fromPaneId };
+  return {
+    layout: clampLayoutRatios(equalizeLayout(insertBeside(next, toPaneId, extracted, zone))),
+    focusPaneId: extracted.paneId,
+  };
+}
+
+/** Add a blank browser as a sibling of `paneId` (right or below). */
+export function addBrowserBeside(
+  layout: SplitNode,
+  paneId: string,
+  direction: SplitDirection = "h",
+): { layout: SplitNode; paneId: string } | null {
+  if (!findLeaf(layout, paneId)) return null;
+  const leaf = createBrowserLeaf("");
+  return {
+    layout: clampLayoutRatios(equalizeLayout(splitPaneWith(layout, paneId, direction, leaf))),
+    paneId: leaf.paneId,
+  };
+}
+
+/** Add an empty terminal leaf beside `paneId` (new shell pane, not a tab). */
+export function addShellBeside(
+  layout: SplitNode,
+  paneId: string,
+  direction: SplitDirection = "h",
+): { layout: SplitNode; paneId: string } | null {
+  if (!findLeaf(layout, paneId)) return null;
+  const leaf = createLeaf(null);
+  return {
+    layout: clampLayoutRatios(equalizeLayout(splitPaneWith(layout, paneId, direction, leaf))),
+    paneId: leaf.paneId,
+  };
+}
+
+/** Add an empty shell on a specific edge of `paneId` (left/right/top/bottom). */
+export function addShellAtZone(
+  layout: SplitNode,
+  paneId: string,
+  zone: Exclude<DropZone, "center">,
+): { layout: SplitNode; paneId: string } | null {
+  if (!findLeaf(layout, paneId)) return null;
+  const leaf = createLeaf(null);
+  return {
+    layout: clampLayoutRatios(equalizeLayout(insertBeside(layout, paneId, leaf, zone))),
+    paneId: leaf.paneId,
+  };
+}
+
+/** Add a blank browser on a specific edge of `paneId`. */
+export function addBrowserAtZone(
+  layout: SplitNode,
+  paneId: string,
+  zone: Exclude<DropZone, "center">,
+): { layout: SplitNode; paneId: string } | null {
+  if (!findLeaf(layout, paneId)) return null;
+  const leaf = createBrowserLeaf("");
+  return {
+    layout: clampLayoutRatios(equalizeLayout(insertBeside(layout, paneId, leaf, zone))),
+    paneId: leaf.paneId,
+  };
+}
+
+/** Add a blank browser as a new root column (separate from local groups). */
+export function addBrowserRoot(layout: SplitNode): { layout: SplitNode; paneId: string } {
+  const leaf = createBrowserLeaf("");
+  const n = countLeaves(layout);
+  return {
+    layout: clampLayoutRatios({
+      type: "split",
+      id: uid("split"),
+      direction: "h",
+      ratio: clampRatio(n / (n + 1)),
+      first: layout,
+      second: leaf,
+    }),
+    paneId: leaf.paneId,
   };
 }
 
@@ -136,7 +621,9 @@ export function clampLayoutRatios(node: SplitNode): SplitNode {
 }
 
 export function findPaneForSession(node: SplitNode, sessionId: string): string | null {
-  if (node.type === "leaf") return node.sessionId === sessionId ? node.paneId : null;
+  if (node.type === "leaf") {
+    return leafTabIds(node).includes(sessionId) ? node.paneId : null;
+  }
   return findPaneForSession(node.first, sessionId) || findPaneForSession(node.second, sessionId);
 }
 
@@ -147,19 +634,33 @@ export function swapPaneContents(node: SplitNode, fromPaneId: string, toPaneId: 
   if (!from || !to) return node;
   return mapLeaves(node, (leaf) => {
     if (leaf.paneId === fromPaneId) {
+      const sessionIds = leafTabIds(to);
       return {
         ...leaf,
-        kind: to.kind,
-        sessionId: to.sessionId,
-        browserUrl: to.browserUrl,
+        kind: to.kind ?? "terminal",
+        sessionId:
+          to.kind === "browser"
+            ? null
+            : to.sessionId && sessionIds.includes(to.sessionId)
+              ? to.sessionId
+              : sessionIds[0] ?? null,
+        sessionIds: to.kind === "browser" ? [] : sessionIds,
+        browserUrl: to.kind === "browser" ? to.browserUrl : null,
       };
     }
     if (leaf.paneId === toPaneId) {
+      const sessionIds = leafTabIds(from);
       return {
         ...leaf,
-        kind: from.kind,
-        sessionId: from.sessionId,
-        browserUrl: from.browserUrl,
+        kind: from.kind ?? "terminal",
+        sessionId:
+          from.kind === "browser"
+            ? null
+            : from.sessionId && sessionIds.includes(from.sessionId)
+              ? from.sessionId
+              : sessionIds[0] ?? null,
+        sessionIds: from.kind === "browser" ? [] : sessionIds,
+        browserUrl: from.kind === "browser" ? from.browserUrl : null,
       };
     }
     return leaf;
@@ -311,15 +812,19 @@ export function buildGridLayout(count: GridPreset): SplitNode {
   };
 }
 
-/** New space: 1/2/4/8 terminals, optional extra browser pane. */
+/** New space: 1/2/4/8 terminals, optional full-height browser column on the right. */
 export function buildCreateLayout(grid: GridPreset, withBrowser: boolean): SplitNode {
-  let layout = buildGridLayout(grid);
-  if (withBrowser) {
-    layout = expandLayoutToCount(layout, countLeaves(layout) + 1);
-    const ids = collectPaneIds(layout);
-    layout = setLeafBrowser(layout, ids[ids.length - 1], null);
-  }
-  return clampLayoutRatios(layout);
+  const terminals = equalizeLayout(buildGridLayout(grid));
+  if (!withBrowser) return clampLayoutRatios(terminals);
+  return clampLayoutRatios({
+    type: "split",
+    id: uid("split"),
+    direction: "h",
+    // Terminals keep most of the width; browser gets a stable right column.
+    ratio: grid >= 4 ? 0.68 : 0.58,
+    first: terminals,
+    second: createLeaf(null, "browser"),
+  });
 }
 
 /** @deprecated use buildCreateLayout */

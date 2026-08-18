@@ -3,11 +3,19 @@ import {
   CreateSpaceSetup,
   type CreateSpaceSetupValue,
 } from "@/components/shell/CreateSpaceSetup";
+import { ConfirmDialog } from "@/components/PromptDialog";
 import { openInExplorer, pickWorkspaceFolder } from "@/features/terminal";
+import { collectLeaves, collectSessionIds, countLeaves, leafHasBrowser } from "@/features/workspace/layout";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import { clientError } from "@/lib/errors";
-import { SPACE_COLORS, type SpaceColor } from "@/lib/types";
+import { SPACE_COLORS, type SpaceColor, type Workspace } from "@/lib/types";
 import { TerminalSquare } from "@untitledui/icons";
+
+function workspaceHasContent(ws: Workspace) {
+  if (collectSessionIds(ws.layout).length > 0) return true;
+  if (countLeaves(ws.layout) > 1) return true;
+  return collectLeaves(ws.layout).some((leaf) => leafHasBrowser(leaf));
+}
 
 export function ProjectsPage() {
   const {
@@ -26,6 +34,7 @@ export function ProjectsPage() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<Workspace | null>(null);
   const [setup, setSetup] = useState<CreateSpaceSetupValue>({
     grid: 2,
     agentIds: [],
@@ -176,7 +185,7 @@ export function ProjectsPage() {
               ) : (
                 <strong>
                   <span className={`vs-wsAvatar is-${ws.color}`} aria-hidden>
-                    <TerminalSquare size={17} />
+                    <TerminalSquare size={22} strokeWidth={2.35} />
                   </span>
                   {ws.name}
                   {activeWorkspace?.id === ws.id ? (
@@ -240,13 +249,35 @@ export function ProjectsPage() {
               >
                 {t("projects.openFolder")}
               </button>
-              <button type="button" className="vs-btn vs-btnGhost" onClick={() => void removeWorkspace(ws.id)}>
+              <button type="button" className="vs-btn vs-btnGhost" onClick={() => setPendingDelete(ws)}>
                 {t("projects.remove")}
               </button>
             </div>
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        danger
+        title={t("space.settings.deleteTitle")}
+        body={
+          pendingDelete
+            ? (workspaceHasContent(pendingDelete)
+                ? t("space.settings.deleteBodyBusy")
+                : t("space.settings.deleteBody")
+              ).replace("{name}", pendingDelete.name)
+            : ""
+        }
+        confirmLabel={t("space.settings.deleteConfirm")}
+        cancelLabel={t("projects.cancel")}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          const id = pendingDelete?.id;
+          setPendingDelete(null);
+          if (id) void removeWorkspace(id);
+        }}
+      />
     </div>
   );
 }

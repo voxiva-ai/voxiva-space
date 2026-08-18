@@ -72,6 +72,158 @@
   display: none;
 }
 
+/* —— Space settings —— */
+.vs-spaceSettingsModal {
+  width: min(440px, calc(100vw - 2rem));
+  max-height: min(88vh, 680px);
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--vs-bg-raised) 92%, #fff 2%), var(--vs-bg-raised));
+  box-shadow: var(--vs-shadow), 0 0 0 1px var(--vs-border-strong);
+}
+
+.vs-ssHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1.05rem 1.05rem 0.9rem;
+  border-bottom: 1px solid var(--vs-border);
+}
+
+.vs-ssMark {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+}
+
+.vs-ssMark.is-green { color: #3dd68c; }
+.vs-ssMark.is-red { color: #ff6b6b; }
+.vs-ssMark.is-amber { color: #f0c14b; }
+.vs-ssMark.is-violet { color: #a78bfa; }
+.vs-ssMark.is-cyan { color: #22d3ee; }
+.vs-ssMark.is-rose { color: #fb7185; }
+
+.vs-ssHeadCopy {
+  min-width: 0;
+  flex: 1;
+  padding-top: 0.1rem;
+}
+
+.vs-ssHeadCopy strong {
+  display: block;
+  font-size: 1rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+}
+
+.vs-ssHeadCopy p {
+  margin: 0.28rem 0 0;
+  color: var(--vs-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.vs-ssBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+  padding: 1rem 1.05rem 0.35rem;
+  overflow: auto;
+  min-height: 0;
+}
+
+.vs-ssField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+}
+
+.vs-ssField > span {
+  color: var(--vs-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vs-ssColors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.vs-ssColor {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.vs-ssColor:hover {
+  transform: scale(1.08);
+}
+
+.vs-ssColor.is-green { background: #3dd68c; }
+.vs-ssColor.is-red { background: #ff6b6b; }
+.vs-ssColor.is-amber { background: #f0c14b; }
+.vs-ssColor.is-violet { background: #a78bfa; }
+.vs-ssColor.is-cyan { background: #22d3ee; }
+.vs-ssColor.is-rose { background: #fb7185; }
+
+.vs-ssColor.is-active {
+  border-color: var(--vs-text);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--vs-bg-raised) 100%, transparent);
+}
+
+.vs-ssFoot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.85rem 1.05rem 1.05rem;
+  border-top: 1px solid var(--vs-border);
+  background: color-mix(in srgb, var(--vs-bg) 55%, transparent);
+}
+
+.vs-ssFootSpacer {
+  flex: 1;
+  min-width: 0.5rem;
+}
+
+.vs-ssDelete {
+  margin-right: auto;
+}
+
+.vs-ssPinBtn {
+  justify-content: flex-start;
+  gap: 0.45rem;
+  width: fit-content;
+  color: var(--vs-muted);
+}
+
+.vs-ssPinBtn.is-on {
+  color: var(--vs-accent);
+  border-color: color-mix(in srgb, var(--vs-accent) 40%, var(--vs-border));
+  background: color-mix(in srgb, var(--vs-accent) 12%, transparent);
+}
+
+.vs-ssFoot .vs-btnPrimary {
+  box-shadow: none;
+  min-width: 5.5rem;
+}
+
 .vs-modalWide {
   width: min(920px, 100%);
   max-height: min(92vh, 900px);

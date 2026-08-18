@@ -7,8 +7,11 @@ export type HotkeyAction =
   | "splitDown"
   | "nextPane"
   | "prevPane"
+  | "jumpAttention"
   | "nextWorkspace"
   | "prevWorkspace"
+  | "newSpace"
+  | "spaceSettings"
   | "viewSpace"
   | "viewAgents"
   | "viewBoard"
@@ -38,7 +41,7 @@ export const HOTKEY_GROUPS: Array<{
   {
     id: "terminals",
     labelKey: "settings.hk.group.terminals",
-    actions: ["newTerminal", "closePane"],
+    actions: ["newTerminal", "closePane", "jumpAttention"],
   },
   {
     id: "panes",
@@ -48,7 +51,7 @@ export const HOTKEY_GROUPS: Array<{
   {
     id: "spaces",
     labelKey: "settings.hk.group.spaces",
-    actions: ["nextWorkspace", "prevWorkspace"],
+    actions: ["nextWorkspace", "prevWorkspace", "newSpace", "spaceSettings"],
   },
   {
     id: "views",
@@ -74,8 +77,11 @@ export const HOTKEY_LABELS: Record<HotkeyAction, MsgKey> = {
   splitDown: "settings.hk.splitDown",
   nextPane: "settings.hk.nextPane",
   prevPane: "settings.hk.prevPane",
+  jumpAttention: "settings.hk.jumpAttention",
   nextWorkspace: "settings.hk.nextWorkspace",
   prevWorkspace: "settings.hk.prevWorkspace",
+  newSpace: "settings.hk.newSpace",
+  spaceSettings: "settings.hk.spaceSettings",
   viewSpace: "settings.hk.viewSpace",
   viewAgents: "settings.hk.viewAgents",
   viewBoard: "settings.hk.viewBoard",
@@ -92,27 +98,36 @@ export const HOTKEY_ACTIONS = HOTKEY_GROUPS.flatMap((g) =>
   g.actions.map((id) => ({ id, labelKey: HOTKEY_LABELS[id] })),
 );
 
+/**
+ * Defaults match the Settings labels:
+ * Alt+T terminal, Alt+1/Shift+1 cycle spaces, Alt+2–5 views,
+ * Alt+J/K panes, Alt+D/F splits, Alt+A attention, Alt+N new space.
+ * No Ctrl+1–9 workspace jump (that stole chords and confused users).
+ */
 export const DEFAULT_HOTKEYS: HotkeyMap = {
   newTerminal: { key: "t", alt: true, ctrl: false, shift: false },
   closePane: { key: "w", alt: true, ctrl: false, shift: false },
   splitRight: { key: "d", alt: true, ctrl: false, shift: false },
-  splitDown: { key: "d", alt: true, ctrl: false, shift: true },
-  nextPane: { key: "]", alt: true, ctrl: false, shift: false },
-  prevPane: { key: "[", alt: true, ctrl: false, shift: false },
-  nextWorkspace: { key: "tab", alt: false, ctrl: true, shift: false },
-  prevWorkspace: { key: "tab", alt: false, ctrl: true, shift: true },
-  viewSpace: { key: "1", alt: true, ctrl: false, shift: true },
-  viewAgents: { key: "2", alt: true, ctrl: false, shift: true },
-  viewBoard: { key: "3", alt: true, ctrl: false, shift: true },
-  viewEditor: { key: "4", alt: true, ctrl: false, shift: true },
-  viewProjects: { key: "5", alt: true, ctrl: false, shift: true },
+  splitDown: { key: "f", alt: true, ctrl: false, shift: false },
+  prevPane: { key: "j", alt: true, ctrl: false, shift: false },
+  nextPane: { key: "k", alt: true, ctrl: false, shift: false },
+  jumpAttention: { key: "a", alt: true, ctrl: false, shift: false },
+  nextWorkspace: { key: "1", alt: true, ctrl: false, shift: false },
+  prevWorkspace: { key: "1", alt: true, ctrl: false, shift: true },
+  newSpace: { key: "n", alt: true, ctrl: false, shift: false },
+  spaceSettings: { key: ".", alt: true, ctrl: false, shift: false },
+  viewSpace: { key: "s", alt: true, ctrl: false, shift: true },
+  viewAgents: { key: "2", alt: true, ctrl: false, shift: false },
+  viewBoard: { key: "3", alt: true, ctrl: false, shift: false },
+  viewEditor: { key: "4", alt: true, ctrl: false, shift: false },
+  viewProjects: { key: "5", alt: true, ctrl: false, shift: false },
   history: { key: "h", alt: true, ctrl: false, shift: false },
-  browser: { key: "e", alt: true, ctrl: false, shift: false },
+  browser: { key: "b", alt: true, ctrl: false, shift: false },
   settings: { key: ",", alt: true, ctrl: false, shift: false },
   sidebar: { key: "b", alt: false, ctrl: true, shift: false },
 };
 
-const STORAGE_KEY = "voxiva-space-hotkeys-v1";
+const STORAGE_KEY = "voxiva-space-hotkeys-v3";
 
 function normalizeBinding(raw: unknown, fallback: HotkeyBinding): HotkeyBinding {
   if (!raw || typeof raw !== "object") return fallback;
@@ -163,9 +178,11 @@ export function formatHotkey(binding: HotkeyBinding) {
       ? "Tab"
       : binding.key === ","
         ? ","
-        : binding.key.length === 1
-          ? binding.key.toUpperCase()
-          : binding.key;
+        : binding.key === "."
+          ? "."
+          : binding.key.length === 1
+            ? binding.key.toUpperCase()
+            : binding.key;
   parts.push(keyLabel);
   return parts.join(" + ");
 }
@@ -188,4 +205,23 @@ export function bindingFromEvent(event: KeyboardEvent): HotkeyBinding | null {
     ctrl: event.ctrlKey || event.metaKey,
     shift: event.shiftKey,
   };
+}
+
+export function bindingsEqual(a: HotkeyBinding, b: HotkeyBinding) {
+  return a.key === b.key && a.alt === b.alt && a.ctrl === b.ctrl && a.shift === b.shift;
+}
+
+let capturingHotkey = false;
+
+export function setCapturingHotkey(on: boolean) {
+  capturingHotkey = on;
+}
+
+export function isCapturingHotkey() {
+  return capturingHotkey;
+}
+
+/** True while a modal/dialog scrim is open — app chords must not steal focus. */
+export function isModalOpen() {
+  return Boolean(document.querySelector(".vs-modalScrim"));
 }

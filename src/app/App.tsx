@@ -3,22 +3,40 @@ import { Sidebar } from "@/components/shell/Sidebar";
 import { Topbar } from "@/components/shell/Topbar";
 import { AssistPanel, type AssistTab } from "@/components/shell/AssistPanel";
 import { NewSpaceModal } from "@/components/shell/NewSpaceModal";
+import { SpaceSettingsModal } from "@/components/shell/SpaceSettingsModal";
 import { useHotkeys } from "@/features/hotkeys/useHotkeys";
-import { eventMatchesBinding, loadHotkeys } from "@/features/hotkeys/bindings";
-import { browserClose, browserCloseAll } from "@/features/browser/api";
-import { SpaceProvider, useSpace } from "@/features/workspace/SpaceContext";
-import { AgentsPage } from "@/pages/agents/AgentsPage";
-import { BrowserPage } from "@/pages/browser/BrowserPage";
-import { HistoryPage } from "@/pages/history/HistoryPage";
-import { BoardPage } from "@/pages/board/BoardPage";
-import { ProjectsPage } from "@/pages/projects/ProjectsPage";
-import { SettingsPage } from "@/pages/settings/SettingsPage";
+import { eventMatchesBinding, isCapturingHotkey, isModalOpen, loadHotkeys } from "@/features/hotkeys/bindings";
+import { browserClose, browserCloseAll, browserHideAll } from "@/features/browser/api";
+import { SpaceProvider, useSpace, useView } from "@/features/workspace/SpaceContext";
 import { SpacePage } from "@/pages/space/SpacePage";
 import { installUiZoom } from "@/features/ui/zoom";
+import { revealMainWindow } from "@/features/ui/revealWindow";
+import { useWindowChrome } from "@/features/ui/useWindowChrome";
+import { applyAttentionPrefs } from "@/features/attention/prefs";
 import { WelcomePage } from "@/pages/welcome/WelcomePage";
+import { IconBrowser } from "@/components/icons";
+import type { ViewId } from "@/lib/types";
 
 const EditorPage = lazy(() =>
   import("@/pages/editor/EditorPage").then((module) => ({ default: module.EditorPage })),
+);
+const AgentsPage = lazy(() =>
+  import("@/pages/agents/AgentsPage").then((module) => ({ default: module.AgentsPage })),
+);
+const BrowserPage = lazy(() =>
+  import("@/pages/browser/BrowserPage").then((module) => ({ default: module.BrowserPage })),
+);
+const HistoryPage = lazy(() =>
+  import("@/pages/history/HistoryPage").then((module) => ({ default: module.HistoryPage })),
+);
+const BoardPage = lazy(() =>
+  import("@/pages/board/BoardPage").then((module) => ({ default: module.BoardPage })),
+);
+const ProjectsPage = lazy(() =>
+  import("@/pages/projects/ProjectsPage").then((module) => ({ default: module.ProjectsPage })),
+);
+const SettingsPage = lazy(() =>
+  import("@/pages/settings/SettingsPage").then((module) => ({ default: module.SettingsPage })),
 );
 
 const SIDEBAR_KEY = "voxiva-space-sidebar-collapsed";
@@ -31,9 +49,9 @@ function GlobalToast() {
     suggestedLocalUrl,
     dismissSuggestedLocalUrl,
     openBrowserWithUrl,
-    view,
     t,
   } = useSpace();
+  const { view } = useView();
 
   // Suggest only while working in the Space grid — not on full Browser page / other views.
   useEffect(() => {
@@ -52,10 +70,14 @@ function GlobalToast() {
     <div className="vs-globalToastStack" role="status">
       {view === "space" && suggestedLocalUrl ? (
         <div className="vs-globalToast is-suggest">
-          <span>
-            {t("browser.suggestLocal")}{" "}
-            <strong className="vs-mono">{suggestedLocalUrl}</strong>
-          </span>
+          <div className="vs-globalToastIcon" aria-hidden>
+            <IconBrowser size={18} />
+          </div>
+          <div className="vs-globalToastBody">
+            <strong>{t("browser.suggestTitle")}</strong>
+            <p>{t("browser.suggestLocal")}</p>
+            <code className="vs-mono">{suggestedLocalUrl}</code>
+          </div>
           <div className="vs-globalToastActions">
             <button
               type="button"
@@ -83,9 +105,39 @@ function GlobalToast() {
 }
 
 function AppShell() {
-  const { view, onboarded, t, setBrowserUrl } = useSpace();
+  const { welcomeVisible, t, setBrowserUrl } = useSpace();
+  const { view } = useView();
   useHotkeys();
+  useWindowChrome();
+  useEffect(() => {
+    // Mouse clicks shouldn't leave a sticky focus highlight on chrome buttons.
+    const onMouseDown = (event: MouseEvent) => {
+      if (event.button !== 0) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const btn = target.closest(
+        "button.vs-iconBtn, button.vs-btn, button.vs-railBtn, button.vs-navItem, button.vs-fileRow, button.vs-editorTabSelect, button.vs-editorTabClose, button.vs-mdPreviewBtn, button.vs-wsItemGear, button.vs-wsItemPin, button.vs-topbarCwdBtn",
+      );
+      if (!(btn instanceof HTMLElement)) return;
+      event.preventDefault();
+    };
+    document.addEventListener("mousedown", onMouseDown, true);
+    return () => document.removeEventListener("mousedown", onMouseDown, true);
+  }, []);
+
   useEffect(() => installUiZoom(), []);
+  useEffect(() => {
+    applyAttentionPrefs();
+  }, []);
+  useEffect(() => {
+    // Show after first paint + theme so the transparent window never flashes empty.
+    const id = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        void revealMainWindow();
+      });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, []);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
       return localStorage.getItem(SIDEBAR_KEY) === "1";
@@ -93,17 +145,23 @@ function AppShell() {
       return false;
     }
   });
-  const [assistOpen, setAssistOpen] = useState(() => {
-    try {
-      return localStorage.getItem(ASSIST_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
+  const [assistOpen, setAssistOpen] = useState(false);
   const [assistTab, setAssistTab] = useState<AssistTab>("editor");
   const [pendingPath, setPendingPath] = useState<string | null>(null);
   const [pendingAssistUrl, setPendingAssistUrl] = useState<string | null>(null);
   const [newSpaceOpen, setNewSpaceOpen] = useState(false);
+  const [spaceSettingsId, setSpaceSettingsId] = useState<string | null>(null);
+  // Mount each view once, then keep it alive (hidden) so switches don't remount/lag.
+  const [mountedViews, setMountedViews] = useState<Set<ViewId>>(() => new Set(["space"]));
+
+  useEffect(() => {
+    setMountedViews((prev) => {
+      if (prev.has(view)) return prev;
+      const next = new Set(prev);
+      next.add(view);
+      return next;
+    });
+  }, [view]);
 
   useEffect(() => {
     try {
@@ -115,7 +173,8 @@ function AppShell() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(ASSIST_KEY, assistOpen ? "1" : "0");
+      // Never restore assist open on next launch — only remember closed.
+      localStorage.setItem(ASSIST_KEY, "0");
     } catch {
       // ignore
     }
@@ -123,6 +182,8 @@ function AppShell() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (isCapturingHotkey()) return;
+      if (isModalOpen()) return;
       const target = event.target;
       if (target instanceof HTMLElement) {
         const tag = target.tagName;
@@ -150,6 +211,20 @@ function AppShell() {
   }, []);
 
   useEffect(() => {
+    const onNewSpace = () => setNewSpaceOpen(true);
+    const onSpaceSettings = (event: Event) => {
+      const id = (event as CustomEvent<{ workspaceId?: string }>).detail?.workspaceId;
+      if (id) setSpaceSettingsId(id);
+    };
+    window.addEventListener("voxiva-new-space", onNewSpace);
+    window.addEventListener("voxiva-space-settings", onSpaceSettings);
+    return () => {
+      window.removeEventListener("voxiva-new-space", onNewSpace);
+      window.removeEventListener("voxiva-space-settings", onSpaceSettings);
+    };
+  }, []);
+
+  useEffect(() => {
     const onOpen = (event: Event) => {
       const detail =
         (event as CustomEvent<{ tab?: AssistTab; path?: string; url?: string }>).detail ?? {};
@@ -166,14 +241,17 @@ function AppShell() {
     return () => window.removeEventListener("voxiva-assist-open", onOpen);
   }, [setBrowserUrl]);
 
+  // Prefetch editor chunk after first paint so the first open isn't a cold Suspense hit.
   useEffect(() => {
-    const onNew = () => setNewSpaceOpen(true);
-    window.addEventListener("voxiva-new-space", onNew);
-    return () => window.removeEventListener("voxiva-new-space", onNew);
-  }, []);
+    if (welcomeVisible) return;
+    const idle = window.setTimeout(() => {
+      void import("@/pages/editor/EditorPage");
+    }, 1200);
+    return () => window.clearTimeout(idle);
+  }, [welcomeVisible]);
 
   useEffect(() => {
-    if (!onboarded) {
+    if (welcomeVisible) {
       void browserCloseAll().catch(() => undefined);
       return;
     }
@@ -187,14 +265,13 @@ function AppShell() {
       if (!assistBrowser) void browserClose("browser-assist").catch(() => undefined);
       return;
     }
-    if (assistBrowser) {
-      void browserCloseAll("browser-assist").catch(() => undefined);
-      return;
-    }
-    void browserCloseAll().catch(() => undefined);
-  }, [assistOpen, assistTab, onboarded, view]);
+    // Editor / agents / projects / … — hide pane browsers, don't destroy them.
+    void browserHideAll().catch(() => undefined);
+    void browserClose("browser-page").catch(() => undefined);
+    if (!assistBrowser) void browserClose("browser-assist").catch(() => undefined);
+  }, [assistOpen, assistTab, welcomeVisible, view]);
 
-  if (!onboarded) {
+  if (welcomeVisible) {
     return (
       <>
         <WelcomePage />
@@ -203,9 +280,12 @@ function AppShell() {
     );
   }
 
+  const show = (id: ViewId) => view === id;
+  const keep = (id: ViewId) => mountedViews.has(id);
+
   return (
     <div
-      className={`vs-root${sidebarCollapsed ? " is-sidebarCollapsed" : ""}${assistOpen ? " is-assistOpen" : ""}`}
+      className={`vs-root${sidebarCollapsed ? " is-sidebarCollapsed" : ""}${assistOpen ? " is-assistOpen" : ""}${view === "space" ? " is-spaceView" : ""}`}
     >
       <Sidebar
         collapsed={sidebarCollapsed}
@@ -224,26 +304,63 @@ function AppShell() {
         <div className="vs-mainBody">
           <div
             className={`vs-content${
-              view === "space" || view === "browser" || view === "editor" || view === "board"
+              view === "space" || view === "browser" || view === "editor" || view === "board" || view === "settings"
                 ? ""
                 : " is-scroll"
             }`}
           >
-            {/* Keep Space mounted so terminals keep loading while you browse other views. */}
-            <div className={`vs-viewSlot${view === "space" ? " is-active" : ""}`} hidden={view !== "space"}>
+            <div className={`vs-viewSlot${show("space") ? " is-active" : ""}`} hidden={!show("space")}>
               <SpacePage />
             </div>
-            {view === "editor" && (
-              <Suspense fallback={<div className="vs-empty">{t("editor.loading")}</div>}>
-                <EditorPage />
-              </Suspense>
-            )}
-            {view === "projects" && <ProjectsPage />}
-            {view === "agents" && <AgentsPage />}
-            {view === "board" && <BoardPage />}
-            {view === "history" && <HistoryPage />}
-            {view === "browser" && <BrowserPage />}
-            {view === "settings" && <SettingsPage />}
+            {keep("editor") ? (
+              <div className={`vs-viewSlot${show("editor") ? " is-active" : ""}`} hidden={!show("editor")}>
+                <Suspense fallback={<div className="vs-empty">{t("editor.loading")}</div>}>
+                  <EditorPage />
+                </Suspense>
+              </div>
+            ) : null}
+            {keep("projects") ? (
+              <div className={`vs-viewSlot${show("projects") ? " is-active" : ""}`} hidden={!show("projects")}>
+                <Suspense fallback={null}>
+                  <ProjectsPage />
+                </Suspense>
+              </div>
+            ) : null}
+            {keep("agents") ? (
+              <div className={`vs-viewSlot${show("agents") ? " is-active" : ""}`} hidden={!show("agents")}>
+                <Suspense fallback={null}>
+                  <AgentsPage />
+                </Suspense>
+              </div>
+            ) : null}
+            {keep("board") ? (
+              <div className={`vs-viewSlot${show("board") ? " is-active" : ""}`} hidden={!show("board")}>
+                <Suspense fallback={null}>
+                  <BoardPage />
+                </Suspense>
+              </div>
+            ) : null}
+            {keep("history") ? (
+              <div className={`vs-viewSlot${show("history") ? " is-active" : ""}`} hidden={!show("history")}>
+                <Suspense fallback={null}>
+                  <HistoryPage />
+                </Suspense>
+              </div>
+            ) : null}
+            {keep("browser") ? (
+              <div className={`vs-viewSlot${show("browser") ? " is-active" : ""}`} hidden={!show("browser")}>
+                <Suspense fallback={null}>
+                  <BrowserPage />
+                </Suspense>
+              </div>
+            ) : null}
+            {keep("settings") ? (
+              <div className={`vs-viewSlot${show("settings") ? " is-active" : ""}`} hidden={!show("settings")}>
+                <Suspense fallback={null}>
+                  <SettingsPage />
+                </Suspense>
+              </div>
+            ) : null}
           </div>
           <AssistPanel
             open={assistOpen}
@@ -258,6 +375,7 @@ function AppShell() {
         </div>
       </main>
       <NewSpaceModal open={newSpaceOpen} onClose={() => setNewSpaceOpen(false)} />
+      <SpaceSettingsModal workspaceId={spaceSettingsId} onClose={() => setSpaceSettingsId(null)} />
     </div>
   );
 }

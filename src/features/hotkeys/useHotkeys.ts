@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { useSpace } from "@/features/workspace/SpaceContext";
+import { useSpace, useView } from "@/features/workspace/SpaceContext";
 import { collectLeaves } from "@/features/workspace/layout";
 import {
   DEFAULT_HOTKEYS,
   eventMatchesBinding,
+  isCapturingHotkey,
+  isModalOpen,
   loadHotkeys,
   type HotkeyBinding,
   type HotkeyMap,
@@ -37,16 +39,18 @@ function match(event: KeyboardEvent, binding: HotkeyBinding, allowInTerminal: bo
 /** App shortcuts — Alt/Ctrl chords also work while a terminal is focused. */
 export function useHotkeys() {
   const {
-    setView,
     spawnInFocused,
     splitFocused,
     closeFocusedPane,
+    openBrowserInFocused,
     workspaces,
     activeWorkspace,
     selectWorkspace,
     focusPane,
+    focusNextAttention,
     isBusy,
   } = useSpace();
+  const { setView } = useView();
   const [bindings, setBindings] = useState<HotkeyMap>(() => loadHotkeys());
 
   useEffect(() => {
@@ -61,13 +65,21 @@ export function useHotkeys() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (inPlainInput(event.target)) return;
+      if (isCapturingHotkey()) return;
+      if (isModalOpen()) return;
+      // Allow Alt/Ctrl app chords even in URL / search inputs (match Settings).
+      if (inPlainInput(event.target) && !(event.altKey || event.ctrlKey || event.metaKey)) {
+        return;
+      }
 
       const go = (binding: HotkeyBinding) => match(event, binding, true);
 
       if (go(bindings.newTerminal)) {
         event.preventDefault();
-        if (!isBusy) void spawnInFocused({ title: "Shell", accent: "green" });
+        if (!isBusy) {
+          setView("space");
+          void spawnInFocused({ title: "Shell", accent: "green" });
+        }
         return;
       }
       if (go(bindings.closePane)) {
@@ -96,13 +108,38 @@ export function useHotkeys() {
         if (next) focusPane(next.paneId);
         return;
       }
+      if (go(bindings.jumpAttention)) {
+        event.preventDefault();
+        focusNextAttention();
+        return;
+      }
       if (go(bindings.nextWorkspace) || go(bindings.prevWorkspace)) {
-        if (workspaces.length < 2) return;
+        if (workspaces.length < 1) return;
         event.preventDefault();
         const idx = workspaces.findIndex((w) => w.id === activeWorkspace?.id);
         const delta = go(bindings.nextWorkspace) ? 1 : -1;
-        const next = workspaces[(Math.max(0, idx) + delta + workspaces.length) % workspaces.length];
-        if (next) selectWorkspace(next.id);
+        const next =
+          workspaces[(Math.max(0, idx) + delta + workspaces.length) % workspaces.length];
+        if (next) {
+          selectWorkspace(next.id);
+          setView("space");
+        }
+        return;
+      }
+      if (go(bindings.newSpace)) {
+        event.preventDefault();
+        window.dispatchEvent(new Event("voxiva-new-space"));
+        return;
+      }
+      if (go(bindings.spaceSettings)) {
+        event.preventDefault();
+        if (activeWorkspace) {
+          window.dispatchEvent(
+            new CustomEvent("voxiva-space-settings", {
+              detail: { workspaceId: activeWorkspace.id },
+            }),
+          );
+        }
         return;
       }
       if (go(bindings.viewSpace)) {
@@ -137,7 +174,8 @@ export function useHotkeys() {
       }
       if (go(bindings.browser)) {
         event.preventDefault();
-        setView("browser");
+        setView("space");
+        void openBrowserInFocused(undefined, "tab");
         return;
       }
       if (go(bindings.settings)) {
@@ -146,16 +184,8 @@ export function useHotkeys() {
         return;
       }
       if (go(bindings.sidebar)) {
+        // Handled in App (owns collapse state).
         return;
-      }
-
-      const key = event.key.toLowerCase();
-      if ((event.altKey || event.ctrlKey || event.metaKey) && /^[1-9]$/.test(key) && !event.shiftKey) {
-        const ws = workspaces[Number(key) - 1];
-        if (ws) {
-          event.preventDefault();
-          selectWorkspace(ws.id);
-        }
       }
     };
     window.addEventListener("keydown", onKey, true);
@@ -164,12 +194,14 @@ export function useHotkeys() {
     bindings,
     setView,
     spawnInFocused,
+    openBrowserInFocused,
     splitFocused,
     closeFocusedPane,
     workspaces,
     activeWorkspace,
     selectWorkspace,
     focusPane,
+    focusNextAttention,
     isBusy,
   ]);
 

@@ -55,22 +55,27 @@ function SnapPreview({ id }: { id: SnapLayoutId }) {
   );
 }
 
-/** Floating snap picker — drop a pane onto a layout to apply it. */
+/** Floating snap picker — drop a pane onto a layout, or click when clickable. */
 export function LayoutSnapBar({
   disabled = false,
   floating = false,
+  clickable = false,
+  onApplied,
 }: {
   disabled?: boolean;
   floating?: boolean;
+  clickable?: boolean;
+  onApplied?: () => void;
 }) {
-  const { t } = useSpace();
+  const { applySnapLayout, t } = useSpace();
 
   return (
     <div
-      className={`vs-snapBar${floating ? " is-floating" : ""}${floating ? "" : " is-inline"}`}
+      className={`vs-snapBar${floating ? " is-floating" : " is-inline"}${clickable ? " is-clickable" : ""}`}
       role="group"
       aria-label={t("space.tipLabel")}
     >
+      {floating ? <span className="vs-snapBarHint">{t("space.snapDropHint")}</span> : null}
       <div className="vs-snapOptions">
         {SNAP_LAYOUTS.map((layout) => (
           <button
@@ -81,6 +86,10 @@ export function LayoutSnapBar({
             disabled={disabled}
             title={t(SNAP_LABEL[layout.id])}
             aria-label={t(SNAP_LABEL[layout.id])}
+            onClick={() => {
+              if (!clickable || disabled) return;
+              void applySnapLayout(layout.id).then(() => onApplied?.());
+            }}
           >
             <SnapPreview id={layout.id} />
           </button>

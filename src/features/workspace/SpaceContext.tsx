@@ -1,8 +1,10 @@
 import {
   createContext,
+  startTransition,
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -14,6 +16,7 @@ import { clientError } from "@/lib/errors";
 import type {
   Accent,
   AgentAvailability,
+  AgentRun,
   HistoryItem,
   SpaceColor,
   SplitDirection,
@@ -31,8 +34,12 @@ import {
   killTerminalSession,
 } from "@/features/terminal/api";
 import { enqueueTerminalSpawn, yieldToUi } from "@/features/terminal/spawnQueue";
+import {
+  outputNeedsAttention,
+  showAttentionToast,
+} from "@/features/attention/prefs";
 import { browserClose, browserHideAll } from "@/features/browser/api";
-import { extractLocalUrlFromOutput, normalizeBrowserUrl } from "@/features/browser/url";
+import { extractLocalUrlFromOutput, normalizeBrowserUrl, resolveOmniboxInput } from "@/features/browser/url";
 import {
   createTask,
   loadBoard,
@@ -40,16 +47,23 @@ import {
   type TaskPriority,
 } from "@/features/board/store";
 import {
+  companionAppendOutput,
   companionPushSnapshot,
   companionSetWorkspace,
+  companionStatus,
   type CompanionInputEvent,
+  type CompanionRenameEvent,
+  type CompanionSpawnEvent,
   type CompanionTaskEvent,
 } from "@/features/companion/api";
+import { isCompanionLive, setCompanionLive } from "@/features/companion/live";
 import { writeTerminalSession } from "@/features/terminal/api";
 import {
   agentBots,
   commandKeysForBots,
+  isBotReady,
   resolveBotCommand,
+  resumeCommandFor,
 } from "@/features/agents/bots";
 import type { TerminalExitEvent, TerminalOutputEvent } from "@/features/terminal/types";
 import {
@@ -71,15 +85,31 @@ import {
   removePane,
   clampLayoutRatios,
   setLeafBrowser,
+  openBrowserTab,
+  closeBrowserTab,
+  reorderLeafTabs,
+  dockTab,
+  leafHasBrowser,
+  setLeafContents,
   setLeafSession,
+  addLeafSession,
+  activateLeafSession,
+  removeLeafSession,
+  leafTabIds,
   setRatio,
   shrinkLayoutToCount,
-  splitPane,
-  swapPaneContents,
+  addBrowserBeside,
+  addBrowserAtZone,
+  addShellBeside,
+  addShellAtZone,
+  addBrowserRoot,
+  movePane,
+  type DropZone,
 } from "./layout";
-import { loadPersisted, savePersisted, type ThemeId } from "./persist";
+import { loadPersisted, savePersisted, flushPersisted, type ThemeId } from "./persist";
 import { translate, type Locale, type MsgKey } from "@/i18n";
 import { playNotifySound } from "@/features/sounds/prefs";
+import { applyTheme, resolveThemeId } from "@/features/theme";
 import { syncWindowGlass } from "@/features/theme/windowGlass";
 
 const MAX_PANES = 8;
@@ -93,6 +123,8 @@ type SpawnOptions = {
   command?: string;
   accent?: Accent;
   paneId?: string;
+  /** replace = kill current tabs (default for empty). tab = add alongside. */
+  mode?: "replace" | "tab";
 };
 
 type EnterSpaceOptions = {
@@ -122,6 +154,26 @@ function pickSpaceColor(existing: Workspace[], preferred?: SpaceColor): SpaceCol
   const used = new Set(existing.map((ws) => ws.color));
   const free = SPACE_COLORS.find((c) => !used.has(c));
   return free ?? SPACE_COLORS[existing.length % SPACE_COLORS.length];
+}
+
+function normSpacePath(path: string) {
+  return path.trim().replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+
+function normSpaceName(name: string) {
+  return name.trim().toLowerCase() || "space";
+}
+
+function findWorkspaceByIdentity(
+  list: Workspace[],
+  name: string,
+  cwd: string,
+): Workspace | undefined {
+  const keyName = normSpaceName(name);
+  const keyCwd = normSpacePath(cwd);
+  return list.find(
+    (ws) => normSpaceName(ws.name) === keyName && normSpacePath(ws.cwd) === keyCwd,
+  );
 }
 
 function resolveGrid(opts: CreateWorkspaceOptions): GridPreset {
@@ -164,10 +216,36 @@ function queuePaneSpawns(
   });
 }
 
+function hydrateShellPresets(raw: unknown): Workspace["shellPresets"] {
+  if (!Array.isArray(raw)) return [];
+  const out: NonNullable<Workspace["shellPresets"]> = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const title = typeof row.title === "string" ? row.title.trim() : "";
+    if (!title) continue;
+    out.push({
+      id: typeof row.id === "string" && row.id ? row.id : uid("shell"),
+      title,
+      command: typeof row.command === "string" && row.command.trim() ? row.command.trim() : undefined,
+    });
+  }
+  return out;
+}
+
+/**
+ * A recorded agent run. Shape contract for the "Recent agents" sidebar section.
+ */
+export type { AgentRun } from "@/lib/types";
+
 type SpaceContextValue = {
+  /** Startup / preview welcome overlay — never wipes workspaces. */
+  welcomeVisible: boolean;
+  dismissWelcome: () => void;
+  showWelcomeScreen: () => void;
+  skipWelcome: boolean;
+  setSkipWelcome: (skip: boolean) => void;
   onboarded: boolean;
-  view: ViewId;
-  setView: (view: ViewId) => void;
   setEditorDirty: (dirty: boolean) => void;
   takePendingPaneSpawn: (paneId: string) => SpawnOptions | null;
   clearPendingPaneSpawn: (paneId: string) => void;
@@ -181,7 +259,20 @@ type SpaceContextValue = {
   browserUrl: string;
   setBrowserUrl: (url: string) => void;
   setPaneBrowserUrl: (paneId: string, url: string) => void;
-  openBrowserInFocused: () => Promise<void>;
+  openBrowserInFocused: (
+    paneId?: string,
+    mode?: "tab" | "beside" | "below" | "left" | "above" | "root",
+  ) => Promise<void>;
+  /** Focus existing browser tab — never spawns a second pane. */
+  focusBrowserInPane: (paneId?: string) => void;
+  focusTerminalInPane: (paneId?: string) => Promise<void>;
+  closeBrowserTab: (paneId: string) => void;
+  reorderPaneTabs: (paneId: string, fromId: string, toId: string) => void;
+  /** Drag a shell/browser tab onto another pane — keeps the live session / URL. */
+  movePaneTab: (fromPaneId: string, toPaneId: string, tabId: string) => void;
+  /** Drag a tab to a pane edge to split, or center to merge. */
+  dockPaneTab: (fromPaneId: string, toPaneId: string, tabId: string, zone: DropZone) => void;
+  dockPane: (fromPaneId: string, toPaneId: string, zone: DropZone) => void;
   openBrowserWithUrl: (url: string) => Promise<void>;
   suggestedLocalUrl: string | null;
   suggestPreviewUrl: (url: string) => void;
@@ -200,10 +291,15 @@ type SpaceContextValue = {
   setError: (msg: string) => void;
   isBusy: boolean;
   enterSpace: (opts: EnterSpaceOptions) => Promise<void>;
+  /** @deprecated Use showWelcomeScreen — kept for callers. */
   resetOnboarding: () => void | Promise<void>;
   selectWorkspace: (id: string) => void;
   createWorkspace: (opts: CreateWorkspaceOptions) => Promise<void>;
-  updateWorkspace: (id: string, patch: Partial<Pick<Workspace, "name" | "cwd">>) => Promise<void>;
+  updateWorkspace: (
+    id: string,
+    patch: Partial<Pick<Workspace, "name" | "cwd" | "color" | "shellPresets" | "pinned">>,
+  ) => Promise<void>;
+  toggleWorkspacePinned: (id: string) => void;
   removeWorkspace: (id: string) => Promise<void>;
   refreshBranch: (id: string) => Promise<void>;
   focusPane: (paneId: string) => void;
@@ -213,18 +309,39 @@ type SpaceContextValue = {
   spawnInFocused: (opts: SpawnOptions) => Promise<string | null>;
   spawnAllEmpty: () => Promise<void>;
   launchAgent: (opts: SpawnOptions) => Promise<string | null>;
-  splitFocused: (direction: SplitDirection) => Promise<void>;
+  splitFocused: (direction: SplitDirection, paneId?: string) => Promise<void>;
+  /** Split a new shell onto an edge of the pane. */
+  splitShellAt: (paneId: string, zone: Exclude<DropZone, "center">) => Promise<void>;
   closeFocusedPane: () => Promise<void>;
   closePane: (paneId: string) => Promise<void>;
   closeSession: (sessionId: string) => Promise<void>;
+  renameSession: (sessionId: string, title: string) => void;
+  activatePaneSession: (paneId: string, sessionId: string) => void;
   restartSession: (sessionId: string) => Promise<void>;
   clearAttention: (sessionId: string) => void;
+  /** Cycle to the next pane/session that needs attention (unread). */
+  focusNextAttention: () => boolean;
   setSplitRatio: (splitId: string, ratio: number) => void;
+  /**
+   * Recent agent runs, newest first.
+   */
+  agentRuns: AgentRun[];
+  /** Resumes the run inside its workspace, then navigates to the space view. */
+  resumeAgentRun: (run: AgentRun) => Promise<void>;
+  removeAgentRun: (id: string) => void;
+  clearAgentRuns: () => void;
 };
 
 const SpaceContext = createContext<SpaceContextValue | null>(null);
 
-function hydrateLayout(raw: unknown): SplitNode {
+type ViewContextValue = {
+  view: ViewId;
+  setView: (view: ViewId) => void;
+};
+
+const ViewContext = createContext<ViewContextValue | null>(null);
+
+function hydrateLayout(raw: unknown, savedSessions: Record<string, unknown> = {}): SplitNode {
   if (!raw || typeof raw !== "object") return createLeaf(null);
   const node = raw as Record<string, unknown>;
   if (node.type === "leaf" && typeof node.paneId === "string") {
@@ -233,9 +350,17 @@ function hydrateLayout(raw: unknown): SplitNode {
       type: "leaf",
       paneId: node.paneId,
       kind,
-      sessionId: null,
+      sessionId:
+        typeof node.sessionId === "string" && savedSessions[node.sessionId]
+          ? node.sessionId
+          : null,
+      sessionIds: Array.isArray(node.sessionIds)
+        ? node.sessionIds.filter((id): id is string => typeof id === "string" && Boolean(savedSessions[id]))
+        : typeof node.sessionId === "string" && savedSessions[node.sessionId]
+          ? [node.sessionId]
+          : [],
       // Never restore a saved page into a browser pane — always blank start.
-      browserUrl: null,
+      browserUrl: kind === "browser" ? "" : null,
     };
   }
   if (node.type === "split" && node.first && node.second) {
@@ -244,8 +369,8 @@ function hydrateLayout(raw: unknown): SplitNode {
       id: typeof node.id === "string" ? node.id : uid("split"),
       direction: node.direction === "v" ? "v" : "h",
       ratio: typeof node.ratio === "number" ? node.ratio : 0.5,
-      first: hydrateLayout(node.first),
-      second: hydrateLayout(node.second),
+      first: hydrateLayout(node.first, savedSessions),
+      second: hydrateLayout(node.second, savedSessions),
     });
   }
   return createLeaf(null);
@@ -253,8 +378,10 @@ function hydrateLayout(raw: unknown): SplitNode {
 
 export function SpaceProvider({ children }: { children: ReactNode }) {
   const persisted = useMemo(() => loadPersisted(), []);
-  // Always land on welcome on cold start; Enter Space continues into the app.
-  const [onboarded, setOnboarded] = useState(false);
+  const [skipWelcome, setSkipWelcomeState] = useState(() => persisted?.skipWelcome === true);
+  // Show welcome on launch when skipWelcome is off (default). Never derived from onboarded.
+  const [welcomeVisible, setWelcomeVisible] = useState(() => persisted?.skipWelcome !== true);
+  const [onboarded, setOnboarded] = useState(() => Boolean(persisted?.onboarded));
   const [view, setViewState] = useState<ViewId>("space");
   const viewRef = useRef<ViewId>("space");
   const viewTransitionRef = useRef(0);
@@ -263,7 +390,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>(() => {
     if (persisted?.workspaces?.length) {
       return persisted.workspaces.map((w, index) => {
-        const layout = hydrateLayout(w.layout);
+        const layout = hydrateLayout(w.layout, persisted.sessions ?? {});
         const focusedPaneId = findLeaf(layout, w.focusedPaneId)
           ? w.focusedPaneId
           : firstPaneId(layout);
@@ -275,6 +402,8 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
           color: isSpaceColor(w.color) ? w.color : SPACE_COLORS[index % SPACE_COLORS.length],
           layout,
           focusedPaneId,
+          pinned: Boolean(w.pinned),
+          shellPresets: hydrateShellPresets(w.shellPresets),
         };
       });
     }
@@ -287,10 +416,26 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   const activeWorkspaceIdRef = useRef(activeWorkspaceId);
   workspacesRef.current = workspaces;
   activeWorkspaceIdRef.current = activeWorkspaceId;
-  const [sessions, setSessions] = useState<Record<string, TerminalSession>>({});
+  const [sessions, setSessions] = useState<Record<string, TerminalSession>>(() =>
+    Object.fromEntries(
+      Object.entries(persisted?.sessions ?? {}).map(([id, session]) => [id, {
+        id,
+        title: session.title,
+        cwd: session.cwd,
+        shell: session.shell,
+        accent: session.accent,
+        initialCommand: session.initialCommand,
+        status: "closed" as const,
+        needsAttention: false,
+      }]),
+    ),
+  );
+  // Only sessions loaded from disk auto-reopen; manually closed tabs stay closed.
+  const restorePendingIdsRef = useRef(new Set(Object.keys(persisted?.sessions ?? {})));
   const [recentHistory, setRecentHistory] = useState<HistoryItem[]>(
     () => persisted?.recentHistory ?? [],
   );
+  const [agentRuns, setAgentRuns] = useState<AgentRun[]>(() => persisted?.agentRuns ?? []);
   // Always start blank — never auto-open a saved site (store.ql, vercel, etc.).
   const [browserUrl, setBrowserUrl] = useState("");
   const [suggestedLocalUrl, setSuggestedLocalUrl] = useState<string | null>(null);
@@ -299,13 +444,10 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<Locale>(() =>
     persisted?.locale === "en" || persisted?.locale === "ru" ? persisted.locale : "en",
   );
-  const [theme, setTheme] = useState<ThemeId>(() =>
-    (
-      ["default", "dracula", "dark", "gruvbox", "cyber", "glass", "light"] as ThemeId[]
-    ).includes(persisted?.theme as ThemeId)
-      ? persisted!.theme
-      : "default",
+  const [theme, setThemeState] = useState<ThemeId>(() =>
+    resolveThemeId(persisted?.theme),
   );
+  const setTheme = useCallback((next: ThemeId) => setThemeState(resolveThemeId(next)), []);
   const t = useCallback((key: MsgKey) => translate(locale, key), [locale]);
 
   const setEditorDirty = useCallback((dirty: boolean) => {
@@ -325,9 +467,11 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       ++viewTransitionRef.current;
       if (next !== "editor") editorDirtyRef.current = false;
       viewRef.current = next;
-      setViewState(next);
       // Don't block navigation on browser IPC — hide in background.
       void browserHideAll().catch(() => undefined);
+      startTransition(() => {
+        setViewState(next);
+      });
     },
     [confirmLeaveEditor],
   );
@@ -341,22 +485,47 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   }, []);
   const [agentAvailability, setAgentAvailability] = useState<AgentAvailability>({});
   const [agentsScanned, setAgentsScanned] = useState(false);
+  const [companionRunning, setCompanionRunning] = useState(false);
   const [error, setError] = useState("");
   const [isBusy] = useState(false);
 
   const activeWorkspace =
     workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0] ?? null;
 
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    document.documentElement.style.colorScheme =
-      theme === "light" ? "light" : "dark";
-    void syncWindowGlass(theme);
+  useLayoutEffect(() => {
+    applyTheme(theme);
   }, [theme]);
 
   useEffect(() => {
+    void syncWindowGlass(theme);
+  }, [theme]);
+
+  const setSkipWelcome = useCallback((skip: boolean) => {
+    setSkipWelcomeState(skip);
+    if (skip) setWelcomeVisible(false);
+  }, []);
+
+  const dismissWelcome = useCallback(() => {
+    setWelcomeVisible(false);
+    setOnboarded(true);
+    setView("space");
+  }, [setView]);
+
+  const showWelcomeScreen = useCallback(() => {
+    setSkipWelcomeState(false);
+    setWelcomeVisible(true);
+  }, []);
+
+  const persistReadyRef = useRef(false);
+
+  useEffect(() => {
+    if (!persistReadyRef.current) {
+      persistReadyRef.current = true;
+      return;
+    }
     savePersisted({
       onboarded,
+      skipWelcome,
       workspaces: workspaces.map((w) => ({
         id: w.id,
         name: w.name,
@@ -365,6 +534,8 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         color: w.color,
         layout: w.layout,
         focusedPaneId: w.focusedPaneId,
+        pinned: Boolean(w.pinned),
+        shellPresets: w.shellPresets ?? [],
       })),
       activeWorkspaceId: activeWorkspace?.id ?? null,
       browserUrl: "",
@@ -372,9 +543,20 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       locale,
       theme,
       recentHistory,
+      agentRuns,
+      sessions: Object.fromEntries(
+        Object.entries(sessions).map(([id, session]) => [id, {
+          title: session.title,
+          cwd: session.cwd,
+          shell: session.shell,
+          accent: session.accent,
+          initialCommand: session.initialCommand,
+        }]),
+      ),
     });
   }, [
     onboarded,
+    skipWelcome,
     workspaces,
     activeWorkspace?.id,
     browserUrl,
@@ -382,7 +564,19 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     locale,
     theme,
     recentHistory,
+    agentRuns,
   ]);
+
+  useEffect(() => {
+    const onHide = () => flushPersisted();
+    window.addEventListener("pagehide", onHide);
+    window.addEventListener("beforeunload", onHide);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
+      window.removeEventListener("beforeunload", onHide);
+      flushPersisted();
+    };
+  }, []);
 
   const refreshAgents = useCallback(async () => {
     try {
@@ -394,20 +588,27 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Defer PATH scan until after terminals have room to start.
   useEffect(() => {
-    void refreshAgents();
-  }, [refreshAgents]);
+    if (welcomeVisible) return;
+    const id = window.setTimeout(() => {
+      void refreshAgents();
+    }, 5500);
+    return () => window.clearTimeout(id);
+  }, [refreshAgents, welcomeVisible]);
 
   const patchWorkspace = useCallback((id: string, updater: (ws: Workspace) => Workspace) => {
     setWorkspaces((current) => current.map((ws) => (ws.id === id ? updater(ws) : ws)));
   }, []);
 
-  const markAttention = useCallback((sessionId: string) => {
+  const markAttention = useCallback((sessionId: string, reason?: string) => {
     let shouldPlay = false;
+    let title = "Shell";
     setSessions((current) => {
       const session = current[sessionId];
       if (!session || session.needsAttention) return current;
       shouldPlay = true;
+      title = session.title || "Shell";
       return { ...current, [sessionId]: { ...session, needsAttention: true } };
     });
     if (!shouldPlay) return;
@@ -422,16 +623,30 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       workspaceId,
       activeWorkspaceId: activeWorkspaceIdRef.current,
     });
+    showAttentionToast(title, reason || "Needs attention");
+  }, []);
+
+  useEffect(() => {
+    void companionStatus()
+      .then((status) => {
+        const live = Boolean(status.running);
+        setCompanionLive(live);
+        setCompanionRunning(live);
+      })
+      .catch(() => {
+        setCompanionLive(false);
+        setCompanionRunning(false);
+      });
   }, []);
 
   useEffect(() => {
     const unlistenOutput = listen<TerminalOutputEvent>("terminal://output", (event) => {
       const data = event.payload.data;
-      if (
-        /\x1b\](9|99|777)/.test(data) ||
-        /\b(Waiting for input|Do you want to|Press enter|\[y\/N\]|Awaiting)/i.test(data)
-      ) {
-        markAttention(event.payload.id);
+      if (isCompanionLive()) {
+        void companionAppendOutput(event.payload.id, data).catch(() => undefined);
+      }
+      if (outputNeedsAttention(data)) {
+        markAttention(event.payload.id, "Task finished or waiting for input");
       }
       const local = extractLocalUrlFromOutput(data);
       if (local && local !== lastSuggestedUrlRef.current) {
@@ -441,12 +656,14 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     });
     const unlistenExit = listen<TerminalExitEvent>("terminal://exit", (event) => {
       const sessionId = event.payload.id;
+      let title = "Shell";
       setSessions((current) => {
         const session = current[sessionId];
         if (!session) return current;
+        title = session.title || "Shell";
         return {
           ...current,
-          [sessionId]: { ...session, status: "closed", needsAttention: false },
+          [sessionId]: { ...session, status: "closed", needsAttention: true },
         };
       });
       let workspaceId: string | null = null;
@@ -460,6 +677,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         workspaceId,
         activeWorkspaceId: activeWorkspaceIdRef.current,
       });
+      showAttentionToast(title, "Session finished");
     });
     const unlistenAttention = listen<{ id: string }>("terminal://attention", (event) => {
       markAttention(event.payload.id);
@@ -494,9 +712,26 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  const recordAgentRun = useCallback((run: Omit<AgentRun, "id" | "at">) => {
+    const entry: AgentRun = { ...run, id: uid("run"), at: Date.now() };
+    setAgentRuns((current) => {
+      // Dedupe: consecutive launches of the same agent in the same space within 5s.
+      const last = current[0];
+      if (
+        last &&
+        last.agentId === entry.agentId &&
+        last.workspaceId === entry.workspaceId &&
+        entry.at - last.at < 5000
+      ) {
+        return current;
+      }
+      return [entry, ...current].slice(0, 80);
+    });
+  }, []);
+
   const selectWorkspace = useCallback(
     (id: string) => {
-      if (id !== activeWorkspaceId && view === "editor" && !confirmLeaveEditor()) return;
+      if (id !== activeWorkspaceId && viewRef.current === "editor" && !confirmLeaveEditor()) return;
       setActiveWorkspaceId(id);
       setWorkspaces((current) => {
         const target = current.find((ws) => ws.id === id);
@@ -511,7 +746,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       });
       setViewState((current) => (current === "editor" ? "editor" : "space"));
     },
-    [activeWorkspaceId, confirmLeaveEditor, pushHistory, view],
+    [activeWorkspaceId, confirmLeaveEditor, pushHistory],
   );
 
   const createWorkspace = useCallback(
@@ -539,9 +774,12 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         color: pickSpaceColor(workspaces, opts.color),
         layout,
         focusedPaneId: firstPaneId(layout),
+        pinned: false,
+        shellPresets: [],
       };
       setWorkspaces((current) => [...current, ws]);
       setActiveWorkspaceId(ws.id);
+      setOnboarded(true);
       setView("space");
       pushHistory({
         workspaceId: ws.id,
@@ -559,6 +797,9 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       const paneId = opts.paneId ?? workspace.focusedPaneId;
       const leaf = findLeaf(workspace.layout, paneId);
       if (!leaf) return null;
+
+      const existingTabs = leafTabIds(leaf);
+      const asTab = opts.mode === "tab" || (opts.mode !== "replace" && existingTabs.length > 0);
 
       setError("");
       try {
@@ -579,18 +820,24 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
           status: "online",
           accent: opts.accent ?? "green",
           needsAttention: false,
+          initialCommand: opts.command?.trim() || undefined,
         };
         setSessions((current) => {
           const next = { ...current, [session.id]: session };
-          if (leaf.sessionId && leaf.sessionId !== session.id) {
-            void killTerminalSession(leaf.sessionId).catch(() => undefined);
-            delete next[leaf.sessionId];
+          if (!asTab) {
+            for (const id of existingTabs) {
+              if (id === session.id) continue;
+              void killTerminalSession(id).catch(() => undefined);
+              delete next[id];
+            }
           }
           return next;
         });
         patchWorkspace(workspace.id, (ws) => ({
           ...ws,
-          layout: setLeafSession(ws.layout, paneId, session.id),
+          layout: asTab
+            ? addLeafSession(ws.layout, paneId, session.id)
+            : setLeafSession(ws.layout, paneId, session.id),
           focusedPaneId: paneId,
         }));
         return created.id;
@@ -600,6 +847,23 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       }
     },
     [activeWorkspace, patchWorkspace, preferredShell],
+  );
+
+  const activatePaneSession = useCallback(
+    (paneId: string, sessionId: string) => {
+      if (!activeWorkspace) return;
+      patchWorkspace(activeWorkspace.id, (ws) => ({
+        ...ws,
+        layout: activateLeafSession(ws.layout, paneId, sessionId),
+        focusedPaneId: paneId,
+      }));
+      setSessions((current) => {
+        const session = current[sessionId];
+        if (!session?.needsAttention) return current;
+        return { ...current, [sessionId]: { ...session, needsAttention: false } };
+      });
+    },
+    [activeWorkspace, patchWorkspace],
   );
 
   const spawnInFocused = useCallback(
@@ -614,8 +878,8 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       const leaf = findLeaf(activeWorkspace.layout, paneId);
       if (leaf && leaf.kind !== "browser" && !leaf.sessionId) {
         await enqueueTerminalSpawn(async () => {
-          await yieldToUi();
-          return spawnInPane({ title: "Shell", paneId, accent: "green" });
+          await yieldToUi(40);
+          return spawnInPane({ title: "Shell", paneId, accent: "green", mode: "replace" });
         });
       }
     }
@@ -633,87 +897,202 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     [activeWorkspace, patchWorkspace],
   );
 
-  const openBrowserInFocused = useCallback(async () => {
-    if (!activeWorkspace) return;
-    const paneId = activeWorkspace.focusedPaneId;
-    const leaf = findLeaf(activeWorkspace.layout, paneId);
-    if (!leaf) return;
-
-    // Already a browser pane — stay in space, user loads URL manually.
-    if (leaf.kind === "browser") {
-      setView("space");
-      return;
-    }
-
-    // Like cmux/BridgeSpace: open blank browser in a right split on demand.
-    if (countLeaves(activeWorkspace.layout) < MAX_PANES) {
-      const nextLayout = equalizeLayout(splitPane(activeWorkspace.layout, paneId, "h", null));
-      const newLeafId = (() => {
-        const walk = (node: SplitNode): string | null => {
-          if (node.type === "leaf") return null;
-          const inFirst = findLeaf(node.first, paneId);
-          if (
-            inFirst &&
-            node.second.type === "leaf" &&
-            node.second.kind === "terminal" &&
-            !node.second.sessionId
-          ) {
-            return node.second.paneId;
-          }
-          return walk(node.first) || walk(node.second);
-        };
-        return walk(nextLayout);
-      })();
-      if (newLeafId) {
+  const focusTerminalInPane = useCallback(
+    async (targetPaneId?: string) => {
+      if (!activeWorkspace) return;
+      const paneId = targetPaneId ?? activeWorkspace.focusedPaneId;
+      const leaf = findLeaf(activeWorkspace.layout, paneId);
+      if (!leaf) return;
+      const tabs = leafTabIds(leaf);
+      if (tabs.length > 0) {
+        const sessionId =
+          leaf.sessionId && tabs.includes(leaf.sessionId) ? leaf.sessionId : tabs[0]!;
         patchWorkspace(activeWorkspace.id, (ws) => ({
           ...ws,
-          layout: setLeafBrowser(nextLayout, newLeafId, ""),
-          focusedPaneId: newLeafId,
+          layout: activateLeafSession(ws.layout, paneId, sessionId),
+          focusedPaneId: paneId,
         }));
         setView("space");
         return;
       }
-    }
-
-    if (leaf.sessionId) {
-      try {
-        await killTerminalSession(leaf.sessionId);
-      } catch {
-        // ignore
-      }
-      setSessions((current) => {
-        const next = { ...current };
-        delete next[leaf.sessionId!];
-        return next;
+      await spawnInPane({
+        title: "Shell",
+        paneId,
+        mode: "tab",
+        accent: "green",
       });
-    }
-    patchWorkspace(activeWorkspace.id, (ws) => ({
-      ...ws,
-      layout: setLeafBrowser(ws.layout, paneId, ""),
-      focusedPaneId: paneId,
-    }));
-    setView("space");
-  }, [activeWorkspace, patchWorkspace]);
+      setView("space");
+    },
+    [activeWorkspace, patchWorkspace, spawnInPane],
+  );
+
+  const reorderPaneTabs = useCallback(
+    (paneId: string, fromId: string, toId: string) => {
+      if (!activeWorkspace || fromId === toId) return;
+      patchWorkspace(activeWorkspace.id, (ws) => ({
+        ...ws,
+        layout: reorderLeafTabs(ws.layout, paneId, fromId, toId),
+        focusedPaneId: paneId,
+      }));
+    },
+    [activeWorkspace, patchWorkspace],
+  );
+
+  const focusBrowserInPane = useCallback(
+    (targetPaneId?: string) => {
+      if (!activeWorkspace) return;
+      const paneId = targetPaneId ?? activeWorkspace.focusedPaneId;
+      if (!findLeaf(activeWorkspace.layout, paneId)) return;
+      patchWorkspace(activeWorkspace.id, (ws) => ({
+        ...ws,
+        layout: openBrowserTab(ws.layout, paneId),
+        focusedPaneId: paneId,
+      }));
+      setView("space");
+    },
+    [activeWorkspace, patchWorkspace],
+  );
+
+  const openBrowserInFocused = useCallback(
+    async (
+      targetPaneId?: string,
+      requestedMode: "beside" | "below" | "left" | "above" | "root" | "tab" = "tab",
+    ) => {
+      if (!activeWorkspace) return;
+      const paneId = targetPaneId ?? activeWorkspace.focusedPaneId;
+      const leaf = findLeaf(activeWorkspace.layout, paneId);
+      if (!leaf) return;
+      const mode = requestedMode;
+
+      // Tab: open/focus browser in this pane (never auto-split — use edge modes for that).
+      if (mode === "tab" || mode === undefined) {
+        patchWorkspace(activeWorkspace.id, (ws) => ({
+          ...ws,
+          layout: openBrowserTab(ws.layout, paneId),
+          focusedPaneId: paneId,
+        }));
+        setView("space");
+        return;
+      }
+
+      if (countLeaves(activeWorkspace.layout) >= MAX_PANES) {
+        setError(`You can open up to ${MAX_PANES} panes in one workspace.`);
+        return;
+      }
+
+      const zone =
+        mode === "left"
+          ? "left"
+          : mode === "above"
+            ? "top"
+            : mode === "below"
+              ? "bottom"
+              : mode === "beside"
+                ? "right"
+                : null;
+
+      const added =
+        mode === "root"
+          ? addBrowserRoot(activeWorkspace.layout)
+          : zone
+            ? addBrowserAtZone(activeWorkspace.layout, paneId, zone)
+            : addBrowserBeside(activeWorkspace.layout, paneId, "h");
+      if (!added) return;
+
+      patchWorkspace(activeWorkspace.id, (ws) => ({
+        ...ws,
+        layout: added.layout,
+        focusedPaneId: added.paneId,
+      }));
+      setView("space");
+    },
+    [activeWorkspace, patchWorkspace],
+  );
+
+  const closeBrowserTabInPane = useCallback(
+    (paneId: string) => {
+      if (!activeWorkspace) return;
+      const leaf = findLeaf(activeWorkspace.layout, paneId);
+      if (!leaf) return;
+      void browserClose(`browser-${paneId}`).catch(() => undefined);
+      const tabs = leafTabIds(leaf);
+      if (tabs.length === 0) {
+        // Browser-only — drop the leaf (same as close pane without awaiting).
+        const next = removePane(activeWorkspace.layout, paneId);
+        if (!next) return;
+        patchWorkspace(activeWorkspace.id, (ws) => ({
+          ...ws,
+          layout: equalizeLayout(next),
+          focusedPaneId: firstPaneId(next),
+        }));
+        return;
+      }
+      patchWorkspace(activeWorkspace.id, (ws) => ({
+        ...ws,
+        layout: closeBrowserTab(ws.layout, paneId),
+        focusedPaneId: paneId,
+      }));
+    },
+    [activeWorkspace, patchWorkspace],
+  );
+
+  const dockPaneTab = useCallback(
+    (fromPaneId: string, toPaneId: string, tabId: string, zone: DropZone) => {
+      if (!activeWorkspace) return;
+      if (!findLeaf(activeWorkspace.layout, fromPaneId)) return;
+      if (!findLeaf(activeWorkspace.layout, toPaneId)) return;
+      patchWorkspace(activeWorkspace.id, (ws) => {
+        const { layout, focusPaneId } = dockTab(ws.layout, fromPaneId, toPaneId, tabId, zone);
+        return {
+          ...ws,
+          layout,
+          focusedPaneId: findLeaf(layout, focusPaneId)?.paneId ?? firstPaneId(layout),
+        };
+      });
+      setView("space");
+    },
+    [activeWorkspace, patchWorkspace],
+  );
+
+  const movePaneTab = useCallback(
+    (fromPaneId: string, toPaneId: string, tabId: string) => {
+      dockPaneTab(fromPaneId, toPaneId, tabId, "center");
+    },
+    [dockPaneTab],
+  );
+
+  const dockPane = useCallback(
+    (fromPaneId: string, toPaneId: string, zone: DropZone) => {
+      if (!activeWorkspace) return;
+      if (fromPaneId === toPaneId) return;
+      patchWorkspace(activeWorkspace.id, (ws) => ({
+        ...ws,
+        layout: movePane(ws.layout, fromPaneId, toPaneId, zone),
+        focusedPaneId: fromPaneId,
+      }));
+    },
+    [activeWorkspace, patchWorkspace],
+  );
 
   const openBrowserWithUrl = useCallback(
     async (rawUrl: string) => {
       if (!activeWorkspace) return;
-      const url = normalizeBrowserUrl(rawUrl);
+      const url = resolveOmniboxInput(rawUrl);
       if (!url) return;
       setBrowserUrl(url);
       setSuggestedLocalUrl(null);
 
       const focused = findLeaf(activeWorkspace.layout, activeWorkspace.focusedPaneId);
-      if (focused?.kind === "browser") {
+      if (focused) {
         patchWorkspace(activeWorkspace.id, (ws) => ({
           ...ws,
-          layout: setLeafBrowser(ws.layout, focused.paneId, url),
+          layout: setLeafBrowser(openBrowserTab(ws.layout, focused.paneId), focused.paneId, url),
+          focusedPaneId: focused.paneId,
         }));
         setView("space");
         return;
       }
 
-      // Prefer assist browser tab so the terminal grid stays intact.
       window.dispatchEvent(
         new CustomEvent("voxiva-assist-open", { detail: { tab: "browser", url } }),
       );
@@ -772,12 +1151,74 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const unlisten = listen<CompanionSpawnEvent>("companion://spawn", (event) => {
+      const { workspaceId, agentId, title, command } = event.payload;
+      if (!workspaceId) return;
+      const ws = workspacesRef.current.find((item) => item.id === workspaceId);
+      if (!ws) return;
+      setActiveWorkspaceId(workspaceId);
+      setView("space");
+      void (async () => {
+        if (agentId && agentId !== "shell") {
+          const bot = agentBots.find((b) => b.id === agentId);
+          if (!bot) return;
+          const cmd =
+            resolveBotCommand(bot, agentAvailability) || bot.command || command || undefined;
+          const id = await spawnInPane({
+            title: title || bot.name,
+            command: cmd,
+            paneId: ws.focusedPaneId,
+            accent: bot.accent,
+            mode: "tab",
+          });
+          if (id) {
+            recordAgentRun({
+              agentId: bot.id,
+              agentName: title || bot.name,
+              workspaceId: ws.id,
+              workspaceName: ws.name,
+              cwd: ws.cwd,
+              command: cmd,
+              shell: bot.shell ?? null,
+              accent: bot.accent,
+            });
+          }
+          return;
+        }
+        await spawnInPane({
+          title: title || "Shell",
+          command: command || undefined,
+          paneId: ws.focusedPaneId,
+          accent: "green",
+          mode: "tab",
+        });
+      })().catch(() => undefined);
+    });
+    return () => {
+      void unlisten.then((u) => u());
+    };
+  }, [agentAvailability, recordAgentRun, setView, spawnInPane]);
+
+  useEffect(() => {
+    if (!companionRunning) return;
     const push = () => {
       const sessionToWorkspace = new Map<string, string>();
+      const browsers: Array<{ workspaceId: string; paneId: string; url: string; title?: string }> = [];
       for (const ws of workspaces) {
         const walk = (node: SplitNode) => {
           if (node.type === "leaf") {
             if (node.sessionId) sessionToWorkspace.set(node.sessionId, ws.id);
+            for (const sid of node.sessionIds ?? []) {
+              sessionToWorkspace.set(sid, ws.id);
+            }
+            if (leafHasBrowser(node) && (node.browserUrl || "").trim()) {
+              browsers.push({
+                workspaceId: ws.id,
+                paneId: node.paneId,
+                url: node.browserUrl || "",
+                title: ws.name,
+              });
+            }
           } else {
             walk(node.first);
             walk(node.second);
@@ -791,6 +1232,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
           name: ws.name,
           cwd: ws.cwd,
           color: ws.color,
+          branch: ws.branch ?? null,
         })),
         sessions: Object.values(sessions).map((session) => ({
           id: session.id,
@@ -799,16 +1241,59 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
           needsAttention: session.needsAttention,
           workspaceId: sessionToWorkspace.get(session.id) ?? null,
         })),
+        boards: Object.fromEntries(
+          workspaces.map((ws) => [
+            ws.id,
+            loadBoard(ws.id).map((task) => ({
+              id: task.id,
+              title: task.title,
+              column: task.column,
+              priority: task.priority,
+              due: task.due,
+              createdAt: task.createdAt,
+            })),
+          ]),
+        ),
+        history: recentHistory.slice(0, 80),
+        browsers,
+        agents: agentBots
+          .filter((bot) => bot.id === "shell" || bot.command)
+          .map((bot) => ({
+            id: bot.id,
+            name: bot.name,
+            command: bot.command ?? null,
+            ready: bot.id === "shell" || isBotReady(bot, agentAvailability, agentsScanned),
+          })),
       }).catch(() => undefined);
     };
-    push();
+    const startId = window.setTimeout(() => push(), 1800);
     const timer = window.setInterval(push, 2500);
-    return () => window.clearInterval(timer);
-  }, [sessions, workspaces]);
+    return () => {
+      window.clearTimeout(startId);
+      window.clearInterval(timer);
+    };
+  }, [agentAvailability, agentsScanned, companionRunning, recentHistory, sessions, workspaces]);
 
   const enterSpace = useCallback(
     async (opts: EnterSpaceOptions) => {
       const cwd = opts.cwd.trim() || (await getDefaultTerminalCwd().catch(() => "."));
+      const spaceName = opts.name.trim() || "My Space";
+
+      const existing = findWorkspaceByIdentity(workspaces, spaceName, cwd);
+      if (existing) {
+        setActiveWorkspaceId(existing.id);
+        setOnboarded(true);
+        setWelcomeVisible(false);
+        setView("space");
+        setError("");
+        pushHistory({
+          workspaceId: existing.id,
+          workspaceName: existing.name,
+          cwd: existing.cwd,
+        });
+        return;
+      }
+
       const layout = buildGridLayout(opts.grid);
       queuePaneSpawns(
         pendingPaneSpawnsRef.current,
@@ -824,16 +1309,19 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       }
       const ws: Workspace = {
         id: uid("ws"),
-        name: opts.name.trim() || "My Space",
+        name: spaceName,
         cwd,
         branch,
-        color: "green",
+        color: pickSpaceColor(workspaces, undefined),
         layout,
         focusedPaneId: firstPaneId(layout),
+        pinned: false,
+        shellPresets: [],
       };
-      setWorkspaces([ws]);
+      setWorkspaces((current) => (current.length === 0 ? [ws] : [...current, ws]));
       setActiveWorkspaceId(ws.id);
       setOnboarded(true);
+      setWelcomeVisible(false);
       setView("space");
       setError("");
       pushHistory({
@@ -843,7 +1331,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       });
       void refreshAgents();
     },
-    [agentAvailability, pushHistory, refreshAgents, setView],
+    [agentAvailability, pushHistory, refreshAgents, setView, workspaces],
   );
 
   const launchAgent = useCallback(
@@ -858,78 +1346,79 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         return null;
       }
 
-      let layout = workspace.layout;
-      const leaves = collectLeaves(layout);
-      let paneId =
-        leaves.find((leaf) => (leaf.kind ?? "terminal") !== "browser" && !leaf.sessionId)?.paneId ??
-        null;
-
-      // Free pane missing → open a new split. Never kill an existing terminal.
-      if (!paneId && countLeaves(layout) < MAX_PANES) {
-        const before = new Set(collectPaneIds(layout));
-        layout = equalizeLayout(splitPane(layout, workspace.focusedPaneId, "h", null));
-        paneId = collectPaneIds(layout).find((id) => !before.has(id)) ?? null;
+      let paneId = workspace.focusedPaneId;
+      if (!findLeaf(workspace.layout, paneId)) {
+        paneId = firstPaneId(workspace.layout);
       }
 
-      if (!paneId) {
-        setError(missing ? t("agents.missingHint") : t("agents.noFreePane"));
-        return null;
-      }
-
-      setError("");
-      try {
-        const shell = opts.shell ?? (preferredShell.trim() || null);
-        const created = await createTerminalSession({
-          cwd: workspace.cwd || null,
-          shell,
-          title: opts.title || opts.command || "Agent",
-          cols: PTY_COLS,
-          rows: PTY_ROWS,
-          initialCommand: opts.command?.trim() || null,
+      setError(missing ? t("agents.missingHint") : "");
+      // Sibling tab — never wipe shells/browser already in the pane (OpenCode + brush).
+      const id = await spawnInPane({
+        ...opts,
+        title: opts.title || opts.command || "Agent",
+        paneId,
+        mode: "tab",
+      });
+      if (id) {
+        const bot = agentBots.find((b) => b.name === opts.title);
+        recordAgentRun({
+          agentId: bot?.id ?? opts.command ?? "shell",
+          agentName: opts.title,
+          workspaceId: workspace.id,
+          workspaceName: workspace.name,
+          cwd: workspace.cwd,
+          command: opts.command,
+          shell: opts.shell ?? null,
+          accent: opts.accent ?? bot?.accent ?? "green",
         });
-        const session: TerminalSession = {
-          id: created.id,
-          title: created.title,
-          cwd: created.cwd || workspace.cwd,
-          shell: created.shell,
-          status: "online",
-          accent: opts.accent ?? "green",
-          needsAttention: false,
-        };
-        setSessions((current) => ({ ...current, [session.id]: session }));
-        patchWorkspace(workspace.id, () => ({
-          ...workspace,
-          layout: setLeafSession(layout, paneId!, session.id),
-          focusedPaneId: paneId!,
-        }));
-        return created.id;
-      } catch (err) {
-        setError(clientError(err));
-        if (missing) setError(t("agents.missingHint"));
-        return null;
       }
+      if (!id && missing) setError(t("agents.missingHint"));
+      return id;
     },
-    [activeWorkspace, agentAvailability, agentsScanned, patchWorkspace, preferredShell, t],
+    [activeWorkspace, agentAvailability, agentsScanned, recordAgentRun, spawnInPane, t],
   );
 
-  const resetOnboarding = useCallback(async () => {
-    const ids = Object.keys(sessions);
-    for (const sessionId of ids) {
-      try {
-        await killTerminalSession(sessionId);
-      } catch {
-        // already dead
+  const resumeAgentRun = useCallback(
+    async (run: AgentRun) => {
+      const ws = workspaces.find((w) => w.id === run.workspaceId);
+      if (!ws) {
+        setError(t("recentAgents.gone"));
+        return;
       }
-    }
-    setSessions({});
-    setWorkspaces([]);
-    setActiveWorkspaceId(null);
-    setOnboarded(false);
-    setError("");
-  }, [sessions]);
+      setActiveWorkspaceId(ws.id);
+      setView("space");
+      setError("");
+      // Push history like selectWorkspace does.
+      pushHistory({ workspaceId: ws.id, workspaceName: ws.name, cwd: ws.cwd });
+      const bot = agentBots.find((b) => b.id === run.agentId);
+      const command = resumeCommandFor(bot, run.command, agentAvailability);
+      await spawnInPane({
+        title: run.agentName,
+        command: command ?? undefined,
+        shell: run.shell ?? (preferredShell.trim() || null),
+        accent: run.accent,
+        paneId: ws.focusedPaneId,
+        mode: "tab",
+      });
+    },
+    [workspaces, pushHistory, setView, agentAvailability, preferredShell],
+  );
+
+  const removeAgentRun = useCallback((id: string) => {
+    setAgentRuns((current) => current.filter((run) => run.id !== id));
+  }, []);
+
+  const clearAgentRuns = useCallback(() => {
+    setAgentRuns([]);
+  }, []);
+
+  const resetOnboarding = showWelcomeScreen;
 
   const updateWorkspace = useCallback(
-    async (id: string, patch: Partial<Pick<Workspace, "name" | "cwd">>) => {
+    async (
+      id: string,
+      patch: Partial<Pick<Workspace, "name" | "cwd" | "color" | "shellPresets" | "pinned">>,
+    ) => {
       let branch: string | null | undefined;
       if (patch.cwd) {
         try {
@@ -943,6 +1432,13 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         ...patch,
         ...(branch !== undefined ? { branch } : {}),
       }));
+    },
+    [patchWorkspace],
+  );
+
+  const toggleWorkspacePinned = useCallback(
+    (id: string) => {
+      patchWorkspace(id, (ws) => ({ ...ws, pinned: !ws.pinned }));
     },
     [patchWorkspace],
   );
@@ -998,27 +1494,28 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         ...ws,
         focusedPaneId: paneId,
       }));
-      if (leaf?.sessionId) {
-        setSessions((current) => {
-          const session = current[leaf.sessionId!];
-          if (!session?.needsAttention) return current;
-          return { ...current, [session.id]: { ...session, needsAttention: false } };
-        });
-      }
+      const ids = leaf ? leafTabIds(leaf) : [];
+      if (!ids.length) return;
+      setSessions((current) => {
+        let changed = false;
+        const next = { ...current };
+        for (const id of ids) {
+          const session = next[id];
+          if (!session?.needsAttention) continue;
+          next[id] = { ...session, needsAttention: false };
+          changed = true;
+        }
+        return changed ? next : current;
+      });
     },
     [activeWorkspace, patchWorkspace],
   );
 
   const swapPanes = useCallback(
     (fromPaneId: string, toPaneId: string) => {
-      if (!activeWorkspace) return;
-      patchWorkspace(activeWorkspace.id, (ws) => ({
-        ...ws,
-        layout: swapPaneContents(ws.layout, fromPaneId, toPaneId),
-        focusedPaneId: toPaneId,
-      }));
+      dockPane(fromPaneId, toPaneId, "center");
     },
-    [activeWorkspace, patchWorkspace],
+    [dockPane],
   );
 
   const applySnapLayout = useCallback(
@@ -1045,11 +1542,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         const prev = oldLeaves[i];
         const paneId = paneIds[i];
         if (!prev || !paneId) continue;
-        if (prev.kind === "browser") {
-          layout = setLeafBrowser(layout, paneId, prev.browserUrl || browserUrl || null);
-        } else {
-          layout = setLeafSession(layout, paneId, prev.sessionId);
-        }
+        layout = setLeafContents(layout, paneId, prev);
       }
 
       patchWorkspace(activeWorkspace.id, (ws) => ({
@@ -1058,34 +1551,46 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         focusedPaneId: paneIds[0] ?? firstPaneId(layout),
       }));
     },
-    [activeWorkspace, browserUrl, patchWorkspace],
+    [activeWorkspace, patchWorkspace],
   );
 
   const splitFocused = useCallback(
-    async (direction: SplitDirection) => {
+    async (direction: SplitDirection, targetPaneId?: string) => {
       if (!activeWorkspace) return;
       if (countLeaves(activeWorkspace.layout) >= MAX_PANES) {
         setError(`You can open up to ${MAX_PANES} panes in one workspace.`);
         return;
       }
-      const paneId = activeWorkspace.focusedPaneId;
-      const nextLayout = equalizeLayout(splitPane(activeWorkspace.layout, paneId, direction, null));
-      const newLeaf = (() => {
-        const walk = (node: SplitNode): string | null => {
-          if (node.type === "leaf") return null;
-          const inFirst = findLeaf(node.first, paneId);
-          if (inFirst && node.second.type === "leaf" && !node.second.sessionId) {
-            return node.second.paneId;
-          }
-          return walk(node.first) || walk(node.second);
-        };
-        return walk(nextLayout);
-      })();
+      const paneId = targetPaneId ?? activeWorkspace.focusedPaneId;
+      if (!findLeaf(activeWorkspace.layout, paneId)) return;
+
+      const added = addShellBeside(activeWorkspace.layout, paneId, direction);
+      if (!added) return;
       patchWorkspace(activeWorkspace.id, (ws) => ({
         ...ws,
-        layout: nextLayout,
-        focusedPaneId: newLeaf ?? ws.focusedPaneId,
+        layout: added.layout,
+        focusedPaneId: added.paneId,
       }));
+    },
+    [activeWorkspace, patchWorkspace],
+  );
+
+  const splitShellAt = useCallback(
+    async (targetPaneId: string, zone: Exclude<DropZone, "center">) => {
+      if (!activeWorkspace) return;
+      if (countLeaves(activeWorkspace.layout) >= MAX_PANES) {
+        setError(`You can open up to ${MAX_PANES} panes in one workspace.`);
+        return;
+      }
+      if (!findLeaf(activeWorkspace.layout, targetPaneId)) return;
+      const added = addShellAtZone(activeWorkspace.layout, targetPaneId, zone);
+      if (!added) return;
+      patchWorkspace(activeWorkspace.id, (ws) => ({
+        ...ws,
+        layout: added.layout,
+        focusedPaneId: added.paneId,
+      }));
+      setView("space");
     },
     [activeWorkspace, patchWorkspace],
   );
@@ -1105,27 +1610,50 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       current.map((ws) => {
         const paneId = findPaneForSession(ws.layout, sessionId);
         if (!paneId) return ws;
-        return { ...ws, layout: setLeafSession(ws.layout, paneId, null) };
+        return { ...ws, layout: removeLeafSession(ws.layout, paneId, sessionId) };
       }),
     );
   }, []);
+
+  const renameSession = useCallback((sessionId: string, title: string) => {
+    const next = title.trim() || "Shell";
+    setSessions((current) => {
+      const session = current[sessionId];
+      if (!session || session.title === next) return current;
+      return { ...current, [sessionId]: { ...session, title: next } };
+    });
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen<CompanionRenameEvent>("companion://rename", (event) => {
+      const { sessionId, title } = event.payload;
+      if (!sessionId) return;
+      renameSession(sessionId, title || "Shell");
+    });
+    return () => {
+      void unlisten.then((u) => u());
+    };
+  }, [renameSession]);
 
   const closePane = useCallback(
     async (paneId: string) => {
       if (!activeWorkspace) return;
       const leaf = findLeaf(activeWorkspace.layout, paneId);
-      if (leaf?.kind === "browser") {
+      if (leaf && leafHasBrowser(leaf)) {
         await browserClose(`browser-${paneId}`).catch(() => undefined);
       }
-      if (leaf?.sessionId) {
+      const tabIds = leaf ? leafTabIds(leaf) : [];
+      for (const id of tabIds) {
         try {
-          await killTerminalSession(leaf.sessionId);
+          await killTerminalSession(id);
         } catch {
           // ignore
         }
+      }
+      if (tabIds.length) {
         setSessions((current) => {
           const next = { ...current };
-          delete next[leaf.sessionId!];
+          for (const id of tabIds) delete next[id];
           return next;
         });
       }
@@ -1170,16 +1698,37 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         return next;
       });
       if (paneId) {
+        // Remove the old PTY id first; the replacement receives a new backend id.
+        patchWorkspace(activeWorkspace.id, (ws) => ({
+          ...ws,
+          layout: removeLeafSession(ws.layout, paneId, sessionId),
+        }));
+        const command = session.initialCommand === "codex"
+          ? "codex resume --last"
+          : session.initialCommand;
         await spawnInPane({
           paneId,
           title: session.title,
-          shell: preferredShell.trim() || null,
+          shell: session.shell || preferredShell.trim() || null,
           accent: session.accent,
+          command,
+          mode: "tab",
         });
       }
     },
-    [activeWorkspace, preferredShell, sessions, spawnInPane],
+    [activeWorkspace, patchWorkspace, preferredShell, sessions, spawnInPane],
   );
+
+  useEffect(() => {
+    if (welcomeVisible || !activeWorkspace) return;
+    const pending = collectSessionIds(activeWorkspace.layout).filter((id) =>
+      restorePendingIdsRef.current.delete(id),
+    );
+    if (!pending.length) return;
+    void (async () => {
+      for (const id of pending) await restartSession(id);
+    })();
+  }, [activeWorkspace, restartSession, welcomeVisible]);
 
   const clearAttention = useCallback((sessionId: string) => {
     setSessions((current) => {
@@ -1188,6 +1737,47 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       return { ...current, [sessionId]: { ...session, needsAttention: false } };
     });
   }, []);
+
+  const focusNextAttention = useCallback(() => {
+    type Target = { workspaceId: string; paneId: string; sessionId: string };
+    const targets: Target[] = [];
+    for (const ws of workspaces) {
+      for (const leaf of collectLeaves(ws.layout)) {
+        for (const sessionId of leafTabIds(leaf)) {
+          if (sessions[sessionId]?.needsAttention) {
+            targets.push({ workspaceId: ws.id, paneId: leaf.paneId, sessionId });
+          }
+        }
+      }
+    }
+    if (!targets.length) return false;
+
+    const focusedLeaf = activeWorkspace
+      ? findLeaf(activeWorkspace.layout, activeWorkspace.focusedPaneId)
+      : null;
+    const focusedSession = focusedLeaf?.sessionId ?? null;
+    let idx = focusedSession ? targets.findIndex((t) => t.sessionId === focusedSession) : -1;
+    if (idx < 0 && activeWorkspace) {
+      idx = targets.findIndex((t) => t.workspaceId === activeWorkspace.id);
+    }
+    const next = targets[(idx + 1) % targets.length]!;
+
+    setView("space");
+    if (next.workspaceId !== activeWorkspace?.id) {
+      setActiveWorkspaceId(next.workspaceId);
+    }
+    patchWorkspace(next.workspaceId, (ws) => ({
+      ...ws,
+      layout: activateLeafSession(ws.layout, next.paneId, next.sessionId),
+      focusedPaneId: next.paneId,
+    }));
+    setSessions((current) => {
+      const session = current[next.sessionId];
+      if (!session?.needsAttention) return current;
+      return { ...current, [next.sessionId]: { ...session, needsAttention: false } };
+    });
+    return true;
+  }, [activeWorkspace, patchWorkspace, sessions, setView, workspaces]);
 
   const setSplitRatio = useCallback(
     (splitId: string, ratio: number) => {
@@ -1200,69 +1790,177 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     [activeWorkspace, patchWorkspace],
   );
 
-  const value: SpaceContextValue = {
-    onboarded,
-    view,
-    setView,
-    setEditorDirty,
-    takePendingPaneSpawn,
-    clearPendingPaneSpawn,
-    workspaces,
-    activeWorkspace,
-    sessions,
-    recentHistory,
-    pushHistory,
-    clearHistory,
-    removeHistoryItem,
-    browserUrl,
-    setBrowserUrl,
-    setPaneBrowserUrl,
-    openBrowserInFocused,
-    openBrowserWithUrl,
-    suggestedLocalUrl,
-    suggestPreviewUrl,
-    dismissSuggestedLocalUrl,
-    preferredShell,
-    setPreferredShell,
-    locale,
-    setLocale,
-    theme,
-    setTheme,
-    t,
-    agentAvailability,
-    agentsScanned,
-    refreshAgents,
-    error,
-    setError,
-    isBusy,
-    enterSpace,
-    resetOnboarding,
-    selectWorkspace,
-    createWorkspace,
-    updateWorkspace,
-    removeWorkspace,
-    refreshBranch,
-    focusPane,
-    swapPanes,
-    applySnapLayout,
-    spawnInPane,
-    spawnInFocused,
-    spawnAllEmpty,
-    launchAgent,
-    splitFocused,
-    closeFocusedPane,
-    closePane,
-    closeSession,
-    restartSession,
-    clearAttention,
-    setSplitRatio,
-  };
+  const value: SpaceContextValue = useMemo(
+    () => ({
+      welcomeVisible,
+      dismissWelcome,
+      showWelcomeScreen,
+      onboarded,
+      skipWelcome,
+      setSkipWelcome,
+      setEditorDirty,
+      takePendingPaneSpawn,
+      clearPendingPaneSpawn,
+      workspaces,
+      activeWorkspace,
+      sessions,
+      recentHistory,
+      pushHistory,
+      clearHistory,
+      removeHistoryItem,
+      browserUrl,
+      setBrowserUrl,
+      setPaneBrowserUrl,
+      openBrowserInFocused,
+      focusBrowserInPane,
+      focusTerminalInPane,
+      closeBrowserTab: closeBrowserTabInPane,
+      reorderPaneTabs,
+      movePaneTab,
+      dockPaneTab,
+      dockPane,
+      openBrowserWithUrl,
+      suggestedLocalUrl,
+      suggestPreviewUrl,
+      dismissSuggestedLocalUrl,
+      preferredShell,
+      setPreferredShell,
+      locale,
+      setLocale,
+      theme,
+      setTheme,
+      t,
+      agentAvailability,
+      agentsScanned,
+      refreshAgents,
+      error,
+      setError,
+      isBusy,
+      enterSpace,
+      resetOnboarding,
+      selectWorkspace,
+      createWorkspace,
+      updateWorkspace,
+      toggleWorkspacePinned,
+      removeWorkspace,
+      refreshBranch,
+      focusPane,
+      swapPanes,
+      applySnapLayout,
+      spawnInPane,
+      spawnInFocused,
+      spawnAllEmpty,
+      launchAgent,
+      splitFocused,
+      splitShellAt,
+      closeFocusedPane,
+      closePane,
+      closeSession,
+      renameSession,
+      activatePaneSession,
+      restartSession,
+      clearAttention,
+      focusNextAttention,
+      setSplitRatio,
+      agentRuns,
+      resumeAgentRun,
+      removeAgentRun,
+      clearAgentRuns,
+    }),
+    [
+      welcomeVisible,
+      dismissWelcome,
+      showWelcomeScreen,
+      onboarded,
+      skipWelcome,
+      setSkipWelcome,
+      setEditorDirty,
+      takePendingPaneSpawn,
+      clearPendingPaneSpawn,
+      workspaces,
+      activeWorkspace,
+      sessions,
+      recentHistory,
+      pushHistory,
+      clearHistory,
+      removeHistoryItem,
+      browserUrl,
+      setBrowserUrl,
+      setPaneBrowserUrl,
+      openBrowserInFocused,
+      focusBrowserInPane,
+      focusTerminalInPane,
+      closeBrowserTabInPane,
+      reorderPaneTabs,
+      movePaneTab,
+      dockPaneTab,
+      dockPane,
+      openBrowserWithUrl,
+      suggestedLocalUrl,
+      suggestPreviewUrl,
+      dismissSuggestedLocalUrl,
+      preferredShell,
+      setPreferredShell,
+      locale,
+      setLocale,
+      theme,
+      setTheme,
+      t,
+      agentAvailability,
+      agentsScanned,
+      refreshAgents,
+      error,
+      isBusy,
+      enterSpace,
+      resetOnboarding,
+      selectWorkspace,
+      createWorkspace,
+      updateWorkspace,
+      toggleWorkspacePinned,
+      removeWorkspace,
+      refreshBranch,
+      focusPane,
+      swapPanes,
+      applySnapLayout,
+      spawnInPane,
+      spawnInFocused,
+      spawnAllEmpty,
+      launchAgent,
+      splitFocused,
+      splitShellAt,
+      closeFocusedPane,
+      closePane,
+      closeSession,
+      renameSession,
+      activatePaneSession,
+      restartSession,
+      clearAttention,
+      focusNextAttention,
+      setSplitRatio,
+      agentRuns,
+      resumeAgentRun,
+      removeAgentRun,
+      clearAgentRuns,
+    ],
+  );
 
-  return <SpaceContext.Provider value={value}>{children}</SpaceContext.Provider>;
+  const viewValue = useMemo(() => ({ view, setView }), [view, setView]);
+
+  return (
+    <SpaceContext.Provider value={value}>
+      <ViewContext.Provider value={viewValue}>{children}</ViewContext.Provider>
+    </SpaceContext.Provider>
+  );
 }
 
 export function useSpace() {
   const ctx = useContext(SpaceContext);
   if (!ctx) throw new Error("useSpace must be used within SpaceProvider");
+  return ctx;
+}
+
+export function useView() {
+  const ctx = useContext(ViewContext);
+  if (!ctx) throw new Error("useView must be used within SpaceProvider");
   return ctx;
 }

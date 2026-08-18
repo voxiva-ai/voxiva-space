@@ -4,6 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Voxiva Space</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #07090e;
+        color: #e8edf7;
+      }
+      #root {
+        min-height: 100%;
+      }
+    </style>
+    <script>
+      try {
+        var raw = localStorage.getItem("voxiva-space-state-v1");
+        if (raw) {
+          var theme = JSON.parse(raw).theme;
+          if (theme) document.documentElement.setAttribute("data-theme", theme);
+          if (theme === "light") document.documentElement.style.colorScheme = "light";
+        }
+      } catch (e) {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

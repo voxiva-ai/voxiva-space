@@ -9,8 +9,10 @@ export function getGitBranch(cwd: string) {
   return invoke<string | null>("get_git_branch", { cwd });
 }
 
-export function pickWorkspaceFolder() {
-  return invoke<string | null>("pick_workspace_folder");
+export function pickWorkspaceFolder(cwd?: string | null) {
+  return invoke<string | null>("pick_workspace_folder", {
+    startDir: cwd ?? null,
+  });
 }
 
 export function createTerminalSession(request: {
@@ -38,6 +40,15 @@ export function writeTerminalSession(id: string, data: string) {
     request: {
       id,
       data,
+    },
+  });
+}
+
+export function writeTempFile(contentsBase64: string, extension: string) {
+  return invoke<string>("write_temp_file", {
+    request: {
+      contentsBase64,
+      extension,
     },
   });
 }

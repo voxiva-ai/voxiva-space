@@ -2,11 +2,25 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  width: 100%;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
   container-type: inline-size;
-  background:
-    radial-gradient(ellipse 70% 40% at 10% 0%, color-mix(in srgb, var(--vs-accent) 12%, transparent), transparent 60%),
-    var(--vs-bg);
+  background: var(--vs-bg);
+}
+
+.vs-browser.is-compact {
+  min-height: 0;
+  background: var(--vs-term-bg);
+}
+
+.vs-browser.is-compact .vs-browserViewport {
+  background: var(--vs-term-bg);
+}
+
+.vs-browser.is-compact .vs-browserFrameWrap {
+  background: var(--vs-term-bg);
 }
 
 .vs-browserPaneHeader {
@@ -49,6 +63,7 @@
 }
 
 .vs-browserUrlField {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -56,9 +71,81 @@
   gap: 0.45rem;
   height: 34px;
   padding: 0 0.75rem;
-  border-radius: 999px;
+  border-radius: 8px;
   border: 1px solid color-mix(in srgb, var(--vs-accent) 28%, var(--vs-border));
   background: color-mix(in srgb, var(--vs-bg) 88%, transparent);
+}
+
+.vs-browserUrlField.is-suggesting {
+  z-index: 8;
+}
+
+.vs-omnibox {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  margin: 0;
+  padding: 0.28rem;
+  list-style: none;
+  z-index: 30;
+  border-radius: 10px;
+  border: 1px solid var(--vs-border);
+  background: color-mix(in srgb, var(--vs-panel, #16181d) 96%, transparent);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  max-height: min(320px, 50vh);
+  overflow: auto;
+}
+
+.vs-omniboxItem {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.55rem;
+  row-gap: 0.05rem;
+  align-items: baseline;
+  text-align: left;
+  border: 0;
+  border-radius: 8px;
+  padding: 0.42rem 0.55rem;
+  background: transparent;
+  color: var(--vs-text);
+  cursor: pointer;
+}
+
+.vs-omniboxItem strong {
+  grid-column: 2;
+  font-size: 0.86rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vs-omniboxItem small {
+  grid-column: 2;
+  color: var(--vs-muted);
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vs-omniboxKind {
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vs-muted);
+  min-width: 3.4rem;
+}
+
+.vs-omniboxItem:hover,
+.vs-omniboxItem.is-active {
+  background: color-mix(in srgb, var(--vs-accent, #4d9dff) 16%, transparent);
 }
 
 .vs-browserUrlField:focus-within {
@@ -88,17 +175,139 @@
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  min-height: 42px;
-  padding: 0.35rem 0.4rem;
+  min-height: 36px;
+  height: 36px;
+  max-height: 36px;
+  padding: 0 0.4rem;
   border-bottom: 1px solid var(--vs-border);
   background: var(--vs-bg-raised);
   cursor: grab;
   flex-shrink: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
-.vs-browserCompactBar .vs-browserUrlField {
+.vs-browserTabRow {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 28px;
+  height: 28px;
+  padding: 0 0.3rem 0 0.25rem;
+  border-bottom: 1px solid var(--vs-border);
+  background: var(--vs-term-chrome);
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.vs-browserTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 12rem;
+  min-height: 22px;
+  padding: 0 0.35rem 0 0.4rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--vs-bg) 55%, transparent);
+  color: var(--vs-term-chrome-text);
+  font: 650 0.72rem/1 var(--vs-font);
+}
+
+.vs-browserTabIcon {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.vs-browserTabLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vs-browserTabClose {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vs-term-chrome-muted);
+  cursor: pointer;
+}
+
+.vs-browserTabClose:hover {
+  background: rgba(255, 107, 107, 0.18);
+  color: #ff6b6b;
+}
+
+.vs-browserNavBar {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  min-height: 30px;
   height: 30px;
-  padding: 0 0.55rem;
+  padding: 0 0.35rem 0 0.4rem;
+  border-bottom: 1px solid var(--vs-border);
+  background: var(--vs-term-chrome);
+  flex-shrink: 0;
+}
+
+.vs-browserNavBar .vs-browserUrlField {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  border-radius: 6px;
+  padding: 0 0.5rem;
+  border-color: color-mix(in srgb, var(--vs-border-strong) 80%, transparent);
+  background: color-mix(in srgb, var(--vs-bg) 70%, transparent);
+  box-shadow: none;
+}
+
+.vs-browserNavBar .vs-browserUrlField:focus-within {
+  border-color: var(--vs-border-strong);
+  box-shadow: none;
+}
+
+.vs-browserNavBar .vs-browserUrlField input {
+  font-size: 0.74rem;
+}
+
+.vs-browserNavBar .vs-termIconBtn {
+  width: 26px;
+  height: 26px;
+  color: var(--vs-term-chrome-muted);
+}
+
+.vs-browserNavBar .vs-termIconBtn:hover:not(:disabled) {
+  color: var(--vs-term-chrome-text);
+  background: var(--vs-bg-hover);
+}
+
+.vs-browserNavBar .vs-termIconBtn.is-active {
+  color: var(--vs-accent);
+  background: color-mix(in srgb, var(--vs-accent) 14%, transparent);
+}
+
+.vs-browserNavBar .vs-termIconBtn:disabled {
+  opacity: 0.35;
+}
+
+.vs-browserCompactBar .vs-paneActions {
+  margin-left: 0;
+  margin-right: 0.15rem;
+}
+
+.vs-browserCompactBar .vs-termIconBtn {
+  width: 26px;
+  height: 26px;
+  color: var(--vs-muted);
+}
+
+.vs-browserCompactBar .vs-termIconBtn:hover {
+  color: var(--vs-text);
+  background: var(--vs-bg-hover);
 }
 
 .vs-browserCompactBar .vs-btn {
@@ -171,11 +380,25 @@
 }
 
 .vs-browserViewport {
+  position: relative;
   display: flex;
   flex: 1;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+.vs-browserViewport > .vs-browserFrameWrap {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.vs-browserViewport > .vs-browserEmpty {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: var(--vs-bg);
 }
 
 .vs-browserDevtools {
@@ -414,18 +637,42 @@
 
 .vs-browserHint,
 .vs-browserEmpty {
-  flex: 1;
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
   gap: 0.75rem;
-  padding: 2rem 1.25rem;
+  padding: 1.25rem 1rem;
   color: var(--vs-muted);
   font-size: 0.9rem;
   text-align: center;
   line-height: 1.5;
   min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.vs-browser.is-compact .vs-browserEmpty,
+.vs-browserEmpty.is-compact {
+  justify-content: flex-start;
+  padding: 0.65rem 0.7rem 0.85rem;
+  gap: 0.45rem;
+}
+
+.vs-browserEmpty.is-compact .vs-browserStartGroup {
+  width: 100%;
+  max-width: none;
+}
+
+.vs-browserEmpty.is-compact .vs-browserPresets {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.vs-browserEmpty.is-compact .vs-browserPresetCard {
+  padding: 0.55rem 0.6rem;
+  border-radius: 8px;
 }
 
 .vs-browserEmpty h3 {
@@ -446,6 +693,25 @@
   background:
     radial-gradient(ellipse 55% 45% at 50% 20%, color-mix(in srgb, var(--vs-accent) 10%, transparent), transparent 70%),
     transparent;
+}
+
+.vs-browser.is-compact .vs-browserStartMark {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.vs-browser.is-compact .vs-browserEmpty h3 {
+  font-size: 0.92rem;
+}
+
+.vs-browser.is-compact .vs-browserEmpty p {
+  font-size: 0.78rem;
+  max-width: 22rem;
+}
+
+.vs-browser.is-compact .vs-browserStartSearch {
+  display: none;
 }
 
 .vs-browserStartMark {
@@ -652,20 +918,18 @@
 }
 
 @container (max-width: 520px) {
-  .vs-browserBar,
-  .vs-browserCompactBar {
+  .vs-browserBar {
     flex-wrap: wrap;
   }
 
-  .vs-browserBar input,
-  .vs-browserCompactBar input {
+  .vs-browserBar input {
     flex-basis: calc(100% - 42px);
   }
 
+  .vs-browserCompactBar .vs-browserUtilityBtn.is-external,
   .vs-browserDragHandle {
     display: none;
   }
-
 }
 
 @container (max-width: 700px) {
