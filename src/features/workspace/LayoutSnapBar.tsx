@@ -55,7 +55,7 @@ function SnapPreview({ id }: { id: SnapLayoutId }) {
   );
 }
 
-/** Floating snap picker — drop a pane onto a layout, or click when clickable. */
+/** Small floating picker — overlays the grid; does not resize panes. */
 export function LayoutSnapBar({
   disabled = false,
   floating = false,
@@ -73,7 +73,7 @@ export function LayoutSnapBar({
     <div
       className={`vs-snapBar${floating ? " is-floating" : " is-inline"}${clickable ? " is-clickable" : ""}`}
       role="group"
-      aria-label={t("space.tipLabel")}
+      aria-label={t("space.snapLabel")}
     >
       {floating ? <span className="vs-snapBarHint">{t("space.snapDropHint")}</span> : null}
       <div className="vs-snapOptions">

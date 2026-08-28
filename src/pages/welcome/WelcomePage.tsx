@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import logoUrl from "@/assets/brand/voxiva-space-mark.svg";
 import { LiveGridPreview } from "@/components/shell/LiveGridPreview";
 import { WindowControls } from "@/components/shell/WindowControls";
+import { beginWindowDrag, toggleMaximize } from "@/features/ui/windowDrag";
 import { getDefaultTerminalCwd } from "@/features/terminal";
 import { useFolderBrowse } from "@/features/workspace/useFolderBrowse";
 import type { GridPreset } from "@/features/workspace/layout";
@@ -53,8 +54,16 @@ export function WelcomePage() {
 
   return (
     <div className="vs-welcome">
-      <div className="vs-welcomeWin">
-        <WindowControls />
+      <div className="vs-welcomeChrome">
+        <div
+          className="vs-titleDrag"
+          data-tauri-drag-region
+          onPointerDown={beginWindowDrag}
+          onDoubleClick={toggleMaximize}
+        />
+        <div className="vs-welcomeWin">
+          <WindowControls />
+        </div>
       </div>
 
       <div className="vs-welcomeStage">

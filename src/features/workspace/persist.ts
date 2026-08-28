@@ -4,6 +4,7 @@ import type { ThemeId } from "@/features/theme";
 export type { ThemeId } from "@/features/theme";
 
 const STORAGE_KEY = "voxiva-space-state-v1";
+export const MAX_AGENT_RUNS = 500;
 
 export type PersistedHistoryItem = {
   workspaceId: string;
@@ -37,7 +38,7 @@ export type PersistedState = {
   locale: "ru" | "en";
   theme: ThemeId;
   recentHistory: PersistedHistoryItem[];
-  /** Recent agent runs, newest first (capped at 80). */
+  /** Recent agent runs, newest first (capped at MAX_AGENT_RUNS). */
   agentRuns?: AgentRun[];
   /** Live PTYs cannot survive an app shutdown; keep their launch recipe instead. */
   sessions?: Record<string, {
@@ -46,7 +47,10 @@ export type PersistedState = {
     shell: string;
     accent: "blue" | "gold" | "green" | "violet";
     initialCommand?: string;
+    agentId?: string;
   }>;
+  /** Saved workspace layout templates (cmux-style builds). */
+  savedLayouts?: import("@/features/workspace/savedLayouts").SavedWorkspaceLayout[];
 };
 
 export function loadPersisted(): PersistedState | null {
@@ -80,21 +84,23 @@ export function loadPersisted(): PersistedState | null {
                   typeof item.at === "number",
               ),
           )
-          .map(({ id, agentId, agentName, workspaceId, workspaceName, cwd, command, shell, accent, at }) => ({
-            id,
-            agentId,
-            agentName,
-            workspaceId,
-            workspaceName,
-            cwd,
-            command,
-            shell,
-            accent: ["blue", "gold", "green", "violet"].includes(accent)
-              ? accent
-              : "green",
-            at,
+          .map((item) => ({
+            id: item.id,
+            agentId: item.agentId,
+            agentName: item.agentName,
+            workspaceId: item.workspaceId,
+            workspaceName: item.workspaceName,
+            cwd: item.cwd,
+            command: item.command,
+            shell: item.shell,
+            accent: (["blue", "gold", "green", "violet"].includes(item.accent)
+              ? item.accent
+              : "green") as AgentRun["accent"],
+            at: item.at,
+            sessionId: typeof item.sessionId === "string" ? item.sessionId : undefined,
+            paneId: typeof item.paneId === "string" ? item.paneId : undefined,
           }))
-          .slice(0, 80)
+          .slice(0, MAX_AGENT_RUNS)
       : [];
     return {
       ...parsed,

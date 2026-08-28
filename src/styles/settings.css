@@ -64,9 +64,8 @@
 }
 
 .vs-settingsNavItem.is-active {
-  background: var(--vs-bg-hover);
+  background: var(--vs-surface);
   color: var(--vs-text);
-  box-shadow: inset 2px 0 0 var(--vs-accent);
 }
 
 .vs-settingsPanel {

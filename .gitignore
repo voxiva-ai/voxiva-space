@@ -7,6 +7,9 @@ dist/
 .env.*
 _t3themes/
 
+# Local agent tooling (not part of the app)
+.opencode/
+
 # Tauri / Rust
 src-tauri/target/
 src-tauri/WixTools/

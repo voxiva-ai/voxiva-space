@@ -1,3 +1,5 @@
+import { isAgentChatDropPoint } from "@/features/agents/agentChatDrop";
+
 /** MIME for workspace / absolute file paths dropped into a terminal. */
 export const VOXIVA_PATH_MIME = "application/x-voxiva-path";
 /** MIME for editor selection / multiline text (not a path). */
@@ -45,6 +47,7 @@ export function payloadFromDataTransfer(
 
   const plain = data.getData("text/plain");
   if (plain) {
+    if (plain.startsWith("voxiva-agent:")) return null;
     // Multiline / editor selection → paste as text.
     if (plain.includes("\n") || plain.includes("\r")) return plain;
     // Single-line path-like → quote as path (absolute if we can).
@@ -64,6 +67,38 @@ export function payloadFromDataTransfer(
   return null;
 }
 
+/** Collect absolute disk paths from an HTML5 file drop (any file type). */
+export function rawPathsFromDataTransfer(
+  data: DataTransfer,
+  opts?: { cwd?: string | null },
+): string[] {
+  const out: string[] = [];
+  const push = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    const abs = opts?.cwd
+      ? joinWorkspacePath(opts.cwd, trimmed)
+      : trimmed;
+    if (!out.includes(abs)) out.push(abs);
+  };
+
+  const typedPath = data.getData(VOXIVA_PATH_MIME);
+  if (typedPath && !typedPath.includes("\n")) push(typedPath);
+
+  const plain = data.getData("text/plain");
+  if (plain && !plain.includes("\n") && !plain.startsWith("voxiva-agent:")) {
+    push(plain.trim());
+  }
+
+  if (data.files?.length) {
+    for (const file of Array.from(data.files)) {
+      const path = (file as File & { path?: string }).path;
+      if (path) push(path);
+    }
+  }
+  return out;
+}
+
 type OsDropTarget = {
   id: string;
   el: HTMLElement;
@@ -76,11 +111,26 @@ let osUnlisten: (() => void) | null = null;
 let osBoot: Promise<void> | null = null;
 let scaleFactor = 1;
 
+export type WorkspaceOsDropRouter = {
+  onOver: (clientX: number, clientY: number) => void;
+  onDrop: (clientX: number, clientY: number, paths: string[]) => void;
+  onLeave: () => void;
+};
+
+let workspaceRouter: WorkspaceOsDropRouter | null = null;
+
+export function registerWorkspaceOsDropRouter(router: WorkspaceOsDropRouter | null) {
+  workspaceRouter = router;
+}
+
 function targetAtPoint(clientX: number, clientY: number): OsDropTarget | null {
   const hit = document.elementFromPoint(clientX, clientY);
   if (!hit) return null;
   const shell = hit.closest("[data-term-drop]") as HTMLElement | null;
   if (!shell) return null;
+  if (shell.classList.contains("is-agentChat") && !isAgentChatDropPoint(shell, clientY)) {
+    return null;
+  }
   const id = shell.getAttribute("data-term-drop");
   if (!id) return null;
   return osTargets.get(id) ?? null;
@@ -107,16 +157,39 @@ async function ensureOsDropListener() {
         const payload = event.payload;
         if (payload.type === "leave") {
           clearHighlights();
+          workspaceRouter?.onLeave();
           return;
         }
         const x = payload.position.x / scaleFactor;
         const y = payload.position.y / scaleFactor;
-        const target = targetAtPoint(x, y);
         if (payload.type === "enter" || payload.type === "over") {
-          clearHighlights(target?.id);
+          const target = targetAtPoint(x, y);
+          if (target) {
+            clearHighlights(target.id);
+            workspaceRouter?.onLeave();
+            return;
+          }
+          if (workspaceRouter) {
+            workspaceRouter.onOver(x, y);
+            return;
+          }
+          clearHighlights();
           return;
         }
         if (payload.type === "drop") {
+          const target = targetAtPoint(x, y);
+          if (target && payload.paths.length) {
+            target.onPaths(payload.paths);
+            clearHighlights();
+            workspaceRouter?.onLeave();
+            return;
+          }
+          if (workspaceRouter && payload.paths.length) {
+            workspaceRouter.onDrop(x, y, payload.paths);
+            clearHighlights();
+            workspaceRouter.onLeave();
+            return;
+          }
           clearHighlights();
           if (target && payload.paths.length) {
             target.onPaths(payload.paths);
@@ -139,9 +212,13 @@ export function registerTerminalOsDropTarget(target: OsDropTarget) {
   return () => {
     osTargets.delete(target.id);
     target.setHighlight(false);
-    if (osTargets.size === 0 && osUnlisten) {
+    if (osTargets.size === 0 && !workspaceRouter && osUnlisten) {
       osUnlisten();
       osUnlisten = null;
     }
   };
+}
+
+export function ensureWorkspaceOsDropListener() {
+  void ensureOsDropListener();
 }

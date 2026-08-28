@@ -1,3 +1,8 @@
+import wordIcon from "material-icon-theme/icons/word.svg";
+import powerpointIcon from "material-icon-theme/icons/powerpoint.svg";
+import tableIcon from "material-icon-theme/icons/table.svg";
+import zipIcon from "material-icon-theme/icons/zip.svg";
+import documentIcon from "material-icon-theme/icons/document.svg";
 import fileIcon from "material-icon-theme/icons/file.svg";
 import folderIcon from "material-icon-theme/icons/folder.svg";
 import folderOpenIcon from "material-icon-theme/icons/folder-open.svg";
@@ -59,6 +64,20 @@ const extensionIcons: Record<string, string> = {
   flac: audioIcon,
   opus: audioIcon,
   pdf: pdfIcon,
+  doc: wordIcon,
+  docx: wordIcon,
+  xls: tableIcon,
+  xlsx: tableIcon,
+  csv: tableIcon,
+  tsv: tableIcon,
+  ppt: powerpointIcon,
+  pptx: powerpointIcon,
+  zip: zipIcon,
+  rar: zipIcon,
+  "7z": zipIcon,
+  gz: zipIcon,
+  txt: documentIcon,
+  log: documentIcon,
   py: pythonIcon,
   rs: rustIcon,
   sass: sassIcon,
@@ -84,10 +103,14 @@ export function MaterialFileIcon({
   name,
   isDir,
   open = false,
+  size = 16,
+  className = "",
 }: {
   name: string;
   isDir: boolean;
   open?: boolean;
+  size?: number;
+  className?: string;
 }) {
   const lower = name.toLowerCase();
   let src = fileIcon;
@@ -99,5 +122,32 @@ export function MaterialFileIcon({
     const extension = lower.includes(".") ? lower.split(".").pop() ?? "" : "";
     src = fileNameIcons[lower] ?? extensionIcons[extension] ?? fileIcon;
   }
-  return <img className="vs-fileIcon" src={src} width={16} height={16} alt="" aria-hidden />;
+  const large = size > 20 ? " is-large" : "";
+  return (
+    <img
+      className={`vs-fileIcon${large}${className ? ` ${className}` : ""}`}
+      src={src}
+      width={size}
+      height={size}
+      alt=""
+      aria-hidden
+    />
+  );
+}
+
+/** Human label for file type chip (mp4 → Video, docx → Word, …). */
+export function fileTypeLabel(name: string, mime = ""): string {
+  const lower = name.toLowerCase();
+  const ext = lower.includes(".") ? lower.split(".").pop() ?? "" : "";
+  const m = mime.toLowerCase();
+  if (m.startsWith("video/") || /^(mp4|webm|mov|mkv|avi|m4v|ogv)$/.test(ext)) return "Video";
+  if (m.startsWith("audio/") || /^(mp3|wav|ogg|m4a|aac|flac|opus)$/.test(ext)) return "Audio";
+  if (m.startsWith("image/") || /^(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/.test(ext)) return "Image";
+  if (ext === "pdf" || m === "application/pdf") return "PDF";
+  if (/^(docx?)$/.test(ext)) return "Word";
+  if (/^(xlsx?|csv|tsv)$/.test(ext)) return "Excel";
+  if (/^(pptx?)$/.test(ext)) return "PowerPoint";
+  if (/^(zip|rar|7z|gz|tar)$/.test(ext)) return "Archive";
+  if (/^(txt|md|log)$/.test(ext)) return "Text";
+  return ext ? ext.toUpperCase() : "File";
 }

@@ -1,22 +1,45 @@
 import type { ITheme } from "@xterm/xterm";
-import type { ThemeId } from "@/features/theme";
-import { getTheme } from "@/features/theme";
+import { getTheme } from "@/features/theme/catalog.generated";
 
-/** Map app theme → xterm palette (React `theme` id — never read stale DOM). */
-export function readXtermTheme(themeId: ThemeId = "voxiva"): {
+/** Build xterm palette from the active app theme (term tokens + catalog ANSI). */
+export function xtermThemeForId(themeId?: string | null): {
   theme: ITheme;
   allowTransparency: boolean;
 } {
-  const def = getTheme(themeId);
+  const id = themeId ?? document.documentElement.getAttribute("data-theme") ?? "voxiva";
+  const def = getTheme(id);
+  const { tokens, ansi } = def;
+
   return {
-    allowTransparency: false,
     theme: {
-      background: def.tokens.termBg,
-      foreground: def.tokens.termFg,
-      cursor: def.tokens.termCursor,
-      cursorAccent: def.tokens.termBg,
-      selectionBackground: def.tokens.termSelection,
-      ...def.ansi,
+      background: tokens.termBg,
+      foreground: tokens.termFg,
+      cursor: tokens.termCursor,
+      cursorAccent: tokens.termBg,
+      selectionBackground: tokens.termSelection,
+      selectionForeground: undefined,
+      black: ansi.black,
+      red: ansi.red,
+      green: ansi.green,
+      yellow: ansi.yellow,
+      blue: ansi.blue,
+      magenta: ansi.magenta,
+      cyan: ansi.cyan,
+      white: ansi.white,
+      brightBlack: ansi.brightBlack,
+      brightRed: ansi.brightRed,
+      brightGreen: ansi.brightGreen,
+      brightYellow: ansi.brightYellow,
+      brightBlue: ansi.brightBlue,
+      brightMagenta: ansi.brightMagenta,
+      brightCyan: ansi.brightCyan,
+      brightWhite: ansi.brightWhite,
     },
+    allowTransparency: false,
   };
+}
+
+/** @deprecated Use xtermThemeForId — kept for imports. */
+export function nativeXtermTheme() {
+  return xtermThemeForId();
 }

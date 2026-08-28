@@ -1,8 +1,8 @@
 .vs-sectionLabel {
-  margin: 1.25rem 0 0.65rem;
-  font-size: 0.78rem;
+  margin: 1.25rem 0 0.7rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--vs-muted);
 }
@@ -12,84 +12,150 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.45rem;
-  margin-top: 0.7rem;
+  margin-top: 0.6rem;
 }
 
 .vs-agentGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 0.65rem;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  scroll-snap-type: x proximity;
+}
+
+.vs-agentGrid .vs-agentCard {
+  scroll-snap-align: start;
 }
 
 .vs-agentCard {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-  padding: 0.85rem;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1rem;
   border: 1px solid var(--vs-border);
   border-radius: var(--vs-radius);
   background: var(--vs-bg-raised);
 }
 
 .vs-agentCard.is-ready {
-  border-color: rgba(62, 207, 142, 0.22);
-}
-
-.vs-agentCard.is-missing {
-  opacity: 1;
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: color-mix(in srgb, var(--vs-ok) 28%, var(--vs-border));
 }
 
 .vs-agentCardTop {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.vs-agentCardIdentity {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.vs-agentIcon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--vs-text);
+  line-height: 0;
+}
+
+.vs-agentIcon svg,
+.vs-agentIcon .vs-brandMark {
+  width: 28px;
+  height: 28px;
+  display: block;
 }
 
 .vs-agentCard h3 {
   margin: 0;
-  font-size: 0.95rem;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.92rem;
   font-weight: 700;
   letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
 .vs-agentCard p {
   margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   color: var(--vs-muted);
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   line-height: 1.4;
   flex: 1;
 }
 
 .vs-agentMeta {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: var(--vs-muted);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-family: var(--vs-mono);
 }
 
 .vs-agentActions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.15rem;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0.45rem;
+  margin-top: auto;
+}
+
+.vs-agentActions .vs-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.74rem;
+}
+
+.vs-agentCardTop .vs-badge {
+  flex-shrink: 0;
+  max-width: 6.5rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.64rem;
 }
 
 .vs-agentMissingNote {
   margin: 0 0 0.75rem;
   max-width: 42rem;
   color: var(--vs-muted);
-  font-size: 0.82rem;
-  line-height: 1.45;
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 .vs-pageLead {
-  margin: 0.55rem 0 0;
+  margin: 0.45rem 0 0;
   max-width: 40rem;
   color: var(--vs-muted);
-  font-size: 0.88rem;
-  line-height: 1.45;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 720px) {
+  .vs-agentGrid {
+    grid-template-columns: 1fr;
+  }
 }

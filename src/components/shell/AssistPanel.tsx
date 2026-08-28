@@ -8,13 +8,15 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
-  CodeBrowser,
-  Folder,
-  Globe02,
-  LayoutRight,
-} from "@untitledui/icons";
-import { IconFilePlus, IconFolderPlus, IconRefresh, IconX } from "@/components/icons";
+  IconAssistPanel,
+  IconFilePlus,
+  IconFolderPlus,
+  IconRefresh,
+  IconX,
+} from "@/components/icons";
+import { Folder } from "@untitledui/icons";
 import { PromptDialog } from "@/components/PromptDialog";
+import { AgentHistoryPanel } from "@/components/shell/AgentHistoryPanel";
 import { NativeBrowser } from "@/features/browser/NativeBrowser";
 import { EditorTabs } from "@/features/editor/EditorTabs";
 import { FileTree } from "@/features/editor/FileTree";
@@ -23,6 +25,7 @@ import { MediaPreview } from "@/features/editor/MediaPreview";
 import type { EditorTab } from "@/features/editor/types";
 import { editorKindForPath, isBinaryPreviewPath } from "@/features/editor/types";
 import { useSpace } from "@/features/workspace/SpaceContext";
+import { relPathFromWorkspace } from "@/features/workspace/workspaceFileDrop";
 import { getTheme } from "@/features/theme";
 import { clientError } from "@/lib/errors";
 import {
@@ -35,7 +38,7 @@ const CodeEditor = lazy(() =>
   import("@/features/editor/CodeEditor").then((m) => ({ default: m.CodeEditor })),
 );
 
-export type AssistTab = "editor" | "browser";
+export type AssistTab = "editor" | "browser" | "agents";
 
 const WIDTH_KEY = "voxiva-space-assist-w";
 const MIN_W = 320;
@@ -162,6 +165,37 @@ export function AssistPanel({
   }, [open, openFile, onPendingConsumed, pendingPath]);
 
   useEffect(() => {
+    const onOpenAbs = (event: Event) => {
+      const absPath = (event as CustomEvent<{ absPath: string }>).detail?.absPath?.trim();
+      if (!absPath || !activeWorkspace) return;
+      const rel = relPathFromWorkspace(activeWorkspace.cwd, absPath);
+      if (rel !== null) {
+        void openFile(rel || absPath.split(/[/\\]/).pop() || "file");
+        return;
+      }
+      const name = absPath.split(/[/\\]/).pop() || "file";
+      setTabs((current) => {
+        if (current.some((tabItem) => tabItem.path === absPath)) return current;
+        return [
+          ...current,
+          {
+            path: absPath,
+            content: "",
+            savedContent: "",
+            dirty: false,
+            kind: editorKindForPath(name),
+            absPath,
+          },
+        ];
+      });
+      setActivePath(absPath);
+      onTabChange("editor");
+    };
+    window.addEventListener("voxiva-open-workspace-file", onOpenAbs);
+    return () => window.removeEventListener("voxiva-open-workspace-file", onOpenAbs);
+  }, [activeWorkspace, onTabChange, openFile]);
+
+  useEffect(() => {
     if (!open || !pendingUrl) return;
     setAssistUrl(pendingUrl);
     onTabChange("browser");
@@ -275,22 +309,27 @@ export function AssistPanel({
             role="tab"
             className={`vs-assistTab${tab === "editor" ? " is-active" : ""}`}
             aria-selected={tab === "editor"}
-            title={t("assist.editor")}
             onClick={() => onTabChange("editor")}
           >
-            <CodeBrowser size={15} aria-hidden />
-            <span>{t("assist.editor")}</span>
+            {t("assist.editor")}
           </button>
           <button
             type="button"
             role="tab"
             className={`vs-assistTab${tab === "browser" ? " is-active" : ""}`}
             aria-selected={tab === "browser"}
-            title={t("assist.browser")}
             onClick={() => onTabChange("browser")}
           >
-            <Globe02 size={15} aria-hidden />
-            <span>{t("assist.browser")}</span>
+            {t("assist.browser")}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            className={`vs-assistTab${tab === "agents" ? " is-active" : ""}`}
+            aria-selected={tab === "agents"}
+            onClick={() => onTabChange("agents")}
+          >
+            {t("assist.agents")}
           </button>
         </div>
         <button
@@ -300,13 +339,13 @@ export function AssistPanel({
           aria-label={t("assist.close")}
           onClick={onClose}
         >
-          <IconX size={15} />
+          <IconX size={16} />
         </button>
       </header>
 
       {!activeWorkspace ? (
         <div className="vs-assistEmpty">
-          <LayoutRight size={22} aria-hidden />
+          <IconAssistPanel size={22} aria-hidden />
           <p>{t("assist.needWorkspace")}</p>
         </div>
       ) : (
@@ -417,6 +456,12 @@ export function AssistPanel({
                 url={assistUrl}
                 onUrlChange={setAssistUrl}
               />
+            </div>
+          )}
+
+          {tab === "agents" && (
+            <div className="vs-assistAgents">
+              <AgentHistoryPanel compact />
             </div>
           )}
         </div>

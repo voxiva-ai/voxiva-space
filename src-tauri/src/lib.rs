@@ -2,6 +2,7 @@
 
 mod browser;
 mod companion;
+mod vault;
 
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
@@ -33,6 +34,7 @@ use companion::{
     companion_append_output, companion_push_snapshot, companion_set_workspace, companion_start,
     companion_status, companion_stop, empty_state,
 };
+use vault::scan_vault_sessions;
 
 #[derive(Serialize)]
 struct AppMetadata {
@@ -406,7 +408,9 @@ fn write_temp_file(request: WriteTempFileRequest) -> Result<String, String> {
         .trim_start_matches('.')
         .to_ascii_lowercase();
     const ALLOWED: &[&str] = &[
-        "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "pdf", "txt", "md", "bin",
+        "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svg", "pdf", "txt", "md", "bin",
+        "mp4", "webm", "mov", "avi", "mkv", "mp3", "wav", "weba", "m4a", "csv", "doc", "docx",
+        "xls", "xlsx", "ppt", "pptx",
     ];
     if !ALLOWED.contains(&ext.as_str()) {
         return Err("Unsupported temp file type".into());
@@ -896,9 +900,9 @@ fn enriched_path() -> Option<String> {
         if let Ok(program_files_x86) = std::env::var("ProgramFiles(x86)") {
             extras.push(format!("{program_files_x86}\\nodejs"));
         }
-        // Merge durable User PATH from the registry (GUI apps often miss installer updates).
-        static USER_PATH: OnceLock<Option<String>> = OnceLock::new();
-        if let Some(reg_path) = USER_PATH.get_or_init(windows_user_path).clone() {
+        // Merge durable User + Machine PATH from the registry (GUI apps often miss installer updates).
+        static REG_PATH: OnceLock<Option<String>> = OnceLock::new();
+        if let Some(reg_path) = REG_PATH.get_or_init(windows_registry_path).clone() {
             extras.push(reg_path);
         }
     }
@@ -948,7 +952,7 @@ fn enriched_path() -> Option<String> {
 }
 
 #[cfg(windows)]
-fn windows_user_path() -> Option<String> {
+fn windows_registry_path() -> Option<String> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x08000000;
     let output = std::process::Command::new("powershell")
@@ -956,7 +960,7 @@ fn windows_user_path() -> Option<String> {
             "-NoLogo",
             "-NoProfile",
             "-Command",
-            "[Environment]::GetEnvironmentVariable('Path','User')",
+            "$m = [Environment]::GetEnvironmentVariable('Path','Machine'); $u = [Environment]::GetEnvironmentVariable('Path','User'); if ($m -and $u) { $m + ';' + $u } elseif ($u) { $u } else { $m }",
         ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
@@ -1109,13 +1113,19 @@ fn create_terminal_session(
             || shell.eq_ignore_ascii_case("pwsh")
             || shell.eq_ignore_ascii_case("pwsh.exe")
         {
-            cmd.args(["-NoLogo", "-NoProfile"]);
+        cmd.args(["-NoLogo"]);
         }
         #[cfg(windows)]
         if shell.eq_ignore_ascii_case("cmd") || shell.eq_ignore_ascii_case("cmd.exe") {
             cmd.args(["/K", "chcp 65001 >nul"]);
         }
         cmd.env("TERM", "xterm-256color");
+        cmd.env("COLORTERM", "truecolor");
+        cmd.env("TERM_PROGRAM", "VoxivaSpace");
+        cmd.env("FORCE_COLOR", "3");
+        cmd.env("CLICOLOR_FORCE", "1");
+        // Interactive PTY — never inherit NO_COLOR from a parent GUI process.
+        cmd.env_remove("NO_COLOR");
 
         match pair.slave.spawn_command(cmd) {
             Ok(child) => {
@@ -1215,9 +1225,10 @@ fn create_terminal_session(
         let write_id = id.clone();
         let write_registry = registry.inner().clone();
         thread::spawn(move || {
-            // No-profile shells are ready quickly; keep a short buffer for the first PTY fit.
-            thread::sleep(std::time::Duration::from_millis(350));
-            for attempt in 0..10 {
+            // No-profile shells are ready quickly; PowerShell profile needs more headroom
+            // so agent resume CLIs (`opencode --continue`) are not swallowed.
+            thread::sleep(std::time::Duration::from_millis(700));
+            for attempt in 0..12 {
                 if let Ok(sessions) = write_registry.sessions.lock() {
                     if let Some(session) = sessions.get(&write_id) {
                         let writer = Arc::clone(&session.writer);
@@ -1539,6 +1550,7 @@ pub fn run() {
             companion_set_workspace,
             companion_push_snapshot,
             companion_append_output,
+            scan_vault_sessions,
         ])
         .run(tauri::generate_context!())
         .expect("failed to start Voxiva Space");

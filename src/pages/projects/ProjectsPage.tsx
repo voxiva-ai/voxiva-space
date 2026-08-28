@@ -4,6 +4,7 @@ import {
   type CreateSpaceSetupValue,
 } from "@/components/shell/CreateSpaceSetup";
 import { ConfirmDialog } from "@/components/PromptDialog";
+import { IconX } from "@/components/icons";
 import { openInExplorer, pickWorkspaceFolder } from "@/features/terminal";
 import { collectLeaves, collectSessionIds, countLeaves, leafHasBrowser } from "@/features/workspace/layout";
 import { useSpace } from "@/features/workspace/SpaceContext";
@@ -100,7 +101,7 @@ export function ProjectsPage() {
           <input
             value={cwd}
             onChange={(e) => setCwd(e.target.value)}
-            placeholder="D:\\projects\\app"
+            placeholder="D:/projects/app"
             spellCheck={false}
           />
         </label>
@@ -142,8 +143,14 @@ export function ProjectsPage() {
           >
             <div className="vs-modalHeader">
               <strong>{t("projects.setupTitle")}</strong>
-              <button type="button" className="vs-btn vs-btnGhost" onClick={() => setModalOpen(false)}>
-                ×
+              <button
+                type="button"
+                className="vs-iconBtn"
+                onClick={() => setModalOpen(false)}
+                aria-label={t("space.close")}
+                title={t("space.close")}
+              >
+                <IconX size={16} />
               </button>
             </div>
             <p className="vs-modalLead">{t("projects.setupLead")}</p>

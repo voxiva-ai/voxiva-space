@@ -112,10 +112,13 @@ pub async fn browser_open(
     // Start on about:blank then navigate — more reliable for localhost on WebView2
     // than creating the child already pointed at a loopback URL.
     let blank = url::Url::parse("about:blank").map_err(|e| e.to_string())?;
+    let profile_dir = browser_profile_dir(&app)?;
+    std::fs::create_dir_all(&profile_dir).map_err(|e| e.to_string())?;
     let webview = main
         .add_child(
             WebviewBuilder::new(&label, WebviewUrl::External(blank))
                 .initialization_script(INSPECTOR_SCRIPT)
+                .data_directory(profile_dir)
                 // Real Chromium DevTools (separate OS window). In-app side panel
                 // is the Simux-style dock; WebView2 cannot embed DevTools UI.
                 .devtools(true)
@@ -145,7 +148,10 @@ pub async fn browser_open(
                     );
                     NewWindowResponse::Deny
                 })
-                .on_page_load(move |_webview, payload| {
+                .on_page_load(move |webview, payload| {
+                    if matches!(payload.event(), PageLoadEvent::Finished) {
+                        let _ = webview.eval(INSPECTOR_SCRIPT);
+                    }
                     let state = match payload.event() {
                         PageLoadEvent::Started => "started",
                         PageLoadEvent::Finished => "finished",
@@ -327,13 +333,22 @@ async fn eval_js_bool(webview: &tauri::Webview, script: &str) -> Result<bool, St
         })
         .map_err(|e| e.to_string())?;
     let raw = tauri::async_runtime::spawn_blocking(move || {
-        receiver.recv_timeout(std::time::Duration::from_millis(800))
+        receiver.recv_timeout(std::time::Duration::from_millis(1800))
     })
     .await
     .map_err(|e| e.to_string())?
     .map_err(|_| "Inspector script timed out".to_string())?;
-    let trimmed = raw.trim();
+    let trimmed = raw.trim().trim_matches('"');
     Ok(trimmed == "true" || trimmed == "1")
+}
+
+fn browser_profile_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    app.path()
+        .resolve(
+            "browser-profile",
+            tauri::path::BaseDirectory::AppLocalData,
+        )
+        .map_err(|e| e.to_string())
 }
 
 fn ensure_inspector_script(webview: &tauri::Webview) -> Result<(), String> {
@@ -351,16 +366,27 @@ pub async fn browser_toggle_inspector(
     let webview = app
         .get_webview(&label)
         .ok_or_else(|| "Browser not open — open a site first".to_string())?;
-    ensure_inspector_script(&webview)?;
     let flag = if enabled { "true" } else { "false" };
     let script = format!(
-        "(function(){{ if (!window.__voxivaInspector) return false; return Boolean(window.__voxivaInspector.setEnabled({flag})); }})()"
+        "(function(){{ try {{ if (!window.__voxivaInspector) return false; return Boolean(window.__voxivaInspector.setEnabled({flag})); }} catch(e) {{ return false; }} }})()"
     );
-    let ok = eval_js_bool(&webview, &script).await?;
-    if enabled && !ok {
-        return Err("Brush inspector failed to activate — reload the page and try again".into());
+    for attempt in 0..6 {
+        if attempt > 0 {
+            let delay = 120 + attempt * 100;
+            tauri::async_runtime::spawn_blocking(move || {
+                std::thread::sleep(std::time::Duration::from_millis(delay));
+            })
+            .await
+            .map_err(|e| e.to_string())?;
+        }
+        ensure_inspector_script(&webview)?;
+        if let Ok(ok) = eval_js_bool(&webview, &script).await {
+            if ok || !enabled {
+                return Ok(ok);
+            }
+        }
     }
-    Ok(ok)
+    Ok(false)
 }
 
 #[tauri::command]

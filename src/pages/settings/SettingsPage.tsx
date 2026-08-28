@@ -28,6 +28,7 @@ import {
   DEFAULT_HOTKEYS,
 } from "@/features/hotkeys/bindings";
 import { clientError } from "@/lib/errors";
+import { ZoomControls } from "@/components/shell/ZoomControls";
 import {
   DEFAULT_SOUND_PREFS,
   loadSoundPrefs,
@@ -400,6 +401,7 @@ export function SettingsPage() {
             </div>
             <h2 style={{ marginTop: "2rem" }}>{t("settings.zoom")}</h2>
             <p className="vs-settingsHint">{t("settings.zoomHint")}</p>
+            <ZoomControls showRange />
           </section>
         )}
 

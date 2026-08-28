@@ -116,28 +116,32 @@ export function resumeCommandFor(
   rawCommand: string | undefined,
   availability: AgentAvailability,
 ): string | undefined {
-  if (!bot) return rawCommand;
-  const cmd = resolveBotCommand(bot, availability) ?? rawCommand;
-  if (!cmd) return undefined;
+  if (!bot) {
+    const raw = rawCommand?.trim();
+    return raw || undefined;
+  }
+  const resolved = resolveBotCommand(bot, availability);
+  const base = (resolved || rawCommand || bot.command || "").trim().split(/\s+/)[0];
+  if (!base) return undefined;
   switch (bot.id) {
     case "opencode":
-      return `${cmd} --continue`;
+      return `${base} --continue`;
     case "claude":
-      return `${cmd} --continue`;
+      return `${base} --continue`;
     case "codex":
-      return `${cmd} resume --last`;
+      return `${base} resume --last`;
     case "gemini":
-      return `${cmd} -r "latest"`;
+      return `${base} -r "latest"`;
     case "aider":
-      return `${cmd} --restore-chat-history`;
+      return `${base} --restore-chat-history`;
     case "goose":
-      return `${cmd} session --resume`;
+      return `${base} session --resume`;
     case "cursor-agent":
-      return `${cmd} --continue`;
+      return `${base} --continue`;
     case "amp":
       // amp has no single-binary resume flag; run the non-interactive threads subcommand.
       return "amp threads continue";
     default:
-      return cmd;
+      return resolved || rawCommand || base;
   }
 }

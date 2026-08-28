@@ -5,7 +5,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Calendar, ChevronLeft, ChevronRight, CodeBrowser, Plus, Trash01 } from "@untitledui/icons";
+import { ChevronLeft, ChevronRight, CodeBrowser, Plus, Trash01 } from "@untitledui/icons";
 import { IconX } from "@/components/icons";
 import { DatePicker } from "@/components/DatePicker";
 import { PrioritySelect } from "@/components/PrioritySelect";
@@ -149,6 +149,25 @@ export function BoardPage() {
     return tasks.filter((task) => task.due === filterDay);
   }, [tasks, filterDay]);
 
+  const boardStats = useMemo(() => {
+    const todayIso = toIsoDate(Date.now());
+    return {
+      total: tasks.length,
+      dueToday: tasks.filter(
+        (task) => task.due === todayIso && task.column !== "done" && task.column !== "cancelled",
+      ).length,
+      filtered: visibleTasks.length,
+    };
+  }, [tasks, visibleTasks.length]);
+
+  const filterDayLabel = useMemo(() => {
+    if (!filterDay) return "";
+    const [y, m, d] = filterDay.split("-");
+    if (!y || !m || !d) return filterDay;
+    const ts = new Date(Number(y), Number(m) - 1, Number(d)).getTime();
+    return formatDayLabel(ts, locale);
+  }, [filterDay, locale]);
+
   function persist(next: WorkspaceTask[]) {
     setTasks(next);
     if (wsId) saveBoard(wsId, next);
@@ -263,14 +282,27 @@ export function BoardPage() {
   return (
     <div className={`vs-page vs-boardPage${assistOpen ? " has-assist" : ""}`}>
       <div className="vs-boardMain">
-        <div className="vs-pageHeader">
-          <div className="vs-pageHeaderRow">
-            <div>
-              <h2 className="vs-boardHeading">
-                <Calendar size={20} aria-hidden />
-                {t("board.title")}
-              </h2>
+        <div className="vs-boardShell">
+          <div className="vs-boardToolbar">
+            <div className="vs-boardIntro">
               <p className="vs-pageLead">{t("board.lead")}</p>
+              <span className="vs-boardWsBadge">{activeWorkspace.name}</span>
+            </div>
+            <div className="vs-boardStats">
+              <div className="vs-boardStat">
+                <strong>{boardStats.total}</strong>
+                <span>{t("board.statsTotal")}</span>
+              </div>
+              <div className="vs-boardStat">
+                <strong>{boardStats.dueToday}</strong>
+                <span>{t("board.statsDueToday")}</span>
+              </div>
+              {filterDay ? (
+                <div className="vs-boardStat is-accent">
+                  <strong>{boardStats.filtered}</strong>
+                  <span>{t("board.statsInFilter")}</span>
+                </div>
+              ) : null}
             </div>
             <div className="vs-boardHeaderActions">
               <div className="vs-boardModeTabs" role="tablist">
@@ -301,8 +333,19 @@ export function BoardPage() {
             </div>
           </div>
 
-          {calMode === "week" ? (
-            <div className="vs-boardWeek" aria-label={t("board.week")}>
+          <div className="vs-boardPlanner">
+            {filterDay ? (
+              <div className="vs-boardFilterBar">
+                <span>{t("board.filterLabel")}</span>
+                <button type="button" className="vs-boardFilterChip" onClick={() => setFilterDay(null)}>
+                  {filterDayLabel}
+                  <IconX size={12} />
+                </button>
+              </div>
+            ) : null}
+
+            {calMode === "week" ? (
+              <div className="vs-boardWeek" aria-label={t("board.week")}>
               <button
                 type="button"
                 className="vs-iconBtn"
@@ -397,6 +440,8 @@ export function BoardPage() {
               </div>
             </div>
           )}
+
+          </div>
 
           <div className="vs-boardComposer">
             <input

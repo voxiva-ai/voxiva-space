@@ -85,29 +85,62 @@ function colorToRgba(input: string, alpha: number) {
 }
 
 /** Patterns that mean an agent/task finished or is waiting. */
+export function stripTerminalAnsi(data: string): string {
+  return data
+    .replace(/\x1b\[[0-9:;?]*[ -/]*[@-~]/g, "")
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "")
+    .replace(/\x1b[@-_]/g, "");
+}
+
+/** Scan only the tail — completion cues appear at the end of a chunk stream. */
 export function outputNeedsAttention(data: string): boolean {
+  const plain = stripTerminalAnsi(data);
+  const tail = plain.slice(-640);
+
+  // Ignore dev-server noise (Next/Vite "ready" banners).
+  if (
+    /\b(Next\.js|Vite|webpack|Compiled successfully|Local:\s*http|ready in \d+|GET \/[^\s]+ \d{3})\b/i.test(
+      tail,
+    ) &&
+    !/\b(task (complete|completed|done|finished)|awaiting|approve|\[y\/N\])\b/i.test(tail)
+  ) {
+    return false;
+  }
+
+  // Terminal bell / notification OSC sequences.
   if (/\x1b\](9|99|777)/.test(data)) return true;
+  if (/\x07/.test(data)) return true;
+
   if (
-    /\b(Waiting for input|Do you want to|Press enter|\[y\/N\]|Awaiting|needs? (your )?input)\b/i.test(
-      data,
+    /\b(Waiting for input|Do you want to|Press enter to continue|\[y\/N\]|\[Y\/n\]|Awaiting your|needs? (your )?input|How would you like to proceed)\b/i.test(
+      tail,
     )
   ) {
     return true;
   }
-  // OpenCode / agent completion cues
+
+  // Agent finished — specific phrasing, not bare "ready"/"done" in logs.
   if (
-    /\b(task (complete|completed|done|finished)|all done|finished successfully|✓|✔|✔︎)\b/i.test(
-      data,
+    /\b(task (complete|completed|done|finished)|all done|finished successfully|completed successfully|execution finished)\b/i.test(
+      tail,
     )
   ) {
     return true;
   }
-  if (/\b(OpenCode|opencode|Claude Code|Codex).{0,60}\b(done|complete|finished|ready)\b/i.test(data)) {
+
+  if (/\b(agent|session) (has )?(finished|completed|done)\b/i.test(tail)) {
     return true;
   }
-  if (/\b(agent|session).{0,40}\b(finished|completed|done)\b/i.test(data)) {
+
+  if (/\b(tests? \d+ passed|awaiting approve|done · approve)\b/i.test(tail)) {
     return true;
   }
+
+  // OpenCode / Codex idle prompt — user must act.
+  if (/\?\s*$/.test(tail.trim()) && /\b(continue|proceed|approve|allow)\b/i.test(tail)) {
+    return true;
+  }
+
   return false;
 }
 

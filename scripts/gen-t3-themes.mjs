@@ -146,11 +146,11 @@ function mapColors(c, appearance) {
   const borderRaw = c.border || (appearance === "light" ? "#0f172a" : "#ffffff");
   const border =
     String(borderRaw).startsWith("#") && String(borderRaw).length === 7
-      ? hexAlpha(borderRaw, appearance === "light" ? 0.38 : 0.14)
+      ? hexAlpha(borderRaw, appearance === "light" ? 0.38 : 0.18)
       : borderRaw;
   const borderStrong =
     String(borderRaw).startsWith("#") && String(borderRaw).length === 7
-      ? hexAlpha(borderRaw, appearance === "light" ? 0.58 : 0.24)
+      ? hexAlpha(borderRaw, appearance === "light" ? 0.58 : 0.3)
       : borderRaw;
   const muted = solid(c.textMuted || c.mutedForeground || c.sidebarMutedForeground || "#8a93a8");
   const onAccent =
@@ -266,8 +266,8 @@ function buildCatalog(files) {
     bgRaised: "#0c1119",
     bgHover: "#151c28",
     surface: "#101722",
-    border: "rgba(255,255,255,0.055)",
-    borderStrong: "rgba(255,255,255,0.11)",
+    border: "rgba(255,255,255,0.12)",
+    borderStrong: "rgba(255,255,255,0.22)",
     text: "#eef2f8",
     muted: "#8a93a8",
     accent: "#5aa6ff",

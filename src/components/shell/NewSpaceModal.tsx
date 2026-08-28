@@ -3,6 +3,7 @@ import {
   CreateSpaceSetup,
   type CreateSpaceSetupValue,
 } from "@/components/shell/CreateSpaceSetup";
+import { IconX } from "@/components/icons";
 import { useFolderBrowse } from "@/features/workspace/useFolderBrowse";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import { clientError } from "@/lib/errors";
@@ -13,6 +14,13 @@ type NewSpaceModalProps = {
   open: boolean;
   onClose: () => void;
 };
+
+/** Show/store Windows paths with single backslashes (never `D:\\foo`). */
+function normalizeFolderPath(path: string) {
+  const trimmed = path.trim();
+  if (!trimmed) return "";
+  return trimmed.replace(/\//g, "\\").replace(/\\{2,}/g, "\\");
+}
 
 function nextColor(used: Set<string>, count: number): SpaceColor {
   return (
@@ -67,9 +75,10 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
     try {
       const picked = await browseFolder(cwd.trim() || null);
       if (!picked) return;
-      setCwd(picked);
+      const folder = normalizeFolderPath(picked);
+      setCwd(folder);
       if (!name.trim()) {
-        const base = picked.replace(/[\\/]+$/, "").split(/[\\/]/).pop();
+        const base = folder.replace(/[\\/]+$/, "").split(/[\\/]/).pop();
         if (base) setName(base);
       }
     } catch (err) {
@@ -78,7 +87,8 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
   }
 
   async function confirm() {
-    if (!cwd.trim()) {
+    const folder = normalizeFolderPath(cwd);
+    if (!folder) {
       setError(t("projects.needFolder"));
       return;
     }
@@ -86,7 +96,7 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
     try {
       await createWorkspace({
         name: name.trim() || "Space",
-        cwd: cwd.trim(),
+        cwd: folder,
         grid: setup.grid,
         includeBrowser: setup.includeBrowser,
         color: setup.color,
@@ -113,8 +123,14 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
       >
         <div className="vs-modalHeader">
           <strong>{t("projects.setupTitle")}</strong>
-          <button type="button" className="vs-btn vs-btnGhost" onClick={onClose} aria-label="Close">
-            ×
+          <button
+            type="button"
+            className="vs-iconBtn"
+            onClick={onClose}
+            aria-label={t("space.close")}
+            title={t("space.close")}
+          >
+            <IconX size={16} />
           </button>
         </div>
 
@@ -135,8 +151,8 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
             <Folder size={15} aria-hidden />
             <input
               value={cwd}
-              onChange={(e) => setCwd(e.target.value)}
-              placeholder="D:\\projects\\app"
+              onChange={(e) => setCwd(normalizeFolderPath(e.target.value))}
+              placeholder="D:/projects/app"
               spellCheck={false}
             />
             <button

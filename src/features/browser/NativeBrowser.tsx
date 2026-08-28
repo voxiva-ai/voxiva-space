@@ -509,20 +509,24 @@ export function NativeBrowser({
       return;
     }
     const next = !inspectorRef.current;
+    const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
     try {
-      if (next) {
-        await browserConfigureInspector(label, inspectorAgents, componentFiles);
+      let enabled = false;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        if (next) {
+          await browserConfigureInspector(label, inspectorAgents, componentFiles).catch(
+            () => undefined,
+          );
+        }
+        enabled = await browserToggleInspector(label, next);
+        if (enabled === next) break;
+        await wait(160 + attempt * 120);
       }
-      const enabled = await browserToggleInspector(label, next);
       inspectorRef.current = enabled;
       setInspector(enabled);
-      if (next && !enabled) {
-        setError(t("browser.devtoolsFailed"));
-      }
-    } catch (error) {
+    } catch {
       inspectorRef.current = false;
       setInspector(false);
-      setError(clientError(error) || t("browser.devtoolsFailed"));
     }
   }
 
@@ -546,12 +550,29 @@ export function NativeBrowser({
       detailsPath = "";
     }
 
-    const pageMatch = full.match(/^Page:\s*(.+)$/m);
-    const countMatch = full.match(/^Selections:\s*(\d+)/m);
-    const headings = [...full.matchAll(/^##\s+\d+\.\s+(.+)$/gm)].map((m) => m[1].trim());
+    const pageMatch = full.match(/^\*\*Page:\*\*\s*(.+)$/m) || full.match(/^Page:\s*(.+)$/m);
+    const countMatch =
+      full.match(/^\*\*Selections:\*\*\s*(\d+)/m) || full.match(/^Selections:\s*(\d+)/m);
+    const headings = [
+      ...full.matchAll(/^##\s+([A-Z])\.\s+(.+)$/gm),
+      ...full.matchAll(/^##\s+\d+\.\s+(.+)$/gm),
+    ].map((m) => (m[2] ? `${m[1]} ${m[2]}`.trim() : m[1].trim()));
+    const docs = [...full.matchAll(/^-\s+`([^`]+)`$/gm)]
+      .map((m) => m[1])
+      .filter((path) => !path.includes(" ") || path.includes("/") || path.includes("\\"))
+      .slice(0, 12);
     const noteLine =
-      full.split("\n").find((line) => line.trim() && !line.startsWith("Design-mode"))?.trim() ||
-      "Update the selected UI elements.";
+      full
+        .split("\n")
+        .map((line) => line.trim())
+        .find(
+          (line) =>
+            line &&
+            !line.startsWith("#") &&
+            !line.startsWith(">") &&
+            !line.startsWith("**") &&
+            !line.startsWith("Design-mode"),
+        ) || "Update the selected UI elements.";
     const shortLines = [noteLine, ""];
     if (pageMatch) shortLines.push(`Page: ${pageMatch[1].trim()}`);
     if (countMatch || headings.length) {
@@ -560,10 +581,14 @@ export function NativeBrowser({
         headings.length ? `Selections: ${count} (${headings.join(", ")})` : `Selections: ${count}`,
       );
     }
+    if (docs.length) {
+      shortLines.push("Documents:");
+      for (const doc of docs) shortLines.push(`- ${doc}`);
+    }
     if (detailsPath) {
       shortLines.push(`Details: ${detailsPath}`, "");
       shortLines.push(
-        "Open the Details file for selectors, styles, and DOM snippets, then apply the change in the codebase.",
+        "Open the Details file for selectors, styles, DOM snippets, and related documents, then apply the change in the codebase.",
       );
     } else {
       shortLines.push(full);
@@ -571,7 +596,8 @@ export function NativeBrowser({
     const short = shortLines.join("\n").trim();
 
     if (agentId === "clipboard") {
-      const text = short;
+      // Full annotation for Ctrl+V into OpenCode / Claude / any chat.
+      const text = detailsPath ? `${full}\n\nDetails file: ${detailsPath}` : full;
       try {
         await navigator.clipboard.writeText(text);
       } catch {

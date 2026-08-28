@@ -1,257 +1,391 @@
-.vs-historyLayout {
-  display: grid;
-  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
-  gap: 1rem;
-  align-items: start;
-}
+/* ── Agent history · cmux-style grouped list ─────────────────────── */
 
-.vs-historyFilters {
+.vs-historyPage {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.75rem;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  max-width: none;
 }
 
-.vs-historyChip {
-  min-height: 30px;
-  padding: 0 0.75rem;
-  border: 1px solid var(--vs-border);
-  border-radius: 999px;
-  background: var(--vs-bg-raised);
+.vs-historyPageHead {
+  padding: 1.1rem 1.25rem 0.65rem;
+  border-bottom: 1px solid var(--vs-border);
+}
+
+.vs-historyPageHead h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.vs-historyPageHead p {
+  margin: 0;
+  font-size: 0.78rem;
   color: var(--vs-muted);
-  font: 650 0.76rem/1 "DM Sans", system-ui, sans-serif;
+  line-height: 1.4;
+}
+
+.vs-agentHistoryToolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+  padding: 0.42rem 0.48rem 0.32rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--vs-border) 62%, transparent);
+}
+
+.vs-agentHistorySearch {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.42rem;
+  border: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--vs-bg-raised) 82%, transparent);
+  color: var(--vs-muted);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vs-border) 72%, transparent);
+  animation: vs-vaultSearchIn 120ms ease-out;
+}
+
+.vs-agentHistorySearch input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--vs-text);
+  font-size: 0.72rem;
+  outline: none;
+}
+
+.vs-agentHistoryFilters {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.vs-agentHistoryFilter {
+  padding: 0.22rem 0.42rem;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--vs-muted);
+  font-size: 0.67rem;
+  font-weight: 560;
   cursor: pointer;
 }
 
-.vs-historyChip:hover {
+.vs-agentHistoryFilter:hover,
+.vs-agentHistorySearchToggle:hover {
   color: var(--vs-text);
-  border-color: color-mix(in srgb, var(--vs-accent) 35%, transparent);
+  background: var(--vs-bg-hover);
 }
 
-.vs-historyChip.is-active {
-  color: var(--vs-accent);
-  border-color: color-mix(in srgb, var(--vs-accent) 55%, transparent);
-  background: color-mix(in srgb, var(--vs-accent) 12%, transparent);
+.vs-agentHistoryFilter.is-on {
+  color: var(--vs-text);
+  background: color-mix(in srgb, var(--vs-text) 9%, transparent);
 }
 
-.vs-historyClear {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
+.vs-agentHistorySearchToggle {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--vs-muted);
+  cursor: pointer;
 }
 
-.vs-historyCalendar {
-  position: sticky;
-  top: 0;
-  padding: 0.9rem;
-  border: 1px solid var(--vs-border);
-  border-radius: 14px;
-  background: var(--vs-bg-raised);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
-  max-height: calc(100vh - 7rem);
+.vs-agentHistorySearchToggle.is-on {
+  color: var(--vs-text);
+  background: color-mix(in srgb, var(--vs-text) 9%, transparent);
+}
+
+@keyframes vs-vaultSearchIn {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.vs-agentHistoryMark.is-folder {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--vs-muted);
+}
+
+.vs-historyPageBody {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
+  max-width: 480px;
 }
 
-.vs-historyCalHead {
+.vs-agentHistory {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.vs-agentHistory.is-compact .vs-agentHistoryTitle {
+  font-size: 0.68rem;
+}
+
+.vs-agentHistory.is-scoped {
+  border-top: 0;
+}
+
+.vs-agentHistoryHead {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.35rem;
-  margin-bottom: 0.65rem;
+  padding: 0.55rem 0.65rem 0.35rem;
 }
 
-.vs-historyCalHead strong {
-  font-size: 0.88rem;
+.vs-agentHistoryTitle {
+  font-size: 0.6rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  text-transform: capitalize;
-}
-
-.vs-historyCalNav {
-  display: inline-flex;
-  gap: 0.15rem;
-}
-
-.vs-historyCalWeek {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.15rem;
-  margin-bottom: 0.25rem;
-  color: var(--vs-muted);
-  font-size: 0.62rem;
-  text-align: center;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-}
-
-.vs-historyCalGrid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.2rem;
-}
-
-.vs-historyCalDay {
-  aspect-ratio: 1;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--vs-text);
-  font-size: 0.72rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.vs-historyCalDay:hover {
-  background: var(--vs-bg-hover);
-}
-
-.vs-historyCalDay.is-hot {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vs-accent) 40%, transparent);
-}
-
-.vs-historyCalDay.is-today {
-  font-weight: 700;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vs-accent) 55%, transparent);
-}
-
-.vs-historyCalDay.is-active {
-  background: var(--vs-accent);
-  color: var(--vs-on-accent);
-  font-weight: 700;
-  box-shadow: none;
-}
-
-.vs-historyEmptyCard {
-  padding: 1.25rem;
-  border: 1px dashed var(--vs-border);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--vs-bg-raised) 70%, transparent);
   color: var(--vs-muted);
 }
 
-.vs-historyEmptyCard p {
+.vs-agentHistoryActions .vs-iconBtn {
+  width: 21px;
+  height: 21px;
+  color: var(--vs-muted);
+}
+
+.vs-agentHistoryActions .vs-iconBtn:hover {
+  color: var(--vs-danger);
+}
+
+.vs-agentHistoryEmpty {
   margin: 0;
+  padding: 0.35rem 0.65rem 0.75rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--vs-muted);
 }
 
-.vs-historyCalEmpty {
-  aspect-ratio: 1;
-}
-
-.vs-historyListWrap {
-  min-width: 0;
-}
-
-.vs-historyList {
+.vs-agentHistoryGroups {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  max-width: none;
-  max-height: calc(100vh - 11rem);
-  overflow: auto;
-  padding-right: 0.15rem;
+  gap: 0.12rem;
+  padding: 0.28rem 0.34rem 0.65rem;
 }
 
-@media (max-width: 860px) {
-  .vs-historyLayout {
-    grid-template-columns: 1fr;
-  }
-
-  .vs-historyCalendar {
-    position: static;
-  }
-}
-
-.vs-historyItem {
+.vs-agentHistoryGroup {
   display: flex;
-  align-items: stretch;
-  gap: 0.25rem;
-  width: 100%;
-  padding: 0.25rem 0.35rem 0.25rem 0.25rem;
-  border-radius: 12px;
-  border: 1px solid var(--vs-border);
-  background: var(--vs-bg-raised);
-  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+  flex-direction: column;
 }
 
-.vs-historyItem:hover {
-  border-color: color-mix(in srgb, var(--vs-accent) 45%, transparent);
-  background: var(--vs-bg-hover);
-  transform: translateY(-1px);
-}
-
-.vs-historyItem.is-gone {
-  opacity: 0.55;
-}
-
-.vs-historyItemMain {
+.vs-agentHistoryGroupHead {
   display: grid;
-  grid-template-columns: 7.5rem minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
-  column-gap: 0.85rem;
-  row-gap: 0.15rem;
-  flex: 1;
-  min-width: 0;
-  padding: 0.55rem 0.55rem;
+  grid-template-columns: 18px minmax(0, 1fr) 14px;
+  align-items: center;
+  column-gap: 0.42rem;
+  width: 100%;
+  min-height: 27px;
+  padding: 0.22rem 0.36rem;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--vs-radius-sm);
+  background: transparent;
+  color: var(--vs-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.vs-agentHistoryGroupHead:hover {
+  background: var(--vs-bg-hover);
+}
+
+.vs-agentHistoryGroupHead strong {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.74rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.vs-agentHistoryChevron {
+  justify-self: end;
+  color: var(--vs-muted);
+  transition: transform 0.15s ease;
+}
+
+.vs-agentHistoryGroupHead.is-collapsed .vs-agentHistoryChevron {
+  transform: rotate(-90deg);
+}
+
+.vs-agentHistoryMark {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  color: var(--vs-text);
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.vs-agentHistoryMark .vs-brandMark {
+  color: var(--vs-text);
+}
+
+.vs-agentHistoryMark .vs-brandMark,
+.vs-agentHistoryMark svg {
+  width: 17px;
+  height: 17px;
+}
+
+.vs-agentHistoryItems {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 0.35rem 0.22rem calc(0.35rem + 18px + 0.42rem);
+}
+
+.vs-agentHistoryItem {
+  display: grid;
+  grid-template-columns: 13px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.32rem;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0.16rem 0.2rem;
+  border: 0;
+  border-radius: var(--vs-radius-sm);
   background: transparent;
   text-align: left;
   color: var(--vs-text);
-  cursor: pointer;
+  font: inherit;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 
-.vs-historyItemMain:disabled {
-  cursor: default;
+.vs-agentHistoryItemIcon {
+  width: 12px;
+  height: 12px;
+  color: color-mix(in srgb, var(--vs-text) 72%, var(--vs-muted));
+  opacity: 0.82;
+  pointer-events: none;
 }
 
-.vs-historyItemDelete {
-  align-self: center;
-  flex-shrink: 0;
+.vs-agentHistoryItem:active,
+.vs-agentHistoryItem.is-dragging {
+  cursor: grabbing;
+}
+
+.vs-agentHistoryItem.is-dragging {
   opacity: 0.55;
 }
 
-.vs-historyItemDelete:hover {
-  opacity: 1;
-  color: #ff6b6b;
+.vs-agentHistoryItem:hover:not(:disabled) {
+  background: var(--vs-bg-hover);
 }
 
-.vs-historyWhen {
-  grid-row: 1 / span 2;
-  align-self: center;
+.vs-agentHistoryItem.is-gone,
+.vs-agentHistoryItem:disabled {
+  opacity: 0.5;
+  cursor: default;
+  touch-action: auto;
+}
+
+body.is-agent-dragging {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+body.is-agent-dragging .vs-pane {
+  pointer-events: auto;
+}
+
+.vs-historyDragGhost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10000;
+  max-width: 220px;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--vs-border) 75%, var(--vs-accent));
+  background: color-mix(in srgb, var(--vs-bg-raised) 96%, transparent);
+  color: var(--vs-text);
   font-size: 0.72rem;
-  color: var(--vs-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.vs-historyItemMain strong {
-  font-size: 0.88rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-}
-
-.vs-historyItemMain small {
-  color: var(--vs-muted);
-  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: 0 8px 22px color-mix(in srgb, #000 24%, transparent);
+  will-change: transform;
+}
+
+.vs-historyDragGhost.is-visible {
+  opacity: 1;
+}
+
+.vs-agentHistoryItemText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.69rem;
+  line-height: 1.25;
+  color: color-mix(in srgb, var(--vs-text) 88%, var(--vs-muted));
+  pointer-events: none;
+}
+
+.vs-agentHistoryItemWhen {
+  flex-shrink: 0;
+  pointer-events: none;
+  font-size: 0.59rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--vs-muted);
   white-space: nowrap;
 }
 
-.vs-historyItemMain em {
-  grid-column: 3;
-  grid-row: 1 / span 2;
-  align-self: center;
-  font-style: normal;
-  font-size: 0.72rem;
+.vs-agentHistoryItemRemove {
+  display: none;
+}
+
+.vs-agentHistoryMore {
+  align-self: flex-start;
+  margin: 0.08rem 0 0.12rem 0;
+  padding: 0.12rem 0.2rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
   color: var(--vs-muted);
+  font-size: 0.68rem;
+  cursor: pointer;
 }
 
-.vs-historyItemMain em.vs-historyOpen {
-  color: color-mix(in srgb, var(--vs-accent) 85%, white);
-  font-weight: 700;
+.vs-agentHistoryMore:hover {
+  color: var(--vs-accent);
+  background: var(--vs-bg-hover);
 }
 
-.vs-pageHeaderRow {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
+.vs-agentHistory.is-compact .vs-agentHistoryItemText {
+  font-size: 0.68rem;
 }

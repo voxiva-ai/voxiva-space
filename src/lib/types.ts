@@ -15,7 +15,7 @@ export type SpaceColor = "green" | "red" | "amber" | "violet" | "cyan" | "rose";
 
 export const SPACE_COLORS: SpaceColor[] = ["green", "red", "amber", "violet", "cyan", "rose"];
 
-export type TerminalStatus = "online" | "closed" | "error";
+export type TerminalStatus = "online" | "closed" | "starting" | "error";
 
 export type TerminalSession = {
   id: string;
@@ -27,11 +27,13 @@ export type TerminalSession = {
   needsAttention: boolean;
   /** Command used to open the terminal again after Voxiva Space restarts. */
   initialCommand?: string;
+  /** Stable agent bot id when this tab is an agent CLI (opencode, gemini, …). */
+  agentId?: string;
 };
 
 export type SplitDirection = "h" | "v";
 
-export type PaneKind = "terminal" | "browser";
+export type PaneKind = "terminal" | "browser" | "media";
 
 export type SplitNode =
   | {
@@ -48,6 +50,8 @@ export type SplitNode =
        */
       tabOrder?: string[];
       browserUrl: string | null;
+      /** In-pane image/media preview (absolute path). */
+      mediaPath?: string | null;
     }
   | {
       type: "split";
@@ -119,4 +123,21 @@ export type AgentRun = {
   accent: Accent;
   /** Date.now() */
   at: number;
+  /** Live PTY session — resume focuses this tab when still online. */
+  sessionId?: string;
+  paneId?: string;
+  /** From on-disk vault index (cmux-style), not a live Voxiva run. */
+  vaultId?: string;
+  resumeCommand?: string;
+};
+
+/** Indexed agent session from local transcript files (Vault). */
+export type VaultSession = {
+  id: string;
+  agentId: string;
+  title: string;
+  cwd: string;
+  mtimeMs: number;
+  resumeCommand?: string | null;
+  source: string;
 };

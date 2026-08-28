@@ -64,8 +64,8 @@ export function PaneActions({
       <button
         type="button"
         className="vs-termIconBtn is-danger"
-        title={t("term.close")}
-        aria-label={t("term.close")}
+        title={t("space.menu.close")}
+        aria-label={t("space.menu.close")}
         onClick={() => void closePane(paneId)}
       >
         <IconX size={14} />

@@ -1,8 +1,8 @@
 /** Serialize PTY creates so opening a grid doesn't freeze the UI. */
 let tail: Promise<unknown> = Promise.resolve();
 
-/** Gap between ConPTY creates — Windows shells are expensive. */
-const SPAWN_GAP_MS = 240;
+/** Gap between ConPTY creates — keep small so grids feel instant; queue still serializes. */
+const SPAWN_GAP_MS = 80;
 
 export function enqueueTerminalSpawn<T>(fn: () => Promise<T>): Promise<T> {
   const run = tail.then(
@@ -45,8 +45,8 @@ export function nextXtermMountDelay() {
   }
   const slot = xtermMountSlot++;
   if (slot === 0) return 0;
-  // ~120–960ms — keeps the focused pane instant, others after paint.
-  return Math.min(960, slot * 120);
+  // Background panes mount shortly after paint — focused pane stays instant.
+  return Math.min(480, slot * 60);
 }
 
 /** Ordered cold-start slots so every pane still boots, without a thundering herd. */
@@ -67,6 +67,5 @@ export function takeColdStartSlot(priority: boolean) {
 /** Delay before a pane may request its first PTY. */
 export function coldStartDelayMs(slot: number) {
   if (slot <= 0) return 0;
-  // Focused = 0; others: 350, 700, 1050, … so UI stays interactive.
-  return 350 + (slot - 1) * 350;
+  return 60 + (slot - 1) * 100;
 }

@@ -190,7 +190,10 @@
 }
 
 .vs-railWs.is-attention .vs-railWsMark {
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vs-attention) 55%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--vs-attention) 55%, transparent),
+    0 0 10px color-mix(in srgb, var(--vs-attention) 35%, transparent);
+  animation: vs-attentionMarkPulse 2s ease-in-out infinite;
 }
 
 .vs-railWs.is-active {
@@ -201,9 +204,21 @@
   0%,
   100% {
     opacity: 1;
+    transform: scale(1);
   }
   50% {
-    opacity: 0.72;
+    opacity: 0.78;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes vs-attentionMarkPulse {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.18);
   }
 }
 
@@ -481,7 +496,10 @@
 }
 
 .vs-wsItem.is-attention .vs-wsAvatar {
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vs-attention) 55%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--vs-attention) 55%, transparent),
+    0 0 10px color-mix(in srgb, var(--vs-attention) 30%, transparent);
+  animation: vs-attentionMarkPulse 2s ease-in-out infinite;
 }
 
 .vs-wsItem strong .vs-badge {
@@ -497,6 +515,7 @@
   border-radius: 999px;
   background: var(--vs-attention);
   box-shadow: 0 0 0 3px var(--vs-attention-ring);
+  animation: vs-attentionPulse 1.8s ease-in-out infinite;
 }
 
 .vs-wsItem .vs-attnDot {
@@ -506,6 +525,16 @@
 [data-attention-ring="0"] .vs-pane.is-attention,
 [data-attention-ring="0"] .vs-pane.is-focused.is-attention {
   box-shadow: none;
+  animation: none;
+}
+
+[data-attention-ring="0"] .vs-attnDot {
+  animation: none;
+}
+
+[data-attention-ring="0"] .vs-paneTab.is-attention {
+  box-shadow: none;
+  background: transparent;
 }
 
 .vs-spacesLabel {
@@ -576,7 +605,7 @@
 }
 
 .vs-iconBtn.is-collapse:hover {
-  color: var(--vs-accent);
+  color: var(--vs-text);
 }
 
 .vs-iconChevron {
@@ -599,6 +628,30 @@
   margin-top: auto;
   padding: 0.45rem 0.45rem 0.35rem;
   border-top: 1px solid var(--vs-border);
+  flex-shrink: 0;
+}
+
+.vs-sidebarHistory {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--vs-border);
+}
+
+.vs-sidebarHistory .vs-agentHistory {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.vs-sidebarHistory .vs-agentHistoryGroups {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
 }
 
 .vs-sidebarFoot {
@@ -679,17 +732,26 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.35rem;
   box-sizing: border-box;
   height: 42px;
   min-height: 42px;
-  padding: 0 0.35rem 0 0.9rem;
+  padding: 0 0 0 0.9rem;
   border-bottom: 1px solid var(--vs-border);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--vs-bg-raised) 80%, transparent), var(--vs-bg));
   flex-shrink: 0;
-  -webkit-app-region: drag;
-  app-region: drag;
+}
+
+.vs-titleDrag {
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-width: 64px;
+  cursor: grab;
+}
+
+.vs-titleDrag:active {
+  cursor: grabbing;
 }
 
 .vs-topbar [data-no-drag],
@@ -705,14 +767,15 @@
   align-items: center;
   gap: 0.55rem;
   min-width: 0;
-  flex: 1;
+  flex: 0 1 auto;
+  max-width: 52%;
 }
 
 .vs-topbarExpand {
   width: 30px;
   height: 30px;
   flex-shrink: 0;
-  color: var(--vs-accent);
+  color: color-mix(in srgb, var(--vs-text) 72%, var(--vs-muted));
 }
 
 .vs-topbarSidebarBtn {
@@ -814,15 +877,354 @@
 .vs-topbarActions {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.1rem;
   flex-shrink: 0;
+  margin-left: auto;
+  padding-right: 0.15rem;
+}
+
+.vs-chromeWrap {
+  position: relative;
+}
+
+.vs-chromeFlyout {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 80;
+  min-width: 168px;
+  padding: 0.4rem;
+  border: 1px solid var(--vs-border);
+  border-radius: 12px;
+  background: var(--vs-bg-raised);
+  box-shadow: 0 12px 32px color-mix(in srgb, #000 38%, transparent);
+}
+
+.vs-chromeFlyout.is-layout {
+  min-width: 0;
+  padding: 0.55rem 0.6rem 0.45rem;
+}
+
+.vs-chromeFlyout.is-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.3rem;
+  min-width: 196px;
+}
+
+.vs-chromeFlyout.is-menu.is-wide {
+  min-width: 228px;
+}
+
+.vs-chromeFlyout.is-menu .vs-chromeMenuLabel {
+  padding: 0.35rem 0.55rem 0.2rem;
+  color: var(--vs-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.vs-chromeFlyout.is-menu .vs-chromeMenuLayout {
+  padding: 0.15rem 0.35rem 0.25rem;
+}
+
+.vs-chromeFlyout.is-menu .vs-chromeMenuSep {
+  height: 1px;
+  margin: 0.2rem 0.35rem;
+  background: var(--vs-border);
+}
+
+.vs-chromeFlyout.is-menu button.is-primary {
+  color: var(--vs-accent);
+  font-weight: 650;
+}
+
+.vs-chromeFlyout.is-layouts {
+  min-width: 300px;
+  max-width: min(92vw, 360px);
+  padding: 0.4rem;
+  gap: 0.15rem;
+}
+
+.vs-chromeFlyout.is-layouts > button.is-primary {
+  min-height: 34px;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.vs-chromeFlyout.is-layouts .vs-chromeMenuSep {
+  margin: 0.35rem 0.2rem;
+}
+
+.vs-chromeFlyout.is-layouts .vs-chromeMenuLabel {
+  padding: 0.2rem 0.5rem 0.35rem;
+}
+
+.vs-layoutBuildList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: min(50vh, 360px);
+  overflow: auto;
+  padding: 0 0.1rem 0.1rem;
+}
+
+.vs-layoutBuildRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.55rem 0.55rem 0.5rem;
+  border: 1px solid var(--vs-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--vs-bg-raised) 70%, transparent);
+}
+
+.vs-layoutBuildRow:hover {
+  background: color-mix(in srgb, var(--vs-bg-hover) 80%, var(--vs-bg-raised));
+  border-color: color-mix(in srgb, var(--vs-border) 70%, var(--vs-text));
+}
+
+.vs-layoutBuildMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.vs-layoutBuildMeta strong {
+  min-width: 0;
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vs-layoutBuildMeta span {
+  flex-shrink: 0;
+  color: var(--vs-muted);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.vs-layoutBuildActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 28px;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.vs-layoutBuildActions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-height: 28px;
+  padding: 0 0.45rem;
+  border: 1px solid var(--vs-border);
+  border-radius: 7px;
+  background: var(--vs-bg);
+  color: var(--vs-text);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-align: center;
+  cursor: pointer;
+}
+
+.vs-layoutBuildActions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.vs-layoutBuildActions button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--vs-accent) 40%, var(--vs-border));
+  background: color-mix(in srgb, var(--vs-accent) 10%, var(--vs-bg));
+}
+
+.vs-layoutBuildActions button.is-apply {
+  background: color-mix(in srgb, var(--vs-accent) 16%, var(--vs-bg));
+  border-color: color-mix(in srgb, var(--vs-accent) 35%, var(--vs-border));
+}
+
+.vs-layoutBuildActions button.is-danger {
+  width: 28px;
+  min-width: 28px;
+  padding: 0;
+  color: var(--vs-muted);
+  border-color: transparent;
+  background: transparent;
+}
+
+.vs-layoutBuildActions button.is-danger svg {
+  display: block;
+}
+
+.vs-layoutBuildActions button.is-danger:hover {
+  color: #f87171;
+  background: color-mix(in srgb, #f87171 12%, transparent);
+  border-color: transparent;
+}
+
+.vs-layoutBuildEmpty {
+  margin: 0.2rem 0.35rem 0.45rem;
+  color: var(--vs-muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.vs-chromeFlyout.is-menu button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 30px;
+  padding: 0.28rem 0.55rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--vs-text);
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vs-chromeFlyout.is-menu button:hover:not(:disabled) {
+  background: var(--vs-bg-hover);
+}
+
+.vs-chromeFlyout .vs-snapBar.is-inline {
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.vs-zoomWrap.is-settings {
+  margin-top: 0.65rem;
+}
+
+.vs-zoomControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.12rem;
+  border: 1px solid var(--vs-border);
+  border-radius: 10px;
+  background: var(--vs-bg-raised);
+}
+
+.vs-zoomBtn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--vs-muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.vs-zoomBtn:hover:not(:disabled) {
+  background: var(--vs-bg-hover);
+  color: var(--vs-text);
+}
+
+.vs-zoomBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.vs-zoomPct {
+  min-width: 52px;
+  height: 26px;
+  padding: 0 0.35rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--vs-text);
+  font: 700 0.72rem/1 "DM Sans", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.vs-zoomPct.is-default {
+  color: var(--vs-accent);
+}
+
+.vs-zoomPct:hover {
+  background: var(--vs-bg-hover);
+}
+
+.vs-zoomRange {
+  margin: 0.35rem 0 0;
+  color: var(--vs-muted);
+  font-size: 0.72rem;
+}
+
+/* Chrome-like zoom pill — only while Ctrl+/−/wheel */
+.vs-zoomHud {
+  position: fixed;
+  top: 52px;
+  left: 50%;
+  z-index: 120;
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: vs-zoomHudIn 0.16s ease-out;
+}
+
+.vs-zoomHudInner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.08rem;
+  padding: 0.18rem 0.22rem;
+  border: 1px solid color-mix(in srgb, var(--vs-border-strong) 88%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--vs-bg-raised) 92%, transparent);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 color-mix(in srgb, var(--vs-text) 6%, transparent);
+  backdrop-filter: blur(14px);
+  pointer-events: auto;
+}
+
+.vs-zoomHud .vs-zoomBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+}
+
+.vs-zoomHud .vs-zoomPct {
+  min-width: 54px;
+  height: 28px;
+  font-size: 0.76rem;
+}
+
+@keyframes vs-zoomHudIn {
+  from {
+    opacity: 0;
+    margin-top: -6px;
+  }
+  to {
+    opacity: 1;
+    margin-top: 0;
+  }
 }
 
 .vs-winControls {
   display: inline-flex;
   align-items: stretch;
-  margin-left: 0.35rem;
   height: 42px;
+  margin-left: 0.2rem;
 }
 
 .vs-winBtn {

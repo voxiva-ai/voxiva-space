@@ -29,7 +29,7 @@ export function WindowControls() {
   }, [refresh]);
 
   return (
-    <div className="vs-winControls" data-no-drag>
+    <div className="vs-winControls" data-no-drag onPointerDown={(e) => e.stopPropagation()}>
       <button
         type="button"
         className="vs-winBtn"

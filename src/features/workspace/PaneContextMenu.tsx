@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { Plus } from "@untitledui/icons";
 import { IconBrowser, IconRefresh, IconTerminal, IconX } from "@/components/icons";
 import { useSpace } from "@/features/workspace/SpaceContext";
+import { BROWSER_TAB, findLeaf, leafSurfaceCount } from "@/features/workspace/layout";
 
 export type PaneMenuState = {
   paneId: string;
@@ -16,6 +17,7 @@ export type PaneMenuState = {
   y: number;
   isBrowser: boolean;
   sessionId: string | null;
+  tabId: string | null;
 } | null;
 
 type PaneContextMenuProps = {
@@ -178,8 +180,11 @@ export function PaneContextMenu({ menu, onClose }: PaneContextMenuProps) {
     focusTerminalInPane,
     spawnInPane,
     closePane,
+    closePaneSurface,
+    dockPaneTab,
     restartSession,
     t,
+    activeWorkspace,
   } = useSpace();
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x: 0, y: 0 });
@@ -228,6 +233,13 @@ export function PaneContextMenu({ menu, onClose }: PaneContextMenuProps) {
   }, [menu, onClose]);
 
   if (!menuRef) return null;
+
+  const leaf = activeWorkspace ? findLeaf(activeWorkspace.layout, menuRef.paneId) : null;
+  const surfaces = leaf ? leafSurfaceCount(leaf) : 0;
+  const surfaceId =
+    menuRef.tabId ??
+    (menuRef.isBrowser ? BROWSER_TAB : menuRef.sessionId);
+  const canDetach = Boolean(surfaceId) && surfaces > 1;
 
   function run(action: () => void | Promise<void>) {
     onClose();
@@ -374,6 +386,25 @@ export function PaneContextMenu({ menu, onClose }: PaneContextMenuProps) {
               if (menuRef.sessionId) void restartSession(menuRef.sessionId);
             })
           }
+        />
+      ) : null}
+
+      {canDetach && surfaceId ? (
+        <Item
+          icon={<IconSplitSide />}
+          label={t("space.menu.detachTab")}
+          onSelect={() =>
+            run(() => dockPaneTab(menuRef.paneId, menuRef.paneId, surfaceId, "right"))
+          }
+        />
+      ) : null}
+
+      {surfaceId && surfaces > 1 ? (
+        <Item
+          icon={<IconX size={14} />}
+          label={t("term.closeTab")}
+          danger
+          onSelect={() => run(() => void closePaneSurface(menuRef.paneId, surfaceId))}
         />
       ) : null}
 

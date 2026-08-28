@@ -23,4 +23,4 @@ export type {
   ThemeId,
   ThemeTokens,
 } from "./catalog.generated";
-export { applyTheme } from "./applyTheme";
+export { applyTheme, subscribeTheme } from "./applyTheme";

@@ -90,7 +90,7 @@ function Codicon({
 
 
 
-/** Geometric X — centered stroke, stays square at 12–16px. */
+/** Geometric X — two equal diagonals through the center. */
 export const IconX = ({ size = 14, className }: IconProps) => (
   <svg
     width={size}
@@ -103,9 +103,15 @@ export const IconX = ({ size = 14, className }: IconProps) => (
     focusable={false}
   >
     <path
-      d="M4.25 4.25 11.75 11.75M11.75 4.25 4.25 11.75"
+      d="M4 4 12 12"
       stroke="currentColor"
-      strokeWidth="1.5"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+    />
+    <path
+      d="M12 4 4 12"
+      stroke="currentColor"
+      strokeWidth="1.75"
       strokeLinecap="round"
     />
   </svg>
@@ -143,48 +149,55 @@ export const IconExternalLink = (iconProps: IconProps) => (
 
 );
 
-/** VS Code–style primary sidebar toggle (left strip, no inner cross). */
-
+/** Sidebar layout toggle — stroke only, symmetric. */
 export const IconSidebar = ({ size = 16, className }: IconProps) => (
-
   <svg
-
     width={size}
-
     height={size}
-
     viewBox="0 0 16 16"
-
     fill="none"
-
+    xmlns="http://www.w3.org/2000/svg"
     className={className}
-
     aria-hidden
-
     focusable={false}
-
   >
-
-    <path
-
-      d="M3.5 2h9A1.5 1.5 0 0 1 14 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-9A1.5 1.5 0 0 1 3.5 2Z"
-
-      stroke="currentColor"
-
-      strokeWidth="1.25"
-
-    />
-
-    <path
-
-      d="M2.625 3.5c0-.483.392-.875.875-.875H6.25v11.75H3.5a.875.875 0 0 1-.875-.875V3.5Z"
-
-      fill="currentColor"
-
-    />
-
+    <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
+    <path d="M6 2.5v11" stroke="currentColor" strokeWidth="1.25" />
   </svg>
+);
 
+export const IconLayout = ({ size = 16, className }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    aria-hidden
+    focusable={false}
+  >
+    <rect x="2.5" y="2.5" width="4.2" height="11" rx="1" stroke="currentColor" strokeWidth="1.25" />
+    <rect x="8.3" y="2.5" width="5.2" height="5" rx="1" stroke="currentColor" strokeWidth="1.25" />
+    <rect x="8.3" y="9" width="5.2" height="4.5" rx="1" stroke="currentColor" strokeWidth="1.25" />
+  </svg>
+);
+
+export const IconMore = ({ size = 16, className }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="currentColor"
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    aria-hidden
+    focusable={false}
+  >
+    <circle cx="3.5" cy="8" r="1.25" />
+    <circle cx="8" cy="8" r="1.25" />
+    <circle cx="12.5" cy="8" r="1.25" />
+  </svg>
 );
 
 /** Planet / globe for browser */
@@ -242,6 +255,45 @@ export const IconSaveAll = ({ size = 16, className }: IconProps) => (
 );
 
 
+
+export const IconHistory = ({ size = 16, className }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    aria-hidden
+    focusable={false}
+  >
+    <circle cx="8" cy="8" r="5.25" stroke="currentColor" strokeWidth="1.25" />
+    <path
+      d="M8 5.25v3.1l2.1 1.25"
+      stroke="currentColor"
+      strokeWidth="1.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+/** Right assist panel toggle — stroke only, symmetric. */
+export const IconAssistPanel = ({ size = 16, className }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    aria-hidden
+    focusable={false}
+  >
+    <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
+    <path d="M10 2.5v11" stroke="currentColor" strokeWidth="1.25" />
+  </svg>
+);
 
 /** Geometric chevron — right by default; rotate 90° when open. */
 export const IconChevronRight = ({ size = 16, className }: IconProps) => (

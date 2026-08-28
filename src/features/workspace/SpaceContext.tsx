@@ -36,10 +36,15 @@ import {
 import { enqueueTerminalSpawn, yieldToUi } from "@/features/terminal/spawnQueue";
 import {
   outputNeedsAttention,
-  showAttentionToast,
 } from "@/features/attention/prefs";
+import {
+  clearAttentionNotifyState,
+  notifyAttention,
+  notifySessionExit,
+  shouldScanOutputForAttention,
+} from "@/features/attention/notify";
 import { browserClose, browserHideAll } from "@/features/browser/api";
-import { extractLocalUrlFromOutput, normalizeBrowserUrl, resolveOmniboxInput } from "@/features/browser/url";
+import { normalizeBrowserUrl, resolveOmniboxInput } from "@/features/browser/url";
 import {
   createTask,
   loadBoard,
@@ -65,18 +70,23 @@ import {
   resolveBotCommand,
   resumeCommandFor,
 } from "@/features/agents/bots";
+import {
+  detectAgentFromOutput,
+  isIdleShellTitle,
+  agentIdForSession,
+  agentIdFromCommand,
+} from "@/features/agents/sessionAgent";
 import type { TerminalExitEvent, TerminalOutputEvent } from "@/features/terminal/types";
 import {
   buildCreateLayout,
   buildGridLayout,
-  buildSnapLayout,
+  arrangeSnapLayout,
   collectLeaves,
   collectPaneIds,
   collectSessionIds,
   countLeaves,
   createLeaf,
   equalizeLayout,
-  expandLayoutToCount,
   findLeaf,
   findPaneForSession,
   firstPaneId,
@@ -85,32 +95,46 @@ import {
   removePane,
   clampLayoutRatios,
   setLeafBrowser,
+  setLeafMedia,
   openBrowserTab,
+  openMediaTab,
   closeBrowserTab,
   reorderLeafTabs,
+  placeLeafTab,
   dockTab,
+  BROWSER_TAB,
+  MEDIA_TAB,
   leafHasBrowser,
-  setLeafContents,
+  leafSurfaceCount,
   setLeafSession,
   addLeafSession,
   activateLeafSession,
   removeLeafSession,
+  replaceLeafSessionId,
   leafTabIds,
   setRatio,
-  shrinkLayoutToCount,
   addBrowserBeside,
   addBrowserAtZone,
+  addMediaAtZone,
   addShellBeside,
   addShellAtZone,
   addBrowserRoot,
   movePane,
   type DropZone,
 } from "./layout";
-import { loadPersisted, savePersisted, flushPersisted, type ThemeId } from "./persist";
+import { loadPersisted, savePersisted, flushPersisted, MAX_AGENT_RUNS, type ThemeId } from "./persist";
+import {
+  buildLayoutFromSaved,
+  captureWorkspaceLayout,
+  normalizeSavedLayouts,
+  savedLayoutPaneCount,
+  type SavedShellSpec,
+  type SavedWorkspaceLayout,
+} from "./savedLayouts";
 import { translate, type Locale, type MsgKey } from "@/i18n";
-import { playNotifySound } from "@/features/sounds/prefs";
 import { applyTheme, resolveThemeId } from "@/features/theme";
 import { syncWindowGlass } from "@/features/theme/windowGlass";
+import { isPreviewDropPath, openWorkspaceFilePreview } from "./workspaceFileDrop";
 
 const MAX_PANES = 8;
 const MAX_HISTORY = 48;
@@ -123,8 +147,16 @@ type SpawnOptions = {
   command?: string;
   accent?: Accent;
   paneId?: string;
+  /** Bot id when known (history / drag) — preferred over title matching. */
+  agentId?: string;
   /** replace = kill current tabs (default for empty). tab = add alongside. */
   mode?: "replace" | "tab";
+  /** History drop / repeat launch — do not steal focus of an already-live agent. */
+  forceNew?: boolean;
+  /** Bracketed paste payload after the shell is online (file drop on empty pane). */
+  paste?: string;
+  /** Spawn inside a specific workspace (resume/history — avoids stale activeWorkspace). */
+  workspaceId?: string;
 };
 
 type EnterSpaceOptions = {
@@ -248,7 +280,15 @@ type SpaceContextValue = {
   onboarded: boolean;
   setEditorDirty: (dirty: boolean) => void;
   takePendingPaneSpawn: (paneId: string) => SpawnOptions | null;
+  /** All pending spawns for a pane (multi-tab saved layouts). */
+  takePendingPaneSpawnQueue: (paneId: string) => SpawnOptions[];
   clearPendingPaneSpawn: (paneId: string) => void;
+  /** While held, empty panes must not auto-spawn a bare Shell. */
+  isEmptyPaneSpawnHeld: (paneId: string) => boolean;
+  /** True when an empty pane may auto-spawn Shell (not held, no tabs yet). */
+  shouldAutoSpawnShell: (paneId: string) => boolean;
+  /** Bumps when a hold is fully released so empty-pane effects can retry. */
+  emptyPaneSpawnEpoch: number;
   workspaces: Workspace[];
   activeWorkspace: Workspace | null;
   sessions: Record<string, TerminalSession>;
@@ -265,9 +305,11 @@ type SpaceContextValue = {
   ) => Promise<void>;
   /** Focus existing browser tab — never spawns a second pane. */
   focusBrowserInPane: (paneId?: string) => void;
+  focusMediaInPane: (paneId?: string) => void;
   focusTerminalInPane: (paneId?: string) => Promise<void>;
   closeBrowserTab: (paneId: string) => void;
   reorderPaneTabs: (paneId: string, fromId: string, toId: string) => void;
+  placePaneTab: (paneId: string, tabId: string, beforeId: string | null) => void;
   /** Drag a shell/browser tab onto another pane — keeps the live session / URL. */
   movePaneTab: (fromPaneId: string, toPaneId: string, tabId: string) => void;
   /** Drag a tab to a pane edge to split, or center to merge. */
@@ -305,6 +347,8 @@ type SpaceContextValue = {
   focusPane: (paneId: string) => void;
   swapPanes: (fromPaneId: string, toPaneId: string) => void;
   applySnapLayout: (id: SnapLayoutId, primaryPaneId?: string) => Promise<void>;
+  /** Drop a pane or tab onto a snap layout — extracts a tab first when needed. */
+  snapDragToLayout: (id: SnapLayoutId, fromPaneId: string, tabId?: string) => void;
   spawnInPane: (opts: SpawnOptions) => Promise<string | null>;
   spawnInFocused: (opts: SpawnOptions) => Promise<string | null>;
   spawnAllEmpty: () => Promise<void>;
@@ -312,9 +356,27 @@ type SpaceContextValue = {
   splitFocused: (direction: SplitDirection, paneId?: string) => Promise<void>;
   /** Split a new shell onto an edge of the pane. */
   splitShellAt: (paneId: string, zone: Exclude<DropZone, "center">) => Promise<void>;
+  /** Route Finder / clipboard file drop onto a pane zone (cmux-style). */
+  handleFileDropAt: (
+    paneId: string,
+    zone: DropZone,
+    pastePayload: string,
+    opts?: { shiftKey?: boolean; rawPaths?: string[] },
+  ) => Promise<void>;
+  /** Open image/media preview in the pane (or split zone) where it was dropped. */
+  openMediaPreviewAt: (paneId: string, zone: DropZone, absPath: string) => void;
+  clearPaneMedia: (paneId: string) => void;
+  takePendingSessionPaste: (sessionId: string) => string | null;
+  savedLayouts: SavedWorkspaceLayout[];
+  saveCurrentLayoutAs: (name: string) => void;
+  removeSavedLayout: (id: string) => void;
+  applySavedLayout: (id: string) => Promise<void>;
+  openNewSpaceFromLayout: (id: string) => Promise<void>;
   closeFocusedPane: () => Promise<void>;
   closePane: (paneId: string) => Promise<void>;
   closeSession: (sessionId: string) => Promise<void>;
+  /** Close one tab; if it is the last surface in the pane, close the pane. */
+  closePaneSurface: (paneId: string, tabId: string) => Promise<void>;
   renameSession: (sessionId: string, title: string) => void;
   activatePaneSession: (paneId: string, sessionId: string) => void;
   restartSession: (sessionId: string) => Promise<void>;
@@ -327,7 +389,9 @@ type SpaceContextValue = {
    */
   agentRuns: AgentRun[];
   /** Resumes the run inside its workspace, then navigates to the space view. */
-  resumeAgentRun: (run: AgentRun) => Promise<void>;
+  resumeAgentRun: (run: AgentRun, opts?: { paneId?: string; forceNew?: boolean }) => Promise<void>;
+  /** Drop a history run onto a pane (live dock or resume). */
+  resumeAgentRunAtDrop: (run: AgentRun, anchorPaneId: string, zone: DropZone) => Promise<void>;
   removeAgentRun: (id: string) => void;
   clearAgentRuns: () => void;
 };
@@ -345,7 +409,14 @@ function hydrateLayout(raw: unknown, savedSessions: Record<string, unknown> = {}
   if (!raw || typeof raw !== "object") return createLeaf(null);
   const node = raw as Record<string, unknown>;
   if (node.type === "leaf" && typeof node.paneId === "string") {
-    const kind = node.kind === "browser" ? "browser" : "terminal";
+    const kind =
+      node.kind === "browser"
+        ? "browser"
+        : node.kind === "media" ||
+            (typeof node.mediaPath === "string" && node.mediaPath) ||
+            (Array.isArray(node.tabOrder) && node.tabOrder.includes("__media__"))
+          ? "media"
+          : "terminal";
     return {
       type: "leaf",
       paneId: node.paneId,
@@ -359,8 +430,17 @@ function hydrateLayout(raw: unknown, savedSessions: Record<string, unknown> = {}
         : typeof node.sessionId === "string" && savedSessions[node.sessionId]
           ? [node.sessionId]
           : [],
-      // Never restore a saved page into a browser pane — always blank start.
-      browserUrl: kind === "browser" ? "" : null,
+      tabOrder: Array.isArray(node.tabOrder)
+        ? node.tabOrder.filter((id): id is string => typeof id === "string")
+        : undefined,
+      // Keep a browser tab if this pane had one; never restore the last URL.
+      browserUrl:
+        node.kind === "browser" ||
+        typeof node.browserUrl === "string" ||
+        (Array.isArray(node.tabOrder) && node.tabOrder.includes("__browser__"))
+          ? ""
+          : null,
+      mediaPath: typeof node.mediaPath === "string" ? node.mediaPath : null,
     };
   }
   if (node.type === "split" && node.first && node.second) {
@@ -379,14 +459,20 @@ function hydrateLayout(raw: unknown, savedSessions: Record<string, unknown> = {}
 export function SpaceProvider({ children }: { children: ReactNode }) {
   const persisted = useMemo(() => loadPersisted(), []);
   const [skipWelcome, setSkipWelcomeState] = useState(() => persisted?.skipWelcome === true);
-  // Show welcome on launch when skipWelcome is off (default). Never derived from onboarded.
-  const [welcomeVisible, setWelcomeVisible] = useState(() => persisted?.skipWelcome !== true);
+  // Welcome only when there is nothing to restore — existing spaces open instantly.
+  const [welcomeVisible, setWelcomeVisible] = useState(() => {
+    if (persisted?.skipWelcome === true) return false;
+    if (persisted?.workspaces?.length) return false;
+    return true;
+  });
   const [onboarded, setOnboarded] = useState(() => Boolean(persisted?.onboarded));
   const [view, setViewState] = useState<ViewId>("space");
   const viewRef = useRef<ViewId>("space");
   const viewTransitionRef = useRef(0);
   const editorDirtyRef = useRef(false);
   const pendingPaneSpawnsRef = useRef(new Map<string, SpawnOptions>());
+  const pendingPaneSpawnQueuesRef = useRef(new Map<string, SpawnOptions[]>());
+  const pendingSessionPasteRef = useRef(new Map<string, string>());
   const [workspaces, setWorkspaces] = useState<Workspace[]>(() => {
     if (persisted?.workspaces?.length) {
       return persisted.workspaces.map((w, index) => {
@@ -425,15 +511,21 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         shell: session.shell,
         accent: session.accent,
         initialCommand: session.initialCommand,
+        agentId: session.agentId,
         status: "closed" as const,
         needsAttention: false,
       }]),
     ),
   );
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
   // Only sessions loaded from disk auto-reopen; manually closed tabs stay closed.
   const restorePendingIdsRef = useRef(new Set(Object.keys(persisted?.sessions ?? {})));
   const [recentHistory, setRecentHistory] = useState<HistoryItem[]>(
     () => persisted?.recentHistory ?? [],
+  );
+  const [savedLayouts, setSavedLayouts] = useState<SavedWorkspaceLayout[]>(() =>
+    normalizeSavedLayouts(persisted?.savedLayouts),
   );
   const [agentRuns, setAgentRuns] = useState<AgentRun[]>(() => persisted?.agentRuns ?? []);
   // Always start blank — never auto-open a saved site (store.ql, vercel, etc.).
@@ -480,8 +572,28 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     return pendingPaneSpawnsRef.current.get(paneId) ?? null;
   }, []);
 
+  const takePendingPaneSpawnQueue = useCallback((paneId: string) => {
+    const queue = pendingPaneSpawnQueuesRef.current.get(paneId);
+    if (queue?.length) {
+      pendingPaneSpawnQueuesRef.current.delete(paneId);
+      return queue;
+    }
+    const single = pendingPaneSpawnsRef.current.get(paneId);
+    if (single) {
+      pendingPaneSpawnsRef.current.delete(paneId);
+      return [single];
+    }
+    return [];
+  }, []);
+
   const clearPendingPaneSpawn = useCallback((paneId: string) => {
     pendingPaneSpawnsRef.current.delete(paneId);
+  }, []);
+
+  const takePendingSessionPaste = useCallback((sessionId: string) => {
+    const payload = pendingSessionPasteRef.current.get(sessionId) ?? null;
+    if (payload) pendingSessionPasteRef.current.delete(sessionId);
+    return payload;
   }, []);
   const [agentAvailability, setAgentAvailability] = useState<AgentAvailability>({});
   const [agentsScanned, setAgentsScanned] = useState(false);
@@ -551,8 +663,10 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
           shell: session.shell,
           accent: session.accent,
           initialCommand: session.initialCommand,
+          agentId: session.agentId,
         }]),
       ),
+      savedLayouts,
     });
   }, [
     onboarded,
@@ -565,6 +679,8 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     theme,
     recentHistory,
     agentRuns,
+    sessions,
+    savedLayouts,
   ]);
 
   useEffect(() => {
@@ -598,33 +714,87 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   }, [refreshAgents, welcomeVisible]);
 
   const patchWorkspace = useCallback((id: string, updater: (ws: Workspace) => Workspace) => {
-    setWorkspaces((current) => current.map((ws) => (ws.id === id ? updater(ws) : ws)));
+    setWorkspaces((current) => {
+      const next = current.map((ws) => (ws.id === id ? updater(ws) : ws));
+      // Keep ref in sync for spawn/resume before the next React render.
+      workspacesRef.current = next;
+      return next;
+    });
   }, []);
 
-  const markAttention = useCallback((sessionId: string, reason?: string) => {
-    let shouldPlay = false;
-    let title = "Shell";
-    setSessions((current) => {
-      const session = current[sessionId];
-      if (!session || session.needsAttention) return current;
-      shouldPlay = true;
-      title = session.title || "Shell";
-      return { ...current, [sessionId]: { ...session, needsAttention: true } };
-    });
-    if (!shouldPlay) return;
-    let workspaceId: string | null = null;
-    for (const ws of workspacesRef.current) {
-      if (findPaneForSession(ws.layout, sessionId)) {
-        workspaceId = ws.id;
-        break;
-      }
-    }
-    playNotifySound("attention", {
-      workspaceId,
-      activeWorkspaceId: activeWorkspaceIdRef.current,
-    });
-    showAttentionToast(title, reason || "Needs attention");
+  /** Refcount of panes that must stay empty until resume/spawn finishes (no surprise Shell). */
+  const emptySpawnHoldRef = useRef(new Map<string, number>());
+  const [emptyPaneSpawnEpoch, setEmptyPaneSpawnEpoch] = useState(0);
+  const holdEmptyPaneSpawn = useCallback((paneId: string) => {
+    const map = emptySpawnHoldRef.current;
+    map.set(paneId, (map.get(paneId) ?? 0) + 1);
   }, []);
+  const releaseEmptyPaneSpawn = useCallback((paneId: string) => {
+    const map = emptySpawnHoldRef.current;
+    const next = (map.get(paneId) ?? 0) - 1;
+    if (next <= 0) {
+      map.delete(paneId);
+      setEmptyPaneSpawnEpoch((n) => n + 1);
+    } else {
+      map.set(paneId, next);
+    }
+  }, []);
+  const isEmptyPaneSpawnHeld = useCallback((paneId: string) => {
+    return (emptySpawnHoldRef.current.get(paneId) ?? 0) > 0;
+  }, []);
+  const shouldAutoSpawnShell = useCallback((paneId: string) => {
+    if ((emptySpawnHoldRef.current.get(paneId) ?? 0) > 0) return false;
+    const wsId = activeWorkspaceIdRef.current;
+    const ws = workspacesRef.current.find((w) => w.id === wsId);
+    if (!ws) return false;
+    const leaf = findLeaf(ws.layout, paneId);
+    if (!leaf) return false;
+    if (leaf.kind === "browser" || leaf.kind === "media") return false;
+    if (leaf.mediaPath || leaf.browserUrl !== null) return false;
+    return leafTabIds(leaf).length === 0;
+  }, []);
+
+  const isSessionFocused = useCallback((sessionId: string) => {
+    const wsId = activeWorkspaceIdRef.current;
+    const ws = workspacesRef.current.find((w) => w.id === wsId);
+    if (!ws) return false;
+    const leaf = findLeaf(ws.layout, ws.focusedPaneId);
+    if (!leaf) return false;
+    return leaf.sessionId === sessionId || leafTabIds(leaf).includes(sessionId);
+  }, []);
+
+  const workspaceForSession = useCallback((sessionId: string) => {
+    for (const ws of workspacesRef.current) {
+      if (findPaneForSession(ws.layout, sessionId)) return ws.id;
+    }
+    return null;
+  }, []);
+
+  const markAttention = useCallback(
+    (sessionId: string, reason?: string) => {
+      let shouldMark = false;
+      let title = "Shell";
+      setSessions((current) => {
+        const session = current[sessionId];
+        if (!session || session.needsAttention) return current;
+        shouldMark = true;
+        title = session.title || "Shell";
+        return { ...current, [sessionId]: { ...session, needsAttention: true } };
+      });
+      if (!shouldMark) return;
+
+      const workspaceId = workspaceForSession(sessionId);
+      notifyAttention({
+        sessionId,
+        workspaceId,
+        activeWorkspaceId: activeWorkspaceIdRef.current,
+        isFocusedSession: isSessionFocused(sessionId),
+        reason,
+        title,
+      });
+    },
+    [isSessionFocused, workspaceForSession],
+  );
 
   useEffect(() => {
     void companionStatus()
@@ -641,17 +811,65 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unlistenOutput = listen<TerminalOutputEvent>("terminal://output", (event) => {
+      const sessionId = event.payload.id;
       const data = event.payload.data;
       if (isCompanionLive()) {
-        void companionAppendOutput(event.payload.id, data).catch(() => undefined);
+        void companionAppendOutput(sessionId, data).catch(() => undefined);
       }
-      if (outputNeedsAttention(data)) {
-        markAttention(event.payload.id, "Task finished or waiting for input");
+
+      if (shouldScanOutputForAttention(sessionId) && outputNeedsAttention(data)) {
+        markAttention(sessionId, "Task finished or waiting for input");
       }
-      const local = extractLocalUrlFromOutput(data);
-      if (local && local !== lastSuggestedUrlRef.current) {
-        lastSuggestedUrlRef.current = local;
-        setSuggestedLocalUrl(local);
+
+      const session = sessionsRef.current[sessionId];
+      if (!session || !isIdleShellTitle(session.title)) return;
+
+      const agentId = detectAgentFromOutput(data);
+      if (!agentId) return;
+
+      const bot = agentBots.find((b) => b.id === agentId);
+      if (!bot) return;
+
+      setSessions((current) => {
+        const s = current[sessionId];
+        if (!s || !isIdleShellTitle(s.title)) return current;
+        return {
+          ...current,
+          [sessionId]: {
+            ...s,
+            title: bot.name,
+            initialCommand: bot.command,
+            accent: bot.accent,
+            agentId: bot.id,
+          },
+        };
+      });
+      for (const ws of workspacesRef.current) {
+        const pane = findPaneForSession(ws.layout, sessionId);
+        if (!pane) continue;
+        setAgentRuns((current) => {
+          if (current.some((run) => run.sessionId === sessionId && run.agentId === bot.id)) {
+            return current;
+          }
+          return [
+            {
+              id: uid("run"),
+              at: Date.now(),
+              agentId: bot.id,
+              agentName: bot.name,
+              workspaceId: ws.id,
+              workspaceName: ws.name,
+              cwd: ws.cwd,
+              command: bot.command,
+              shell: bot.shell ?? null,
+              accent: bot.accent,
+              sessionId,
+              paneId: pane,
+            },
+            ...current,
+          ].slice(0, MAX_AGENT_RUNS);
+        });
+        break;
       }
     });
     const unlistenExit = listen<TerminalExitEvent>("terminal://exit", (event) => {
@@ -666,18 +884,13 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
           [sessionId]: { ...session, status: "closed", needsAttention: true },
         };
       });
-      let workspaceId: string | null = null;
-      for (const ws of workspacesRef.current) {
-        if (findPaneForSession(ws.layout, sessionId)) {
-          workspaceId = ws.id;
-          break;
-        }
-      }
-      playNotifySound("exit", {
-        workspaceId,
+      notifySessionExit({
+        sessionId,
+        workspaceId: workspaceForSession(sessionId),
         activeWorkspaceId: activeWorkspaceIdRef.current,
+        isFocusedSession: isSessionFocused(sessionId),
+        title,
       });
-      showAttentionToast(title, "Session finished");
     });
     const unlistenAttention = listen<{ id: string }>("terminal://attention", (event) => {
       markAttention(event.payload.id);
@@ -687,7 +900,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       void unlistenExit.then((u) => u());
       void unlistenAttention.then((u) => u());
     };
-  }, [markAttention]);
+  }, [markAttention, isSessionFocused, workspaceForSession]);
 
   const pushHistory = useCallback((item: Omit<HistoryItem, "at"> & { at?: number }) => {
     const entry: HistoryItem = { ...item, at: item.at ?? Date.now() };
@@ -715,18 +928,24 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   const recordAgentRun = useCallback((run: Omit<AgentRun, "id" | "at">) => {
     const entry: AgentRun = { ...run, id: uid("run"), at: Date.now() };
     setAgentRuns((current) => {
-      // Dedupe: consecutive launches of the same agent in the same space within 5s.
       const last = current[0];
       if (
         last &&
         last.agentId === entry.agentId &&
         last.workspaceId === entry.workspaceId &&
-        entry.at - last.at < 5000
+        entry.at - last.at < 5000 &&
+        last.sessionId === entry.sessionId
       ) {
         return current;
       }
-      return [entry, ...current].slice(0, 80);
+      return [entry, ...current].slice(0, MAX_AGENT_RUNS);
     });
+  }, []);
+
+  const touchAgentRun = useCallback((runId: string, patch: Partial<Pick<AgentRun, "sessionId" | "paneId" | "at">>) => {
+    setAgentRuns((current) =>
+      current.map((run) => (run.id === runId ? { ...run, ...patch, at: patch.at ?? Date.now() } : run)),
+    );
   }, []);
 
   const selectWorkspace = useCallback(
@@ -792,7 +1011,9 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
 
   const spawnInPane = useCallback(
     async (opts: SpawnOptions) => {
-      const workspace = activeWorkspace;
+      const workspace =
+        (opts.workspaceId && workspacesRef.current.find((w) => w.id === opts.workspaceId)) ||
+        activeWorkspace;
       if (!workspace) return null;
       const paneId = opts.paneId ?? workspace.focusedPaneId;
       const leaf = findLeaf(workspace.layout, paneId);
@@ -821,6 +1042,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
           accent: opts.accent ?? "green",
           needsAttention: false,
           initialCommand: opts.command?.trim() || undefined,
+          agentId: opts.agentId ?? agentIdFromCommand(opts.command) ?? undefined,
         };
         setSessions((current) => {
           const next = { ...current, [session.id]: session };
@@ -840,6 +1062,11 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
             : setLeafSession(ws.layout, paneId, session.id),
           focusedPaneId: paneId,
         }));
+        if (opts.paste?.trim()) {
+          window.setTimeout(() => {
+            void writeTerminalSession(created.id, opts.paste!).catch(() => undefined);
+          }, 80);
+        }
         return created.id;
       } catch (err) {
         setError(clientError(err));
@@ -876,12 +1103,14 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     const panes = collectPaneIds(activeWorkspace.layout);
     for (const paneId of panes) {
       const leaf = findLeaf(activeWorkspace.layout, paneId);
-      if (leaf && leaf.kind !== "browser" && !leaf.sessionId) {
-        await enqueueTerminalSpawn(async () => {
-          await yieldToUi(40);
-          return spawnInPane({ title: "Shell", paneId, accent: "green", mode: "replace" });
-        });
-      }
+      if (!leaf) continue;
+      if (leaf.kind === "browser" || leaf.kind === "media") continue;
+      if (leaf.mediaPath || leaf.browserUrl !== null) continue;
+      if (leafTabIds(leaf).length > 0) continue;
+      await enqueueTerminalSpawn(async () => {
+        await yieldToUi(40);
+        return spawnInPane({ title: "Shell", paneId, accent: "green", mode: "replace" });
+      });
     }
   }, [activeWorkspace, spawnInPane]);
 
@@ -938,6 +1167,18 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     [activeWorkspace, patchWorkspace],
   );
 
+  const placePaneTab = useCallback(
+    (paneId: string, tabId: string, beforeId: string | null) => {
+      if (!activeWorkspace) return;
+      patchWorkspace(activeWorkspace.id, (ws) => ({
+        ...ws,
+        layout: placeLeafTab(ws.layout, paneId, tabId, beforeId),
+        focusedPaneId: paneId,
+      }));
+    },
+    [activeWorkspace, patchWorkspace],
+  );
+
   const focusBrowserInPane = useCallback(
     (targetPaneId?: string) => {
       if (!activeWorkspace) return;
@@ -946,6 +1187,22 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       patchWorkspace(activeWorkspace.id, (ws) => ({
         ...ws,
         layout: openBrowserTab(ws.layout, paneId),
+        focusedPaneId: paneId,
+      }));
+      setView("space");
+    },
+    [activeWorkspace, patchWorkspace],
+  );
+
+  const focusMediaInPane = useCallback(
+    (targetPaneId?: string) => {
+      if (!activeWorkspace) return;
+      const paneId = targetPaneId ?? activeWorkspace.focusedPaneId;
+      const leaf = findLeaf(activeWorkspace.layout, paneId);
+      if (!leaf?.mediaPath) return;
+      patchWorkspace(activeWorkspace.id, (ws) => ({
+        ...ws,
+        layout: openMediaTab(ws.layout, paneId, leaf.mediaPath!),
         focusedPaneId: paneId,
       }));
       setView("space");
@@ -1110,7 +1367,9 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     if (!next) return;
     if (next === lastSuggestedUrlRef.current) return;
     lastSuggestedUrlRef.current = next;
-    setSuggestedLocalUrl(next);
+    window.dispatchEvent(
+      new CustomEvent("voxiva-assist-open", { detail: { tab: "browser", url: next } }),
+    );
   }, []);
 
   useEffect(() => {
@@ -1159,13 +1418,67 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       setActiveWorkspaceId(workspaceId);
       setView("space");
       void (async () => {
-        if (agentId && agentId !== "shell") {
-          const bot = agentBots.find((b) => b.id === agentId);
-          if (!bot) return;
-          const cmd =
-            resolveBotCommand(bot, agentAvailability) || bot.command || command || undefined;
+        const bot =
+          agentId && agentId !== "shell" ? agentBots.find((b) => b.id === agentId) : undefined;
+        const cmd = bot
+          ? resolveBotCommand(bot, agentAvailability) || bot.command || command || undefined
+          : command || undefined;
+        const wantTitle = title || bot?.name || "Shell";
+
+        const liveMatch = Object.values(sessionsRef.current).find((s) => {
+          if (s.status !== "online") return false;
+          if (!findPaneForSession(ws.layout, s.id)) return false;
+          if (bot) {
+            return (
+              s.title === bot.name ||
+              s.initialCommand === bot.command ||
+              (cmd && s.initialCommand === cmd)
+            );
+          }
+          return false;
+        });
+        if (liveMatch) {
+          const pane = findPaneForSession(ws.layout, liveMatch.id);
+          if (pane) activatePaneSession(pane, liveMatch.id);
+          return;
+        }
+
+        const leaf = findLeaf(ws.layout, ws.focusedPaneId);
+        const activeId = leaf?.sessionId;
+        const active = activeId ? sessionsRef.current[activeId] : null;
+        if (bot && cmd && active?.status === "online" && isIdleShellTitle(active.title)) {
+          setSessions((current) => {
+            const s = current[active.id];
+            if (!s) return current;
+            return {
+              ...current,
+              [active.id]: {
+                ...s,
+                title: wantTitle,
+                initialCommand: cmd,
+                accent: bot.accent,
+              },
+            };
+          });
+          void writeTerminalSession(active.id, `${cmd}\r`).catch(() => undefined);
+          recordAgentRun({
+            agentId: bot.id,
+            agentName: wantTitle,
+            workspaceId: ws.id,
+            workspaceName: ws.name,
+            cwd: ws.cwd,
+            command: cmd,
+            shell: bot.shell ?? null,
+            accent: bot.accent,
+            sessionId: active.id,
+            paneId: ws.focusedPaneId,
+          });
+          return;
+        }
+
+        if (bot) {
           const id = await spawnInPane({
-            title: title || bot.name,
+            title: wantTitle,
             command: cmd,
             paneId: ws.focusedPaneId,
             accent: bot.accent,
@@ -1174,20 +1487,22 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
           if (id) {
             recordAgentRun({
               agentId: bot.id,
-              agentName: title || bot.name,
+              agentName: wantTitle,
               workspaceId: ws.id,
               workspaceName: ws.name,
               cwd: ws.cwd,
               command: cmd,
               shell: bot.shell ?? null,
               accent: bot.accent,
+              sessionId: id,
+              paneId: ws.focusedPaneId,
             });
           }
           return;
         }
         await spawnInPane({
-          title: title || "Shell",
-          command: command || undefined,
+          title: wantTitle,
+          command: cmd,
           paneId: ws.focusedPaneId,
           accent: "green",
           mode: "tab",
@@ -1197,7 +1512,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     return () => {
       void unlisten.then((u) => u());
     };
-  }, [agentAvailability, recordAgentRun, setView, spawnInPane]);
+  }, [activatePaneSession, agentAvailability, recordAgentRun, setView, spawnInPane]);
 
   useEffect(() => {
     if (!companionRunning) return;
@@ -1336,8 +1651,9 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
 
   const launchAgent = useCallback(
     async (opts: SpawnOptions) => {
+      const baseCmd = (opts.command || "").trim().split(/\s+/)[0] || "";
       const missing = Boolean(
-        opts.command && agentsScanned && agentAvailability[opts.command] !== true,
+        baseCmd && agentsScanned && agentAvailability[baseCmd] !== true,
       );
       setView("space");
       const workspace = activeWorkspace;
@@ -1346,41 +1662,112 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         return null;
       }
 
-      let paneId = workspace.focusedPaneId;
+      let paneId =
+        opts.paneId && findLeaf(workspace.layout, opts.paneId)
+          ? opts.paneId
+          : workspace.focusedPaneId;
       if (!findLeaf(workspace.layout, paneId)) {
         paneId = firstPaneId(workspace.layout);
       }
 
       setError(missing ? t("agents.missingHint") : "");
-      // Sibling tab — never wipe shells/browser already in the pane (OpenCode + brush).
-      const id = await spawnInPane({
-        ...opts,
-        title: opts.title || opts.command || "Agent",
-        paneId,
-        mode: "tab",
-      });
-      if (id) {
-        const bot = agentBots.find((b) => b.name === opts.title);
+      const bot =
+        agentBots.find((b) => b.id === opts.agentId) ||
+        agentBots.find((b) => b.name === opts.title) ||
+        agentBots.find((b) => b.command === baseCmd || (b.commands ?? []).includes(baseCmd));
+      const cmd = opts.command || bot?.command;
+
+      if (!opts.forceNew) {
+        const liveMatch = Object.values(sessions).find((s) => {
+          if (s.status !== "online") return false;
+          if (!findPaneForSession(workspace.layout, s.id)) return false;
+          return (
+            (bot && (s.title === bot.name || agentIdForSession(s) === bot.id)) ||
+            (cmd && s.initialCommand === cmd) ||
+            (baseCmd && s.initialCommand?.split(/\s+/)[0] === baseCmd) ||
+            s.title === (opts.title || "")
+          );
+        });
+        if (liveMatch) {
+          const pane = findPaneForSession(workspace.layout, liveMatch.id);
+          if (pane) activatePaneSession(pane, liveMatch.id);
+          return liveMatch.id;
+        }
+      }
+
+      const leaf = findLeaf(workspace.layout, paneId);
+      const active = leaf?.sessionId ? sessions[leaf.sessionId] : null;
+      if (active?.status === "online" && isIdleShellTitle(active.title) && cmd) {
+        setSessions((current) => {
+          const s = current[active.id];
+          if (!s) return current;
+          return {
+            ...current,
+            [active.id]: {
+              ...s,
+              title: opts.title || bot?.name || cmd,
+              initialCommand: cmd,
+              accent: opts.accent ?? bot?.accent ?? s.accent,
+              agentId: bot?.id ?? opts.agentId ?? agentIdFromCommand(cmd) ?? s.agentId,
+            },
+          };
+        });
+        void writeTerminalSession(active.id, `${cmd}\r`).catch(() => undefined);
         recordAgentRun({
-          agentId: bot?.id ?? opts.command ?? "shell",
+          agentId: bot?.id ?? (baseCmd || opts.command || "shell"),
           agentName: opts.title,
           workspaceId: workspace.id,
           workspaceName: workspace.name,
           cwd: workspace.cwd,
-          command: opts.command,
+          command: bot?.command ?? (baseCmd || cmd),
           shell: opts.shell ?? null,
           accent: opts.accent ?? bot?.accent ?? "green",
+          sessionId: active.id,
+          paneId,
+        });
+        return active.id;
+      }
+
+      // Sibling tab — never wipe shells/browser already in the pane.
+      const id = await spawnInPane({
+        ...opts,
+        title: opts.title || bot?.name || opts.command || "Agent",
+        paneId,
+        mode: "tab",
+        agentId: bot?.id ?? opts.agentId,
+      });
+      if (id) {
+        recordAgentRun({
+          agentId: bot?.id ?? (baseCmd || opts.command || "shell"),
+          agentName: opts.title,
+          workspaceId: workspace.id,
+          workspaceName: workspace.name,
+          cwd: workspace.cwd,
+          command: bot?.command ?? (baseCmd || opts.command),
+          shell: opts.shell ?? null,
+          accent: opts.accent ?? bot?.accent ?? "green",
+          sessionId: id,
+          paneId,
         });
       }
       if (!id && missing) setError(t("agents.missingHint"));
       return id;
     },
-    [activeWorkspace, agentAvailability, agentsScanned, recordAgentRun, spawnInPane, t],
+    [activatePaneSession, activeWorkspace, agentAvailability, agentsScanned, recordAgentRun, sessions, spawnInPane, t],
   );
 
   const resumeAgentRun = useCallback(
-    async (run: AgentRun) => {
-      const ws = workspaces.find((w) => w.id === run.workspaceId);
+    async (run: AgentRun, opts?: { paneId?: string; forceNew?: boolean }) => {
+      let ws = workspacesRef.current.find((w) => w.id === run.workspaceId);
+      if (!ws && run.vaultId) {
+        const norm = run.cwd.replace(/\\/g, "/").toLowerCase();
+        ws =
+          workspacesRef.current.find(
+            (w) => w.cwd.replace(/\\/g, "/").toLowerCase() === norm,
+          ) ??
+          workspacesRef.current.find((w) => w.id === activeWorkspaceIdRef.current) ??
+          workspacesRef.current[0];
+      }
       if (!ws) {
         setError(t("recentAgents.gone"));
         return;
@@ -1388,20 +1775,196 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       setActiveWorkspaceId(ws.id);
       setView("space");
       setError("");
-      // Push history like selectWorkspace does.
       pushHistory({ workspaceId: ws.id, workspaceName: ws.name, cwd: ws.cwd });
+
+      const liveSessions = sessionsRef.current;
+
+      if (!opts?.forceNew && run.sessionId && run.paneId) {
+        const session = liveSessions[run.sessionId];
+        const leaf = findLeaf(ws.layout, run.paneId);
+        const tabs = leaf ? leafTabIds(leaf) : [];
+        if (session?.status === "online" && tabs.includes(run.sessionId)) {
+          // Focus existing only when staying on that pane — never steal it for another drop target.
+          if (!opts?.paneId || opts.paneId === run.paneId) {
+            activatePaneSession(run.paneId, run.sessionId);
+            touchAgentRun(run.id, { at: Date.now() });
+            return;
+          }
+        }
+      }
+
       const bot = agentBots.find((b) => b.id === run.agentId);
-      const command = resumeCommandFor(bot, run.command, agentAvailability);
-      await spawnInPane({
-        title: run.agentName,
-        command: command ?? undefined,
-        shell: run.shell ?? (preferredShell.trim() || null),
-        accent: run.accent,
-        paneId: ws.focusedPaneId,
-        mode: "tab",
-      });
+      const command =
+        run.resumeCommand?.trim() ||
+        resumeCommandFor(bot, run.command, agentAvailability);
+      if (!command) {
+        setError(t("agents.missingHint"));
+        return;
+      }
+
+      const paneId =
+        opts?.paneId && findLeaf(workspacesRef.current.find((w) => w.id === ws.id)?.layout ?? ws.layout, opts.paneId)
+          ? opts.paneId
+          : run.paneId && findLeaf(workspacesRef.current.find((w) => w.id === ws.id)?.layout ?? ws.layout, run.paneId)
+            ? run.paneId
+            : (workspacesRef.current.find((w) => w.id === ws.id) ?? ws).focusedPaneId;
+
+      // Block empty-pane auto-Shell until we finish writing/spawning the resume CLI.
+      holdEmptyPaneSpawn(paneId);
+      try {
+        // Let an in-flight empty Shell land so we can reuse it instead of racing replace.
+        if (!opts?.forceNew) {
+          await yieldToUi(80);
+        }
+
+        const liveWs = workspacesRef.current.find((w) => w.id === ws.id) ?? ws;
+        const sessionsNow = sessionsRef.current;
+        const leaf = findLeaf(liveWs.layout, paneId);
+        const tabIds = leaf ? leafTabIds(leaf) : [];
+        const activeId =
+          leaf?.sessionId && tabIds.includes(leaf.sessionId) ? leaf.sessionId : (tabIds[0] ?? null);
+        const active = activeId ? sessionsNow[activeId] : null;
+        const tabTitle = bot?.name || run.agentName || command;
+
+        // Reuse a lone idle Shell only — never kill/replace other tabs or agents.
+        if (
+          !opts?.forceNew &&
+          tabIds.length <= 1 &&
+          active?.status === "online" &&
+          isIdleShellTitle(active.title)
+        ) {
+          setSessions((current) => {
+            const s = current[active.id];
+            if (!s) return current;
+            return {
+              ...current,
+              [active.id]: {
+                ...s,
+                title: tabTitle,
+                initialCommand: command,
+                accent: run.accent ?? bot?.accent ?? s.accent,
+                agentId: run.agentId ?? bot?.id ?? s.agentId,
+              },
+            };
+          });
+          activatePaneSession(paneId, active.id);
+          window.setTimeout(() => {
+            void writeTerminalSession(active.id, `${command}\r`).catch(() => undefined);
+          }, 450);
+          touchAgentRun(run.id, { sessionId: active.id, paneId, at: Date.now() });
+          return;
+        }
+
+        // Always add a tab — keep every existing session/browser/media in the pane.
+        const id = await spawnInPane({
+          title: tabTitle,
+          command,
+          shell: run.shell ?? (preferredShell.trim() || null),
+          accent: run.accent ?? bot?.accent,
+          paneId,
+          mode: "tab",
+          workspaceId: ws.id,
+          agentId: run.agentId ?? bot?.id,
+        });
+        if (id) {
+          activatePaneSession(paneId, id);
+          touchAgentRun(run.id, { sessionId: id, paneId, at: Date.now() });
+        } else {
+          setError(t("agents.missingHint"));
+        }
+      } finally {
+        releaseEmptyPaneSpawn(paneId);
+      }
     },
-    [workspaces, pushHistory, setView, agentAvailability, preferredShell],
+    [
+      pushHistory,
+      setView,
+      agentAvailability,
+      preferredShell,
+      activatePaneSession,
+      spawnInPane,
+      touchAgentRun,
+      holdEmptyPaneSpawn,
+      releaseEmptyPaneSpawn,
+      t,
+    ],
+  );
+
+  const resumeAgentRunAtDrop = useCallback(
+    async (run: AgentRun, anchorPaneId: string, zone: DropZone) => {
+      let ws = workspacesRef.current.find((w) => w.id === run.workspaceId);
+      if (!ws && run.vaultId) {
+        const norm = run.cwd.replace(/\\/g, "/").toLowerCase();
+        ws =
+          workspacesRef.current.find(
+            (w) => w.cwd.replace(/\\/g, "/").toLowerCase() === norm,
+          ) ??
+          workspacesRef.current.find((w) => w.id === activeWorkspaceIdRef.current) ??
+          workspacesRef.current[0];
+      }
+      if (!ws) {
+        setError(t("recentAgents.gone"));
+        return;
+      }
+      const sameWorkspace = ws.id === activeWorkspaceIdRef.current;
+
+      // History drop never steals/moves a live tab — always open another resume
+      // beside (edge) or as a new tab (empty center). Keep originals intact.
+
+      let targetPaneId = anchorPaneId;
+      if (sameWorkspace && findLeaf(ws.layout, anchorPaneId) && zone !== "center") {
+        if (countLeaves(ws.layout) >= MAX_PANES) {
+          setError(`You can open up to ${MAX_PANES} panes in one workspace.`);
+          return;
+        }
+        const added = addShellAtZone(ws.layout, anchorPaneId, zone);
+        if (!added) return;
+        // Hold before layout commit so the new empty leaf never auto-spawns Shell.
+        holdEmptyPaneSpawn(added.paneId);
+        patchWorkspace(ws.id, (w) => ({
+          ...w,
+          layout: added.layout,
+          focusedPaneId: added.paneId,
+        }));
+        targetPaneId = added.paneId;
+        setView("space");
+        await yieldToUi(40);
+        try {
+          await resumeAgentRun(run, { paneId: targetPaneId, forceNew: true });
+        } finally {
+          releaseEmptyPaneSpawn(added.paneId);
+        }
+        return;
+      }
+
+      if (!sameWorkspace) {
+        targetPaneId =
+          run.paneId && findLeaf(ws.layout, run.paneId) ? run.paneId : ws.focusedPaneId;
+      } else {
+        // Center drop — hold so in-flight empty Shell cannot replace the resume.
+        holdEmptyPaneSpawn(targetPaneId);
+      }
+
+      try {
+        // forceNew: keep every existing tab; open resume as an extra tab (or new edge pane).
+        await resumeAgentRun(run, {
+          paneId: targetPaneId,
+          forceNew: true,
+        });
+      } finally {
+        if (sameWorkspace) {
+          releaseEmptyPaneSpawn(targetPaneId);
+        }
+      }
+    },
+    [
+      setView,
+      patchWorkspace,
+      resumeAgentRun,
+      holdEmptyPaneSpawn,
+      releaseEmptyPaneSpawn,
+      t,
+    ],
   );
 
   const removeAgentRun = useCallback((id: string) => {
@@ -1521,35 +2084,40 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   const applySnapLayout = useCallback(
     async (id: SnapLayoutId, primaryPaneId?: string) => {
       if (!activeWorkspace) return;
-      const oldLeaves = [...collectLeaves(activeWorkspace.layout)];
-      if (oldLeaves.length === 0) return;
-      if (primaryPaneId) {
-        const idx = oldLeaves.findIndex((leaf) => leaf.paneId === primaryPaneId);
-        if (idx > 0) {
-          const [primary] = oldLeaves.splice(idx, 1);
-          oldLeaves.unshift(primary);
-        }
-      }
-
-      // Snap is arrangement only — never destroy existing panes/sessions.
-      let layout = buildSnapLayout(id);
-      const need = oldLeaves.length;
-      if (countLeaves(layout) < need) layout = expandLayoutToCount(layout, need);
-      else if (countLeaves(layout) > need) layout = shrinkLayoutToCount(layout, need);
-
-      const paneIds = collectPaneIds(layout);
-      for (let i = 0; i < oldLeaves.length; i += 1) {
-        const prev = oldLeaves[i];
-        const paneId = paneIds[i];
-        if (!prev || !paneId) continue;
-        layout = setLeafContents(layout, paneId, prev);
-      }
-
+      const layout = arrangeSnapLayout(activeWorkspace.layout, id, primaryPaneId);
+      const focused =
+        (primaryPaneId && findLeaf(layout, primaryPaneId)?.paneId) || firstPaneId(layout);
       patchWorkspace(activeWorkspace.id, (ws) => ({
         ...ws,
-        layout: clampLayoutRatios(layout),
-        focusedPaneId: paneIds[0] ?? firstPaneId(layout),
+        layout,
+        focusedPaneId: focused,
       }));
+    },
+    [activeWorkspace, patchWorkspace],
+  );
+
+  const snapDragToLayout = useCallback(
+    (id: SnapLayoutId, fromPaneId: string, tabId?: string) => {
+      if (!activeWorkspace) return;
+      patchWorkspace(activeWorkspace.id, (ws) => {
+        let layout = ws.layout;
+        let primary = fromPaneId;
+        if (tabId) {
+          const leaf = findLeaf(layout, fromPaneId);
+          if (leaf && leafSurfaceCount(leaf) >= 2) {
+            const docked = dockTab(layout, fromPaneId, fromPaneId, tabId, "right");
+            layout = docked.layout;
+            primary = docked.focusPaneId;
+          }
+        }
+        layout = arrangeSnapLayout(layout, id, primary);
+        return {
+          ...ws,
+          layout,
+          focusedPaneId: findLeaf(layout, primary)?.paneId ?? firstPaneId(layout),
+        };
+      });
+      setView("space");
     },
     [activeWorkspace, patchWorkspace],
   );
@@ -1592,7 +2160,237 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       }));
       setView("space");
     },
+    [activeWorkspace, patchWorkspace, setView],
+  );
+
+  const openMediaPreviewAt = useCallback(
+    (paneId: string, zone: DropZone, absPath: string) => {
+      if (!activeWorkspace) return;
+      const trimmed = absPath.trim();
+      if (!trimmed) return;
+      focusPane(paneId);
+      setView("space");
+
+      if (zone !== "center") {
+        if (countLeaves(activeWorkspace.layout) >= MAX_PANES) {
+          setError(`You can open up to ${MAX_PANES} panes in one workspace.`);
+          return;
+        }
+        const added = addMediaAtZone(activeWorkspace.layout, paneId, zone, trimmed);
+        if (!added) return;
+        patchWorkspace(activeWorkspace.id, (ws) => ({
+          ...ws,
+          layout: added.layout,
+          focusedPaneId: added.paneId,
+        }));
+        return;
+      }
+
+      patchWorkspace(activeWorkspace.id, (ws) => ({
+        ...ws,
+        layout: setLeafMedia(ws.layout, paneId, trimmed),
+        focusedPaneId: paneId,
+      }));
+    },
+    [activeWorkspace, focusPane, patchWorkspace, setView],
+  );
+
+  const clearPaneMedia = useCallback(
+    (paneId: string) => {
+      if (!activeWorkspace) return;
+      patchWorkspace(activeWorkspace.id, (ws) => ({
+        ...ws,
+        layout: setLeafMedia(ws.layout, paneId, null),
+      }));
+    },
     [activeWorkspace, patchWorkspace],
+  );
+
+  const handleFileDropAt = useCallback(
+    async (
+      paneId: string,
+      zone: DropZone,
+      pastePayload: string,
+      opts?: { shiftKey?: boolean; rawPaths?: string[] },
+    ) => {
+      if (!activeWorkspace) return;
+      const previewPath = opts?.rawPaths?.find(
+        (p) =>
+          p &&
+          isPreviewDropPath(p) &&
+          (/[\\/]/.test(p) || /^[a-zA-Z]:/.test(p) || p.startsWith("/")),
+      );
+      if (previewPath) {
+        focusPane(paneId);
+        setView("space");
+        if (opts?.shiftKey) {
+          openWorkspaceFilePreview(previewPath);
+        } else {
+          openMediaPreviewAt(paneId, zone, previewPath);
+        }
+        return;
+      }
+
+      if (!pastePayload.trim()) return;
+      const leaf = findLeaf(activeWorkspace.layout, paneId);
+      if (!leaf) return;
+      focusPane(paneId);
+      setView("space");
+
+      if (zone !== "center") {
+        if (countLeaves(activeWorkspace.layout) >= MAX_PANES) {
+          setError(`You can open up to ${MAX_PANES} panes in one workspace.`);
+          return;
+        }
+        const added = addShellAtZone(activeWorkspace.layout, paneId, zone);
+        if (!added) return;
+        pendingPaneSpawnsRef.current.set(added.paneId, {
+          title: "Shell",
+          accent: "green",
+          paneId: added.paneId,
+          paste: pastePayload,
+        });
+        patchWorkspace(activeWorkspace.id, (ws) => ({
+          ...ws,
+          layout: added.layout,
+          focusedPaneId: added.paneId,
+        }));
+        return;
+      }
+
+      const tabs = leafTabIds(leaf);
+      const sessionId =
+        leaf.sessionId && tabs.includes(leaf.sessionId) ? leaf.sessionId : (tabs[0] ?? null);
+      const session = sessionId ? sessions[sessionId] : null;
+
+      if (session?.status === "online" && sessionId) {
+        activatePaneSession(paneId, sessionId);
+        void writeTerminalSession(sessionId, pastePayload).catch(() => undefined);
+        return;
+      }
+
+      if (sessionId && session) {
+        pendingSessionPasteRef.current.set(sessionId, pastePayload);
+        activatePaneSession(paneId, sessionId);
+        return;
+      }
+
+      pendingPaneSpawnsRef.current.set(paneId, {
+        title: "Shell",
+        accent: "green",
+        paneId,
+        paste: pastePayload,
+      });
+    },
+    [activeWorkspace, activatePaneSession, focusPane, openMediaPreviewAt, patchWorkspace, sessions, setView],
+  );
+
+  const queueSavedSpawns = useCallback((spawnQueues: Map<string, SavedShellSpec[]>) => {
+    pendingPaneSpawnQueuesRef.current.clear();
+    pendingPaneSpawnsRef.current.clear();
+    for (const [paneId, specs] of spawnQueues) {
+      pendingPaneSpawnQueuesRef.current.set(
+        paneId,
+        specs.map((spec) => ({
+          title: spec.title,
+          command: spec.command,
+          accent: spec.accent ?? "green",
+          paneId,
+        })),
+      );
+    }
+  }, []);
+
+  const clearWorkspaceSessions = useCallback(async (workspace: Workspace) => {
+    const ids = collectLeaves(workspace.layout).flatMap((leaf) => leafTabIds(leaf));
+    for (const sessionId of ids) {
+      try {
+        await killTerminalSession(sessionId);
+      } catch {
+        // ignore
+      }
+    }
+    setSessions((current) => {
+      const next = { ...current };
+      for (const sessionId of ids) delete next[sessionId];
+      return next;
+    });
+  }, []);
+
+  const saveCurrentLayoutAs = useCallback(
+    (name: string) => {
+      if (!activeWorkspace) return;
+      const captured = captureWorkspaceLayout(activeWorkspace, sessions, name);
+      setSavedLayouts((current) => [captured, ...current.filter((item) => item.name !== captured.name)]);
+    },
+    [activeWorkspace, sessions],
+  );
+
+  const removeSavedLayout = useCallback((id: string) => {
+    setSavedLayouts((current) => current.filter((item) => item.id !== id));
+  }, []);
+
+  const applySavedLayout = useCallback(
+    async (id: string) => {
+      if (!activeWorkspace) return;
+      const saved = savedLayouts.find((item) => item.id === id);
+      if (!saved) return;
+      if (savedLayoutPaneCount(saved) > MAX_PANES) {
+        setError(`Layout has more than ${MAX_PANES} panes.`);
+        return;
+      }
+      const built = buildLayoutFromSaved(saved);
+      await clearWorkspaceSessions(activeWorkspace);
+      queueSavedSpawns(built.spawnQueues);
+      patchWorkspace(activeWorkspace.id, (ws) => ({
+        ...ws,
+        layout: built.layout,
+        focusedPaneId: firstPaneId(built.layout),
+      }));
+      setView("space");
+    },
+    [activeWorkspace, clearWorkspaceSessions, patchWorkspace, queueSavedSpawns, savedLayouts, setError, setView],
+  );
+
+  const openNewSpaceFromLayout = useCallback(
+    async (id: string) => {
+      const saved = savedLayouts.find((item) => item.id === id);
+      if (!saved) return;
+      if (savedLayoutPaneCount(saved) > MAX_PANES) {
+        setError(`Layout has more than ${MAX_PANES} panes.`);
+        return;
+      }
+      const cwd = activeWorkspace?.cwd?.trim() || ".";
+      const built = buildLayoutFromSaved(saved);
+      queueSavedSpawns(built.spawnQueues);
+      let branch: string | null = null;
+      try {
+        branch = await getGitBranch(cwd);
+      } catch {
+        branch = null;
+      }
+      const ws: Workspace = {
+        id: uid("ws"),
+        name: saved.name,
+        cwd,
+        branch,
+        color: pickSpaceColor(workspaces),
+        layout: built.layout,
+        focusedPaneId: firstPaneId(built.layout),
+        pinned: false,
+        shellPresets: [],
+      };
+      setWorkspaces((current) => [...current, ws]);
+      setActiveWorkspaceId(ws.id);
+      setOnboarded(true);
+      setView("space");
+      pushHistory({
+        workspaceId: ws.id,
+        workspaceName: ws.name,
+        cwd: ws.cwd,
+      });
+    },
+    [activeWorkspace?.cwd, pushHistory, queueSavedSpawns, savedLayouts, setView, workspaces],
   );
 
   const closeSession = useCallback(async (sessionId: string) => {
@@ -1621,6 +2419,16 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       const session = current[sessionId];
       if (!session || session.title === next) return current;
       return { ...current, [sessionId]: { ...session, title: next } };
+    });
+    setAgentRuns((current) => {
+      let changed = false;
+      const mapped = current.map((run) => {
+        if (run.sessionId !== sessionId) return run;
+        if (run.agentName === next) return run;
+        changed = true;
+        return { ...run, agentName: next, at: Date.now() };
+      });
+      return changed ? mapped : current;
     });
   }, []);
 
@@ -1682,6 +2490,28 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     await closePane(activeWorkspace.focusedPaneId);
   }, [activeWorkspace, closePane]);
 
+  const closePaneSurface = useCallback(
+    async (paneId: string, tabId: string) => {
+      if (!activeWorkspace) return;
+      const leaf = findLeaf(activeWorkspace.layout, paneId);
+      if (!leaf) return;
+      if (leafSurfaceCount(leaf) <= 1) {
+        await closePane(paneId);
+        return;
+      }
+      if (tabId === BROWSER_TAB) {
+        closeBrowserTabInPane(paneId);
+        return;
+      }
+      if (tabId === MEDIA_TAB) {
+        clearPaneMedia(paneId);
+        return;
+      }
+      await closeSession(tabId);
+    },
+    [activeWorkspace, clearPaneMedia, closePane, closeBrowserTabInPane, closeSession],
+  );
+
   const restartSession = useCallback(
     async (sessionId: string) => {
       const session = sessions[sessionId];
@@ -1719,18 +2549,87 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     [activeWorkspace, patchWorkspace, preferredShell, sessions, spawnInPane],
   );
 
+  const restoreSession = useCallback(
+    async (sessionId: string) => {
+      const session = sessionsRef.current[sessionId];
+      if (!session || !activeWorkspace) return;
+      const paneId = findPaneForSession(activeWorkspace.layout, sessionId);
+      if (!paneId) return;
+
+      setSessions((current) => ({
+        ...current,
+        [sessionId]: { ...session, status: "starting" },
+      }));
+
+      try {
+        await killTerminalSession(sessionId);
+      } catch {
+        // ignore — stale id after last run
+      }
+
+      try {
+        const command =
+          session.initialCommand === "codex" ? "codex resume --last" : session.initialCommand;
+        const created = await createTerminalSession({
+          cwd: session.cwd || activeWorkspace.cwd || null,
+          shell: session.shell || preferredShell.trim() || null,
+          title: session.title,
+          cols: PTY_COLS,
+          rows: PTY_ROWS,
+          initialCommand: command?.trim() || null,
+        });
+        const nextSession: TerminalSession = {
+          id: created.id,
+          title: created.title,
+          cwd: created.cwd || session.cwd,
+          shell: created.shell,
+          status: "online",
+          accent: session.accent,
+          needsAttention: false,
+          initialCommand: session.initialCommand,
+        };
+        setSessions((current) => {
+          const next = { ...current };
+          delete next[sessionId];
+          next[created.id] = nextSession;
+          return next;
+        });
+        patchWorkspace(activeWorkspace.id, (ws) => ({
+          ...ws,
+          layout: replaceLeafSessionId(ws.layout, paneId, sessionId, created.id),
+        }));
+      } catch (err) {
+        setSessions((current) => ({
+          ...current,
+          [sessionId]: { ...session, status: "error" },
+        }));
+        setError(clientError(err));
+      }
+    },
+    [activeWorkspace, patchWorkspace, preferredShell, setError],
+  );
+
   useEffect(() => {
     if (welcomeVisible || !activeWorkspace) return;
     const pending = collectSessionIds(activeWorkspace.layout).filter((id) =>
       restorePendingIdsRef.current.delete(id),
     );
     if (!pending.length) return;
-    void (async () => {
-      for (const id of pending) await restartSession(id);
-    })();
-  }, [activeWorkspace, restartSession, welcomeVisible]);
+
+    const focusedLeaf = findLeaf(activeWorkspace.layout, activeWorkspace.focusedPaneId);
+    const focusedId = focusedLeaf?.sessionId;
+    const ordered = [
+      ...(focusedId && pending.includes(focusedId) ? [focusedId] : []),
+      ...pending.filter((id) => id !== focusedId),
+    ];
+
+    for (const id of ordered) {
+      void enqueueTerminalSpawn(() => restoreSession(id));
+    }
+  }, [activeWorkspace, restoreSession, welcomeVisible]);
 
   const clearAttention = useCallback((sessionId: string) => {
+    clearAttentionNotifyState(sessionId);
     setSessions((current) => {
       const session = current[sessionId];
       if (!session) return current;
@@ -1800,7 +2699,11 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       setSkipWelcome,
       setEditorDirty,
       takePendingPaneSpawn,
+      takePendingPaneSpawnQueue,
       clearPendingPaneSpawn,
+      isEmptyPaneSpawnHeld,
+      shouldAutoSpawnShell,
+      emptyPaneSpawnEpoch,
       workspaces,
       activeWorkspace,
       sessions,
@@ -1813,9 +2716,11 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       setPaneBrowserUrl,
       openBrowserInFocused,
       focusBrowserInPane,
+      focusMediaInPane,
       focusTerminalInPane,
       closeBrowserTab: closeBrowserTabInPane,
       reorderPaneTabs,
+      placePaneTab,
       movePaneTab,
       dockPaneTab,
       dockPane,
@@ -1847,15 +2752,26 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       focusPane,
       swapPanes,
       applySnapLayout,
+      snapDragToLayout,
       spawnInPane,
       spawnInFocused,
       spawnAllEmpty,
       launchAgent,
       splitFocused,
       splitShellAt,
+      handleFileDropAt,
+      openMediaPreviewAt,
+      clearPaneMedia,
+      takePendingSessionPaste,
+      savedLayouts,
+      saveCurrentLayoutAs,
+      removeSavedLayout,
+      applySavedLayout,
+      openNewSpaceFromLayout,
       closeFocusedPane,
       closePane,
       closeSession,
+      closePaneSurface,
       renameSession,
       activatePaneSession,
       restartSession,
@@ -1864,6 +2780,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       setSplitRatio,
       agentRuns,
       resumeAgentRun,
+      resumeAgentRunAtDrop,
       removeAgentRun,
       clearAgentRuns,
     }),
@@ -1876,7 +2793,11 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       setSkipWelcome,
       setEditorDirty,
       takePendingPaneSpawn,
+      takePendingPaneSpawnQueue,
       clearPendingPaneSpawn,
+      isEmptyPaneSpawnHeld,
+      shouldAutoSpawnShell,
+      emptyPaneSpawnEpoch,
       workspaces,
       activeWorkspace,
       sessions,
@@ -1889,9 +2810,11 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       setPaneBrowserUrl,
       openBrowserInFocused,
       focusBrowserInPane,
+      focusMediaInPane,
       focusTerminalInPane,
       closeBrowserTabInPane,
       reorderPaneTabs,
+      placePaneTab,
       movePaneTab,
       dockPaneTab,
       dockPane,
@@ -1922,15 +2845,26 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       focusPane,
       swapPanes,
       applySnapLayout,
+      snapDragToLayout,
       spawnInPane,
       spawnInFocused,
       spawnAllEmpty,
       launchAgent,
       splitFocused,
       splitShellAt,
+      handleFileDropAt,
+      openMediaPreviewAt,
+      clearPaneMedia,
+      takePendingSessionPaste,
+      savedLayouts,
+      saveCurrentLayoutAs,
+      removeSavedLayout,
+      applySavedLayout,
+      openNewSpaceFromLayout,
       closeFocusedPane,
       closePane,
       closeSession,
+      closePaneSurface,
       renameSession,
       activatePaneSession,
       restartSession,
@@ -1939,6 +2873,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       setSplitRatio,
       agentRuns,
       resumeAgentRun,
+      resumeAgentRunAtDrop,
       removeAgentRun,
       clearAgentRuns,
     ],

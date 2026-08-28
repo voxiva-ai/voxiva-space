@@ -1,13 +1,16 @@
-import { useEffect, useState } from "react";
-import { Folder, LayoutRight } from "@untitledui/icons";
-import { IconSidebar } from "@/components/icons";
+import { useEffect, useRef, useState } from "react";
+import { Folder } from "@untitledui/icons";
+import { IconAssistPanel, IconMore, IconSidebar, IconX } from "@/components/icons";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { PromptDialog } from "@/components/PromptDialog";
 import { useFolderBrowse } from "@/features/workspace/useFolderBrowse";
+import { savedLayoutPaneCount } from "@/features/workspace/savedLayouts";
 import { useSpace, useView } from "@/features/workspace/SpaceContext";
 import type { ViewId } from "@/lib/types";
 import type { MsgKey } from "@/i18n";
 import { clientError } from "@/lib/errors";
 import { WindowControls } from "@/components/shell/WindowControls";
+import { beginWindowDrag, toggleMaximize } from "@/features/ui/windowDrag";
 
 function shortPath(cwd: string) {
   const normalized = cwd.replace(/\\/g, "/");
@@ -28,39 +31,67 @@ const TITLE_KEY: Record<ViewId, MsgKey> = {
   settings: "nav.settings",
 };
 
-/** App-level pages — show page title only, not the workspace name. */
 const APP_VIEWS = new Set<ViewId>(["agents", "history", "projects", "board"]);
-/** Settings has its own left nav — skip the topbar title to avoid "Settings / SETTINGS". */
 const HIDE_TOPBAR_TITLE = new Set<ViewId>(["settings"]);
 
 type TopbarProps = {
   assistOpen: boolean;
   onToggleAssist: () => void;
   sidebarCollapsed?: boolean;
-  onExpandSidebar?: () => void;
+  onToggleSidebar?: () => void;
+  onOpenHistory?: () => void;
 };
 
 export function Topbar({
   assistOpen,
   onToggleAssist,
   sidebarCollapsed = false,
-  onExpandSidebar,
+  onToggleSidebar,
 }: TopbarProps) {
-  const { activeWorkspace, updateWorkspace, setError, t } = useSpace();
+  const {
+    activeWorkspace,
+    updateWorkspace,
+    setError,
+    t,
+    savedLayouts,
+    saveCurrentLayoutAs,
+    removeSavedLayout,
+    applySavedLayout,
+    openNewSpaceFromLayout,
+  } = useSpace();
   const { view } = useView();
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(activeWorkspace?.name ?? "");
   const browseFolder = useFolderBrowse();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
   const showWorkspace = Boolean(activeWorkspace) && !APP_VIEWS.has(view) && !HIDE_TOPBAR_TITLE.has(view);
-  // Space view: cwd chip in topbar; name lives in the sidebar.
   const showSpaceCwd = Boolean(activeWorkspace) && view === "space";
   const showMeta = showWorkspace && view !== "space";
   const showAppTitle = !showWorkspace && !HIDE_TOPBAR_TITLE.has(view);
+  const canSaveLayout = view === "space" && Boolean(activeWorkspace);
 
   useEffect(() => {
     setNameDraft(activeWorkspace?.name ?? "");
     setEditing(false);
   }, [activeWorkspace?.id, activeWorkspace?.name]);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onPointer = (event: PointerEvent) => {
+      if (!moreRef.current?.contains(event.target as Node)) setMoreOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMoreOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [moreOpen]);
 
   useEffect(() => {
     const label = HIDE_TOPBAR_TITLE.has(view)
@@ -94,103 +125,194 @@ export function Topbar({
     }
   }
 
+  function closeMore() {
+    setMoreOpen(false);
+  }
+
   return (
-    <header
-      className="vs-topbar"
-      data-tauri-drag-region
-      onMouseDown={(e) => {
-        if ((e.target as HTMLElement).closest("[data-no-drag]")) return;
-        if (e.buttons === 1) {
-          void getCurrentWindow()
-            .startDragging()
-            .catch(() => undefined);
-        }
-      }}
-    >
-      <div className="vs-topbarLeft" data-tauri-drag-region>
-        {sidebarCollapsed && onExpandSidebar ? (
-          <button
-            type="button"
-            className="vs-iconBtn vs-topbarExpand"
-            data-no-drag
-            title={t("shell.expand")}
-            aria-label={t("shell.expand")}
-            onClick={onExpandSidebar}
-          >
-            <IconSidebar size={16} />
-          </button>
-        ) : null}
-        {showSpaceCwd ? (
-          <div className="vs-topbarMeta vs-topbarSpaceMeta" data-tauri-drag-region>
-            <button
-              type="button"
-              className="vs-topbarCwdBtn"
-              data-no-drag
-              title={activeWorkspace!.cwd}
-              onClick={() => void changeFolder()}
-            >
-              <Folder size={14} aria-hidden />
-              <span className="vs-topbarCwdLabel">{shortPath(activeWorkspace!.cwd)}</span>
-            </button>
-            {activeWorkspace!.branch ? (
-              <span className="vs-badge" data-no-drag>
-                {activeWorkspace!.branch}
-              </span>
-            ) : null}
-          </div>
-        ) : showMeta ? (
-          <div className="vs-topbarMeta" data-tauri-drag-region>
-            {editing ? (
-              <input
-                className="vs-topbarNameInput"
-                data-no-drag
-                value={nameDraft}
-                autoFocus
-                onChange={(e) => setNameDraft(e.target.value)}
-                onBlur={() => void commitName()}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void commitName();
-                  if (e.key === "Escape") {
-                    setNameDraft(activeWorkspace!.name);
-                    setEditing(false);
-                  }
-                }}
-              />
-            ) : (
+    <>
+      <header className="vs-topbar">
+        <div className="vs-topbarLeft" data-no-drag>
+          {showSpaceCwd ? (
+            <div className="vs-topbarMeta vs-topbarSpaceMeta">
               <button
                 type="button"
-                className="vs-topbarNameBtn"
-                data-no-drag
-                title={t("topbar.rename")}
-                onClick={() => setEditing(true)}
+                className="vs-topbarCwdBtn"
+                title={activeWorkspace!.cwd}
+                onClick={() => void changeFolder()}
               >
-                {activeWorkspace!.name}
+                <Folder size={14} aria-hidden />
+                <span className="vs-topbarCwdLabel">{shortPath(activeWorkspace!.cwd)}</span>
               </button>
-            )}
-            {view !== "editor" && <span className="vs-topbarView">{t(TITLE_KEY[view])}</span>}
-            {activeWorkspace!.branch && (
-              <span className="vs-badge" data-no-drag>
-                {activeWorkspace!.branch}
-              </span>
-            )}
+              {activeWorkspace!.branch ? (
+                <span className="vs-badge">{activeWorkspace!.branch}</span>
+              ) : null}
+            </div>
+          ) : showMeta ? (
+            <div className="vs-topbarMeta">
+              {editing ? (
+                <input
+                  className="vs-topbarNameInput"
+                  value={nameDraft}
+                  autoFocus
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onBlur={() => void commitName()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void commitName();
+                    if (e.key === "Escape") {
+                      setNameDraft(activeWorkspace!.name);
+                      setEditing(false);
+                    }
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="vs-topbarNameBtn"
+                  title={t("topbar.rename")}
+                  onClick={() => setEditing(true)}
+                >
+                  {activeWorkspace!.name}
+                </button>
+              )}
+              {view !== "editor" && <span className="vs-topbarView">{t(TITLE_KEY[view])}</span>}
+              {activeWorkspace!.branch && (
+                <span className="vs-badge">{activeWorkspace!.branch}</span>
+              )}
+            </div>
+          ) : showAppTitle ? (
+            <h1 className="vs-topbarTitle">{t(TITLE_KEY[view])}</h1>
+          ) : null}
+        </div>
+        <div
+          className="vs-titleDrag"
+          data-tauri-drag-region
+          onPointerDown={beginWindowDrag}
+          onDoubleClick={toggleMaximize}
+        />
+        <div className="vs-topbarActions" data-no-drag>
+          {onToggleSidebar ? (
+            <button
+              type="button"
+              className="vs-iconBtn"
+              title={sidebarCollapsed ? t("shell.expand") : t("shell.collapse")}
+              aria-label={sidebarCollapsed ? t("shell.expand") : t("shell.collapse")}
+              aria-pressed={!sidebarCollapsed}
+              onClick={onToggleSidebar}
+            >
+              <IconSidebar size={16} />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="vs-iconBtn"
+            title={t("assist.toggle")}
+            aria-label={t("assist.toggle")}
+            aria-pressed={assistOpen}
+            onClick={onToggleAssist}
+          >
+            <IconAssistPanel size={16} aria-hidden />
+          </button>
+          <div className="vs-chromeWrap" ref={moreRef}>
+            <button
+              type="button"
+              className="vs-iconBtn"
+              title={t("layouts.menu")}
+              aria-label={t("layouts.menu")}
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
+              onClick={() => setMoreOpen((v) => !v)}
+            >
+              <IconMore size={16} />
+            </button>
+            {moreOpen ? (
+              <div className="vs-chromeFlyout is-menu is-wide is-layouts" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="is-primary"
+                  disabled={!canSaveLayout}
+                  onClick={() => {
+                    closeMore();
+                    setSaveOpen(true);
+                  }}
+                >
+                  {t("layouts.saveCurrent")}
+                </button>
+                {savedLayouts.length ? (
+                  <>
+                    <div className="vs-chromeMenuSep" role="separator" />
+                    <div className="vs-chromeMenuLabel">{t("layouts.saved")}</div>
+                    <div className="vs-layoutBuildList">
+                      {savedLayouts.map((layout) => (
+                        <div key={layout.id} className="vs-layoutBuildRow">
+                          <div className="vs-layoutBuildMeta">
+                            <strong title={layout.name}>{layout.name}</strong>
+                            <span>
+                              {t("layouts.paneCount").replace(
+                                "{n}",
+                                String(savedLayoutPaneCount(layout)),
+                              )}
+                            </span>
+                          </div>
+                          <div className="vs-layoutBuildActions">
+                            <button
+                              type="button"
+                              className="is-apply"
+                              disabled={!canSaveLayout}
+                              onClick={() => {
+                                closeMore();
+                                void applySavedLayout(layout.id);
+                              }}
+                            >
+                              {t("layouts.applyHere")}
+                            </button>
+                            <button
+                              type="button"
+                              className="is-open"
+                              onClick={() => {
+                                closeMore();
+                                void openNewSpaceFromLayout(layout.id);
+                              }}
+                            >
+                              {t("layouts.newSpace")}
+                            </button>
+                            <button
+                              type="button"
+                              className="is-danger"
+                              title={t("layouts.remove")}
+                              aria-label={t("layouts.remove")}
+                              onClick={() => removeSavedLayout(layout.id)}
+                            >
+                              <IconX size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="vs-layoutBuildEmpty">{t("layouts.empty")}</p>
+                )}
+              </div>
+            ) : null}
           </div>
-        ) : showAppTitle ? (
-          <h1 className="vs-topbarTitle">{t(TITLE_KEY[view])}</h1>
-        ) : null}
-      </div>
-      <div className="vs-topbarActions" data-no-drag>
-        <button
-          type="button"
-          className={`vs-iconBtn vs-topbarAssistBtn${assistOpen ? " is-active" : ""}`}
-          title={t("assist.toggle")}
-          aria-label={t("assist.toggle")}
-          aria-pressed={assistOpen}
-          onClick={onToggleAssist}
-        >
-          <LayoutRight size={17} aria-hidden />
-        </button>
-        <WindowControls />
-      </div>
-    </header>
+          <WindowControls />
+        </div>
+      </header>
+      <PromptDialog
+        open={saveOpen}
+        title={t("layouts.saveTitle")}
+        label={t("layouts.saveLabel")}
+        initialValue={activeWorkspace?.name ?? ""}
+        confirmLabel={t("layouts.saveConfirm")}
+        cancelLabel={t("layouts.saveCancel")}
+        onCancel={() => setSaveOpen(false)}
+        onConfirm={(value) => {
+          setSaveOpen(false);
+          saveCurrentLayoutAs(value);
+        }}
+      />
+    </>
   );
 }

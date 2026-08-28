@@ -10,11 +10,11 @@ import { browserClose, browserCloseAll, browserHideAll } from "@/features/browse
 import { SpaceProvider, useSpace, useView } from "@/features/workspace/SpaceContext";
 import { SpacePage } from "@/pages/space/SpacePage";
 import { installUiZoom } from "@/features/ui/zoom";
+import { ZoomHud } from "@/components/shell/ZoomHud";
 import { revealMainWindow } from "@/features/ui/revealWindow";
 import { useWindowChrome } from "@/features/ui/useWindowChrome";
 import { applyAttentionPrefs } from "@/features/attention/prefs";
 import { WelcomePage } from "@/pages/welcome/WelcomePage";
-import { IconBrowser } from "@/components/icons";
 import type { ViewId } from "@/lib/types";
 
 const EditorPage = lazy(() =>
@@ -43,55 +43,17 @@ const SIDEBAR_KEY = "voxiva-space-sidebar-collapsed";
 const ASSIST_KEY = "voxiva-space-assist-open";
 
 function GlobalToast() {
-  const {
-    error,
-    setError,
-    suggestedLocalUrl,
-    dismissSuggestedLocalUrl,
-    openBrowserWithUrl,
-    t,
-  } = useSpace();
-  const { view } = useView();
+  const { error, setError, suggestedLocalUrl, dismissSuggestedLocalUrl, t } = useSpace();
 
-  // Suggest only while working in the Space grid — not on full Browser page / other views.
+  // Localhost preview opens in assist browser silently — no toast.
   useEffect(() => {
-    if (view !== "space" && suggestedLocalUrl) {
-      dismissSuggestedLocalUrl();
-    }
-  }, [dismissSuggestedLocalUrl, suggestedLocalUrl, view]);
+    if (suggestedLocalUrl) dismissSuggestedLocalUrl();
+  }, [dismissSuggestedLocalUrl, suggestedLocalUrl]);
 
-  if (view !== "space") {
-    if (!error) return null;
-  }
-
-  if (!error && !suggestedLocalUrl) return null;
+  if (!error) return null;
 
   return (
     <div className="vs-globalToastStack" role="status">
-      {view === "space" && suggestedLocalUrl ? (
-        <div className="vs-globalToast is-suggest">
-          <div className="vs-globalToastIcon" aria-hidden>
-            <IconBrowser size={18} />
-          </div>
-          <div className="vs-globalToastBody">
-            <strong>{t("browser.suggestTitle")}</strong>
-            <p>{t("browser.suggestLocal")}</p>
-            <code className="vs-mono">{suggestedLocalUrl}</code>
-          </div>
-          <div className="vs-globalToastActions">
-            <button
-              type="button"
-              className="vs-btn vs-btnPrimary"
-              onClick={() => void openBrowserWithUrl(suggestedLocalUrl)}
-            >
-              {t("browser.openSuggest")}
-            </button>
-            <button type="button" className="vs-btn vs-btnGhost" onClick={dismissSuggestedLocalUrl}>
-              {t("toast.ok")}
-            </button>
-          </div>
-        </div>
-      ) : null}
       {error ? (
         <div className="vs-globalToast" role="alert">
           <span>{error}</span>
@@ -233,20 +195,29 @@ function AppShell() {
         setBrowserUrl(detail.url);
         setPendingAssistUrl(detail.url);
       }
-      if (detail.tab === "browser" || detail.tab === "editor") setAssistTab(detail.tab);
+      if (detail.tab === "browser" || detail.tab === "editor" || detail.tab === "agents") setAssistTab(detail.tab);
       else if (detail.path) setAssistTab("editor");
       setAssistOpen(true);
     };
     window.addEventListener("voxiva-assist-open", onOpen);
-    return () => window.removeEventListener("voxiva-assist-open", onOpen);
+    const onOpenFile = () => {
+      setAssistOpen(true);
+      setAssistTab("editor");
+    };
+    window.addEventListener("voxiva-open-workspace-file", onOpenFile);
+    return () => {
+      window.removeEventListener("voxiva-assist-open", onOpen);
+      window.removeEventListener("voxiva-open-workspace-file", onOpenFile);
+    };
   }, [setBrowserUrl]);
 
-  // Prefetch editor chunk after first paint so the first open isn't a cold Suspense hit.
+  // Prefetch editor + agents after first paint so those views open instantly.
   useEffect(() => {
     if (welcomeVisible) return;
     const idle = window.setTimeout(() => {
       void import("@/pages/editor/EditorPage");
-    }, 1200);
+      void import("@/pages/agents/AgentsPage");
+    }, 400);
     return () => window.clearTimeout(idle);
   }, [welcomeVisible]);
 
@@ -289,7 +260,6 @@ function AppShell() {
     >
       <Sidebar
         collapsed={sidebarCollapsed}
-        onCollapse={() => setSidebarCollapsed(true)}
         onExpand={() => setSidebarCollapsed(false)}
         onNewSpace={() => setNewSpaceOpen(true)}
       />
@@ -298,9 +268,14 @@ function AppShell() {
           assistOpen={assistOpen}
           onToggleAssist={() => setAssistOpen((v) => !v)}
           sidebarCollapsed={sidebarCollapsed}
-          onExpandSidebar={() => setSidebarCollapsed(false)}
+          onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+          onOpenHistory={() => {
+            setAssistTab("agents");
+            setAssistOpen(true);
+          }}
         />
         <GlobalToast />
+        <ZoomHud />
         <div className="vs-mainBody">
           <div
             className={`vs-content${

@@ -7,25 +7,198 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import type { SplitNode } from "@/lib/types";
+import type { Accent, AgentRun, PaneKind, SplitNode, Workspace } from "@/lib/types";
 import {
   BROWSER_TAB,
+  MEDIA_TAB,
   leafTabOrder,
   type SnapLayoutId,
+  type DropZone,
 } from "@/features/workspace/layout";
-import type { DropZone } from "@/features/workspace/layout";
 import {
+  clearFileDropPaint,
+  clearPaneDropClasses,
   dropZoneAt,
+  dropZoneLabelKey,
   emitPaneDrag,
+  isExternalFileDrag,
+  markPaneDrop,
+  resolveFileDropZone,
+  syncFileDropPaint,
 } from "@/features/workspace/paneDropOverlay";
+import { useWorkspaceFileDrop } from "@/features/workspace/useWorkspaceFileDrop";
+import {
+  bracketedFilePayload,
+  isPanePreviewMime,
+  isPreviewDropPath,
+  payloadFromHtml5FileDrop,
+  relPathFromWorkspace,
+} from "@/features/workspace/workspaceFileDrop";
+import { getWorkspaceFileInfo } from "@/features/editor/api";
+import { MediaPreview } from "@/features/editor/MediaPreview";
+import { MaterialFileIcon } from "@/features/editor/MaterialFileIcon";
+import {
+  isImagePath,
+} from "@/features/editor/types";
+import { saveBlobToTemp } from "@/features/terminal/paste";
 import { TerminalPane } from "@/features/terminal";
-import { enqueueTerminalSpawn, yieldToUi, takeColdStartSlot, coldStartDelayMs } from "@/features/terminal/spawnQueue";
+import { enqueueTerminalSpawn, yieldToUi } from "@/features/terminal/spawnQueue";
 import { NativeBrowser, type BrowserTabMeta } from "@/features/browser/NativeBrowser";
 import { browserFaviconUrl, prettyBrowserLabel } from "@/features/browser/tabMeta";
+import { readAgentDrag, isAgentDrag, endAgentDragSession, type AgentDragPayload } from "@/features/agents/drag";
+import { agentBots, resolveBotCommand, resumeCommandFor } from "@/features/agents/bots";
 import { PaneActions } from "@/features/workspace/PaneActions";
 import { PaneContextMenu, type PaneMenuState } from "@/features/workspace/PaneContextMenu";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import { IconBrowser, IconGrip, IconTerminal, IconX } from "@/components/icons";
+import { AgentBrandIcon } from "@/components/agents/AgentBrandIcon";
+import { agentIdForSession } from "@/features/agents/sessionAgent";
+
+function mediaKindForPath(path: string): "image" | "binary" {
+  return isImagePath(path) ? "image" : "binary";
+}
+
+function mediaTabTitle(path: string) {
+  return path.split(/[/\\]/).pop() || path;
+}
+
+function runFromDragPayload(
+  payload: AgentDragPayload,
+  workspace: Workspace | null | undefined,
+  workspaces: Workspace[],
+): AgentRun | null {
+  const workspaceId = payload.workspaceId || workspace?.id;
+  if (!workspaceId) return null;
+  const ws = workspaces.find((item) => item.id === workspaceId) ?? workspace;
+  const bot = agentBots.find((b) => b.id === payload.agentId);
+  return {
+    id: payload.runId || `drag-${payload.agentId}`,
+    agentId: payload.agentId,
+    agentName: payload.agentName,
+    workspaceId,
+    workspaceName: ws?.name ?? "",
+    cwd: ws?.cwd ?? "",
+    command: payload.command ?? bot?.command,
+    shell: payload.shell ?? null,
+    accent: (payload.accent as Accent | undefined) ?? bot?.accent ?? "green",
+    at: Date.now(),
+    sessionId: payload.sessionId,
+    paneId: payload.paneId,
+  };
+}
+
+function mimeFromPath(path: string) {
+  const ext = path.split(/[/\\]/).pop()?.split(".").pop()?.toLowerCase() ?? "";
+  const map: Record<string, string> = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    bmp: "image/bmp",
+    ico: "image/x-icon",
+    avif: "image/avif",
+    svg: "image/svg+xml",
+    mp4: "video/mp4",
+    webm: "video/webm",
+    mov: "video/quicktime",
+    m4v: "video/x-m4v",
+    mkv: "video/x-matroska",
+    avi: "video/x-msvideo",
+    ogv: "video/ogg",
+    mp3: "audio/mpeg",
+    wav: "audio/wav",
+    ogg: "audio/ogg",
+    m4a: "audio/mp4",
+    aac: "audio/aac",
+    flac: "audio/flac",
+    opus: "audio/opus",
+    pdf: "application/pdf",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls: "application/vnd.ms-excel",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ppt: "application/vnd.ms-powerpoint",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    csv: "text/csv",
+    tsv: "text/tab-separated-values",
+    txt: "text/plain",
+    zip: "application/zip",
+    rar: "application/vnd.rar",
+    "7z": "application/x-7z-compressed",
+  };
+  return map[ext] ?? "application/octet-stream";
+}
+
+function PaneMediaPreview({ absPath }: { paneId: string; absPath: string }) {
+  const { activeWorkspace } = useSpace();
+  const [info, setInfo] = useState<{
+    path: string;
+    mime: string;
+    kind: "image" | "binary";
+    absPath: string;
+    size?: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!activeWorkspace) return;
+    const rel = relPathFromWorkspace(activeWorkspace.cwd, absPath);
+    const name = absPath.split(/[/\\]/).pop() || "file";
+    if (rel !== null) {
+      void getWorkspaceFileInfo(activeWorkspace.cwd, rel)
+        .then((file) => {
+          setInfo({
+            path: file.path,
+            mime: file.mime,
+            kind: mediaKindForPath(file.path),
+            absPath: file.absolutePath,
+            size: file.size,
+          });
+        })
+        .catch(() => {
+          setInfo({
+            path: name,
+            mime: mimeFromPath(name),
+            kind: mediaKindForPath(name),
+            absPath,
+          });
+        });
+      return;
+    }
+    setInfo({
+      path: name,
+      mime: mimeFromPath(name),
+      kind: mediaKindForPath(name),
+      absPath,
+    });
+  }, [absPath, activeWorkspace]);
+
+  if (!info) {
+    return (
+      <div className="vs-paneMedia is-loading">
+        <div className="vs-paneLoader" aria-hidden>
+          <span />
+          <span />
+          <span />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="vs-paneMedia">
+      <MediaPreview
+        path={info.path}
+        mime={info.mime}
+        kind={info.kind}
+        size={info.size}
+        workspaceRoot={activeWorkspace?.cwd}
+        absPath={info.absPath}
+        chrome="pane"
+      />
+    </div>
+  );
+}
 
 function BrowserTabIcon({ url, pageFavicon }: { url: string; pageFavicon?: string | null }) {
   const src = browserFaviconUrl(url, pageFavicon);
@@ -57,25 +230,6 @@ function TabGlyph({ children }: { children: ReactNode }) {
   );
 }
 
-function clearPaneDropClasses() {
-  document.querySelectorAll(".vs-pane.is-dropTarget, .vs-pane.is-tabDrop").forEach((el) => {
-    el.classList.remove("is-dropTarget", "is-tabDrop");
-    el.removeAttribute("data-drop-zone");
-  });
-  document.querySelectorAll(".vs-snapOption.is-dropTarget").forEach((el) => {
-    el.classList.remove("is-dropTarget");
-  });
-}
-
-function markPaneDrop(el: HTMLElement, zone: DropZone, asTabMerge: boolean) {
-  el.setAttribute("data-drop-zone", zone);
-  if (asTabMerge && zone === "center") {
-    el.classList.add("is-tabDrop");
-  } else {
-    el.classList.add("is-dropTarget");
-  }
-}
-
 function PaneLeaf({
   paneId,
   kind,
@@ -83,33 +237,42 @@ function PaneLeaf({
   sessionIds,
   tabOrder,
   browserUrl,
+  mediaPath,
 }: {
   paneId: string;
-  kind: "terminal" | "browser";
+  kind: PaneKind;
   sessionId: string | null;
   sessionIds?: string[];
   tabOrder?: string[];
   browserUrl: string | null;
+  mediaPath?: string | null;
 }) {
   const {
     activeWorkspace,
     sessions,
+    agentRuns,
+    agentAvailability,
+    workspaces,
     focusPane,
     spawnInPane,
-    takePendingPaneSpawn,
+    launchAgent,
+    resumeAgentRunAtDrop,
+    takePendingPaneSpawnQueue,
     clearPendingPaneSpawn,
-    closePane,
-    closeSession,
-    closeBrowserTab,
+    shouldAutoSpawnShell,
+    emptyPaneSpawnEpoch,
+    closePaneSurface,
     renameSession,
     activatePaneSession,
     focusBrowserInPane,
-    reorderPaneTabs,
+    focusMediaInPane,
+    placePaneTab,
     dockPaneTab,
+    snapDragToLayout,
     restartSession,
-    applySnapLayout,
     setPaneBrowserUrl,
     dockPane,
+    handleFileDropAt,
     t,
   } = useSpace();
   const focused = activeWorkspace?.focusedPaneId === paneId;
@@ -121,7 +284,9 @@ function PaneLeaf({
         : [];
   const activeId = sessionId && tabIds.includes(sessionId) ? sessionId : tabIds[0] ?? null;
   const hasBrowser = browserUrl !== null;
+  const hasMedia = Boolean(mediaPath);
   const browserActive = kind === "browser" && hasBrowser;
+  const mediaActive = kind === "media" && hasMedia;
   const surfaceOrder = useMemo(
     () =>
       leafTabOrder({
@@ -132,12 +297,12 @@ function PaneLeaf({
         sessionIds: tabIds,
         tabOrder,
         browserUrl,
+        mediaPath: mediaPath ?? null,
       }),
-    [browserUrl, kind, paneId, sessionId, tabIds, tabOrder],
+    [browserUrl, kind, mediaPath, paneId, sessionId, tabIds, tabOrder],
   );
   const anyAttention = tabIds.some((id) => sessions[id]?.needsAttention);
   const spawning = useRef(false);
-  const [spawnReady, setSpawnReady] = useState(focused);
   const [mountedTabs, setMountedTabs] = useState<Set<string>>(() =>
     activeId ? new Set([activeId]) : new Set(),
   );
@@ -150,27 +315,7 @@ function PaneLeaf({
   const [draggingTab, setDraggingTab] = useState<string | null>(null);
   const [dragOverTab, setDragOverTab] = useState<string | null>(null);
   const suppressTabClickRef = useRef(false);
-  const hasChrome = tabIds.length > 0 || hasBrowser;
-
-  // Background panes: stagger PTY start so every terminal still boots without freezing UI.
-  useEffect(() => {
-    if (spawnReady) return;
-    if (focused) {
-      takeColdStartSlot(true);
-      setSpawnReady(true);
-      return;
-    }
-    let cancelled = false;
-    const slot = takeColdStartSlot(false);
-    const delay = coldStartDelayMs(slot);
-    const timer = window.setTimeout(() => {
-      if (!cancelled) setSpawnReady(true);
-    }, delay);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [focused, paneId, spawnReady]);
+  const hasChrome = tabIds.length > 0 || hasBrowser || hasMedia;
 
   useEffect(() => {
     if (!activeId) return;
@@ -182,10 +327,6 @@ function PaneLeaf({
     });
   }, [activeId]);
 
-  useEffect(() => {
-    if (focused) setSpawnReady(true);
-  }, [focused]);
-
   const beginTabDrag = (tabKey: string, event: ReactPointerEvent) => {
     if (event.button !== 0) return;
     if ((event.target as HTMLElement).closest(".vs-paneTabClose, input, [data-no-tab-drag]")) {
@@ -196,11 +337,20 @@ function PaneLeaf({
     const startX = event.clientX;
     const startY = event.clientY;
     let active = false;
-    let overTab: string | null = null;
+    let insertBefore: string | null | undefined;
     let overPane: string | null = null;
     let overZone: DropZone | null = null;
     let overSnap: string | null = null;
-    const soleSurface = surfaceOrder.length === 1;
+    const beforeIdInStrip = (strip: HTMLElement, clientX: number): string | null => {
+      const tabs = [...strip.querySelectorAll<HTMLElement>("[data-tab-key]")];
+      for (const tab of tabs) {
+        const key = tab.getAttribute("data-tab-key");
+        if (!key || key === tabKey) continue;
+        const rect = tab.getBoundingClientRect();
+        if (clientX < rect.left + rect.width / 2) return key;
+      }
+      return null;
+    };
 
     const onMove = (moveEvent: PointerEvent) => {
       if (
@@ -209,9 +359,11 @@ function PaneLeaf({
       ) {
         active = true;
         setDraggingTab(tabKey);
-        emitPaneDrag(true);
+        emitPaneDrag(true, "tab");
+        document.body.classList.add("is-tab-dragging");
       }
       if (!active) return;
+
       const strip = tabsStripRef.current;
       if (strip) {
         const rect = strip.getBoundingClientRect();
@@ -221,69 +373,90 @@ function PaneLeaf({
       }
 
       clearPaneDropClasses();
-      overTab = null;
+      insertBefore = undefined;
       overPane = null;
       overZone = null;
       overSnap = null;
       setDragOverTab(null);
 
       const el = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      if (!el) return;
 
-      if (soleSurface) {
-        const snap = el?.closest("[data-snap-layout]") as HTMLElement | null;
-        if (snap) {
-          snap.classList.add("is-dropTarget");
-          overSnap = snap.getAttribute("data-snap-layout");
-          return;
-        }
+      // Prefer layout snap targets while the floating bar is open.
+      const snap = el.closest("[data-snap-layout]") as HTMLElement | null;
+      if (snap) {
+        snap.classList.add("is-dropTarget");
+        overSnap = snap.getAttribute("data-snap-layout");
+        return;
       }
 
-      const targetPane = el?.closest("[data-pane-id]") as HTMLElement | null;
+      const bar = el.closest(".vs-paneTabBar, .vs-paneTabs") as HTMLElement | null;
+      const stripEl = (bar?.classList.contains("vs-paneTabs") ? bar : bar?.querySelector(".vs-paneTabs")) as
+        | HTMLElement
+        | null;
+      const stripPane = stripEl?.closest("[data-pane-id]") as HTMLElement | null;
+      const stripPaneId = stripPane?.getAttribute("data-pane-id");
+
+      if (stripEl && stripPaneId) {
+        if (stripPaneId === paneId) {
+          const beforeId = beforeIdInStrip(stripEl, moveEvent.clientX);
+          insertBefore = beforeId;
+          setDragOverTab(beforeId ?? "__end__");
+          return;
+        }
+        overPane = stripPaneId;
+        overZone = "center";
+        markPaneDrop(stripPane!, "center", {
+          asTabMerge: true,
+          hint: t(dropZoneLabelKey("center")),
+        });
+        return;
+      }
+
+      const targetPane = el.closest("[data-pane-id]") as HTMLElement | null;
       const targetId = targetPane?.getAttribute("data-pane-id");
       if (!targetPane || !targetId) return;
 
-      let zone = dropZoneAt(
+      const zone = dropZoneAt(
         targetPane.getBoundingClientRect(),
         moveEvent.clientX,
         moveEvent.clientY,
       );
 
-      // Dropping on another pane's tab strip always merges as a tab.
-      if (
-        targetId !== paneId &&
-        el?.closest(".vs-paneTabs, .vs-paneTabBar, [data-tab-key]")
-      ) {
-        zone = "center";
-      }
-
-      // Same pane, center: reorder tabs when hovering another tab.
-      if (targetId === paneId && zone === "center") {
-        const tabTarget = el?.closest("[data-tab-key]") as HTMLElement | null;
-        const key = tabTarget?.getAttribute("data-tab-key");
-        overTab = key && key !== tabKey ? key : null;
-        setDragOverTab(overTab);
+      if (targetId === paneId) {
+        if (zone === "center" || surfaceOrder.length < 2) return;
+        overPane = targetId;
+        overZone = zone;
+        markPaneDrop(targetPane, zone, {
+          asTabMerge: false,
+          hint: t(dropZoneLabelKey(zone)),
+        });
         return;
       }
 
-      // Same pane edge → split this tab out; other pane → merge or dock.
       overPane = targetId;
       overZone = zone;
-      markPaneDrop(targetPane, zone, targetId !== paneId);
+      markPaneDrop(targetPane, zone, {
+        asTabMerge: zone === "center",
+        hint: t(dropZoneLabelKey(zone)),
+      });
     };
 
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
       clearPaneDropClasses();
+      document.body.classList.remove("is-tab-dragging");
       if (active) {
         suppressTabClickRef.current = true;
         emitPaneDrag(false);
-        if (overSnap && soleSurface) {
-          void applySnapLayout(overSnap as SnapLayoutId, paneId);
+        if (overSnap) {
+          snapDragToLayout(overSnap as SnapLayoutId, paneId, tabKey);
+        } else if (insertBefore !== undefined) {
+          placePaneTab(paneId, tabKey, insertBefore);
         } else if (overPane && overZone) {
           dockPaneTab(paneId, overPane, tabKey, overZone);
-        } else if (overTab) {
-          reorderPaneTabs(paneId, tabKey, overTab);
         }
       }
       setDraggingTab(null);
@@ -292,6 +465,7 @@ function PaneLeaf({
 
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   };
 
   const onTabActivate = (action: () => void) => {
@@ -319,38 +493,64 @@ function PaneLeaf({
     setRenamingId(null);
   };
 
-  // Empty pane (no shells, no browser) → spawn Shell. Browser-only → leave it.
+  // Empty terminal pane → spawn Shell. Browser / media-only / held → leave as-is.
   useEffect(() => {
-    if (!spawnReady) return;
-    if (hasBrowser || tabIds.length > 0) {
+    if (hasBrowser || hasMedia || tabIds.length > 0) {
       spawning.current = false;
       return;
     }
     if (!activeWorkspace || spawning.current) return;
+    if (!shouldAutoSpawnShell(paneId)) {
+      spawning.current = false;
+      return;
+    }
     spawning.current = true;
-    const pending = takePendingPaneSpawn(paneId);
     void enqueueTerminalSpawn(async () => {
       await yieldToUi(0);
-      return spawnInPane({
-        title: pending?.title ?? "Shell",
-        command: pending?.command,
-        accent: pending?.accent ?? "green",
-        paneId,
-        mode: "replace",
-      });
+      // Re-check after yield — resume/hold may have claimed this pane.
+      if (!shouldAutoSpawnShell(paneId)) {
+        spawning.current = false;
+        return null;
+      }
+      const queue = takePendingPaneSpawnQueue(paneId);
+      let lastId: string | null = null;
+      const items =
+        queue.length > 0
+          ? queue
+          : [{ title: "Shell", accent: "green" as const, paneId, mode: "replace" as const }];
+      for (let i = 0; i < items.length; i++) {
+        if (i > 0) await yieldToUi(40);
+        if (!shouldAutoSpawnShell(paneId) && i === 0 && queue.length === 0) {
+          spawning.current = false;
+          return null;
+        }
+        lastId = await spawnInPane({
+          title: items[i]!.title ?? "Shell",
+          command: items[i]!.command,
+          accent: items[i]!.accent ?? "green",
+          paneId,
+          mode: i === 0 ? "replace" : "tab",
+          paste: items[i]!.paste,
+          shell: items[i]!.shell,
+          workspaceId: items[i]!.workspaceId,
+        });
+      }
+      return lastId;
     }).then((id) => {
       if (id) clearPendingPaneSpawn(paneId);
       else spawning.current = false;
     });
   }, [
-    spawnReady,
     hasBrowser,
+    hasMedia,
     tabIds.length,
     activeWorkspace,
     paneId,
     spawnInPane,
-    takePendingPaneSpawn,
+    takePendingPaneSpawnQueue,
     clearPendingPaneSpawn,
+    shouldAutoSpawnShell,
+    emptyPaneSpawnEpoch,
   ]);
 
   const browserTabLabel =
@@ -364,16 +564,31 @@ function PaneLeaf({
         if ((event.target as HTMLElement).closest("input, textarea, a, [data-no-ctx]")) return;
         event.preventDefault();
         focusPane(paneId);
+        const tabKey =
+          (event.target as HTMLElement).closest("[data-tab-key]")?.getAttribute("data-tab-key") ??
+          null;
         setMenu({
           paneId,
           x: event.clientX,
           y: event.clientY,
-          isBrowser: browserActive,
-          sessionId: activeId,
+          isBrowser: tabKey === BROWSER_TAB ? true : tabKey ? false : browserActive,
+          sessionId:
+            tabKey && tabKey !== BROWSER_TAB && tabKey !== MEDIA_TAB
+              ? tabKey
+              : tabKey === BROWSER_TAB || tabKey === MEDIA_TAB
+                ? null
+                : activeId,
+          tabId:
+            tabKey ??
+            (mediaActive ? MEDIA_TAB : browserActive ? BROWSER_TAB : activeId),
         });
       }}
       onMouseDown={(event) => {
-        if ((event.target as HTMLElement).closest("[data-no-drag]")) {
+        if (
+          (event.target as HTMLElement).closest(
+            "[data-no-drag], [data-tab-key], .vs-paneTabs, .vs-paneTabClose",
+          )
+        ) {
           focusPane(paneId);
           return;
         }
@@ -402,7 +617,7 @@ function PaneLeaf({
             markPaneDrop(
               target,
               dropZoneAt(target.getBoundingClientRect(), moveEvent.clientX, moveEvent.clientY),
-              false,
+              { asTabMerge: false },
             );
           }
         };
@@ -417,7 +632,7 @@ function PaneLeaf({
           const snapId = snap?.getAttribute("data-snap-layout");
           emitPaneDrag(false);
           if (snapId) {
-            void applySnapLayout(snapId as SnapLayoutId, fromId);
+            snapDragToLayout(snapId as SnapLayoutId, fromId);
             return;
           }
 
@@ -435,14 +650,167 @@ function PaneLeaf({
         window.addEventListener("mousemove", onMove);
         window.addEventListener("mouseup", onUp);
       }}
+      onDragEnter={(event) => {
+        if (isAgentDrag(event.dataTransfer)) {
+          event.preventDefault();
+          return;
+        }
+        if (!isExternalFileDrag(event.dataTransfer.types)) return;
+        event.preventDefault();
+        emitPaneDrag(true, "file");
+      }}
+      onDragOver={(event) => {
+        if (isAgentDrag(event.dataTransfer)) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+          const zone = dropZoneAt(
+            event.currentTarget.getBoundingClientRect(),
+            event.clientX,
+            event.clientY,
+          );
+          markPaneDrop(event.currentTarget, zone, {
+            asTabMerge: zone === "center",
+            hint: t(dropZoneLabelKey(zone)),
+          });
+          return;
+        }
+        if (!isExternalFileDrag(event.dataTransfer.types)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        emitPaneDrag(true, "file");
+        syncFileDropPaint(event.clientX, event.clientY, t);
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+        clearFileDropPaint();
+      }}
+      onDrop={(event) => {
+        const agentPayload = readAgentDrag(event.dataTransfer);
+        if (agentPayload || isAgentDrag(event.dataTransfer)) {
+          if (!agentPayload) return;
+          event.preventDefault();
+          event.stopPropagation();
+          clearPaneDropClasses();
+          emitPaneDrag(false);
+          endAgentDragSession();
+          focusPane(paneId);
+          const zone = dropZoneAt(
+            event.currentTarget.getBoundingClientRect(),
+            event.clientX,
+            event.clientY,
+          );
+          if (agentPayload.runId) {
+            const run =
+              agentRuns.find((item) => item.id === agentPayload.runId) ??
+              runFromDragPayload(agentPayload, activeWorkspace, workspaces);
+            if (run) {
+              void resumeAgentRunAtDrop(run, paneId, zone);
+              return;
+            }
+          }
+          if (
+            agentPayload.live &&
+            agentPayload.sessionId &&
+            agentPayload.paneId &&
+            agentPayload.workspaceId === activeWorkspace?.id
+          ) {
+            if (agentPayload.paneId === paneId && zone === "center") {
+              activatePaneSession(paneId, agentPayload.sessionId);
+              return;
+            }
+            dockPaneTab(agentPayload.paneId, paneId, agentPayload.sessionId, zone);
+            return;
+          }
+          const bot = agentBots.find((b) => b.id === agentPayload.agentId);
+          const command =
+            bot && !agentPayload.runId
+              ? resolveBotCommand(bot, agentAvailability) || agentPayload.command
+              : resumeCommandFor(bot, agentPayload.command, agentAvailability) ??
+                agentPayload.command;
+          void launchAgent({
+            title: agentPayload.agentName,
+            agentId: agentPayload.agentId,
+            command,
+            shell: agentPayload.shell,
+            accent: agentPayload.accent as Accent | undefined,
+            paneId,
+            forceNew: true,
+            mode: "tab",
+          }).then((id) => {
+            if (id && zone !== "center") dockPaneTab(paneId, paneId, id, zone);
+          });
+          return;
+        }
+        if (isExternalFileDrag(event.dataTransfer.types)) {
+          event.preventDefault();
+          event.stopPropagation();
+          clearFileDropPaint();
+          emitPaneDrag(false, "file");
+          focusPane(paneId);
+          const zone = resolveFileDropZone(
+            event.currentTarget,
+            event.clientX,
+            event.clientY,
+          );
+          if (zone === "chat") return;
+          void (async () => {
+            const files = event.dataTransfer.files;
+            if (files?.length) {
+              for (const file of Array.from(files)) {
+                const anyFile = file as File & { path?: string };
+                const diskPath = anyFile.path?.trim();
+                if (diskPath && isPreviewDropPath(diskPath)) {
+                  void handleFileDropAt(paneId, zone, "", {
+                    shiftKey: event.shiftKey,
+                    rawPaths: [diskPath],
+                  });
+                  return;
+                }
+                if (
+                  !diskPath &&
+                  (isPanePreviewMime(file.type) || isPreviewDropPath(file.name))
+                ) {
+                  const temp = await saveBlobToTemp(file, file.name);
+                  if (temp) {
+                    void handleFileDropAt(paneId, zone, "", {
+                      shiftKey: event.shiftKey,
+                      rawPaths: [temp],
+                    });
+                    return;
+                  }
+                }
+              }
+            }
+            const payload = await payloadFromHtml5FileDrop(event.dataTransfer, {
+              cwd: activeWorkspace?.cwd || null,
+            });
+            if (!payload) return;
+            const paths = files?.length
+              ? Array.from(files).map((f) => {
+                  const anyFile = f as File & { path?: string };
+                  return anyFile.path || f.name;
+                })
+              : undefined;
+            void handleFileDropAt(paneId, zone, bracketedFilePayload(payload), {
+              shiftKey: event.shiftKey,
+              rawPaths: paths,
+            });
+          })();
+        }
+      }}
     >
       {hasChrome ? (
         <div className="vs-paneTerminalStack">
-          <div className="vs-paneTabBar" data-pane-drag={paneId}>
-            <span className="vs-dragHandle" title={t("term.drag")} aria-hidden>
+          <div className="vs-paneTabBar">
+            <span className="vs-dragHandle" data-pane-drag={paneId} title={t("term.drag")} aria-hidden>
               <IconGrip size={14} />
             </span>
-            <div className="vs-paneTabs" role="tablist" data-no-drag ref={tabsStripRef}>
+            <div
+              className={`vs-paneTabs${dragOverTab === "__end__" ? " is-drop-end" : ""}`}
+              role="tablist"
+              data-no-drag
+              ref={tabsStripRef}
+            >
               {surfaceOrder.map((key) => {
                 if (key === BROWSER_TAB) {
                   return (
@@ -479,14 +847,59 @@ function PaneLeaf({
                         title={t("term.closeTab")}
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (tabIds.length === 0) void closePane(paneId);
-                          else closeBrowserTab(paneId);
+                          void closePaneSurface(paneId, BROWSER_TAB);
                         }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.stopPropagation();
-                            if (tabIds.length === 0) void closePane(paneId);
-                            else closeBrowserTab(paneId);
+                            void closePaneSurface(paneId, BROWSER_TAB);
+                          }
+                        }}
+                      >
+                        <IconX size={12} />
+                      </span>
+                    </button>
+                  );
+                }
+
+                if (key === MEDIA_TAB && mediaPath) {
+                  const label = mediaTabTitle(mediaPath);
+                  return (
+                    <button
+                      key={MEDIA_TAB}
+                      type="button"
+                      role="tab"
+                      data-tab-key={MEDIA_TAB}
+                      aria-selected={mediaActive}
+                      title={label}
+                      className={`vs-paneTab${mediaActive ? " is-active" : ""}${
+                        draggingTab === MEDIA_TAB ? " is-dragging" : ""
+                      }${dragOverTab === MEDIA_TAB ? " is-drop" : ""}`}
+                      onPointerDown={(e) => beginTabDrag(MEDIA_TAB, e)}
+                      onClick={() =>
+                        onTabActivate(() => {
+                          focusMediaInPane(paneId);
+                          focusPane(paneId);
+                        })
+                      }
+                    >
+                      <TabGlyph>
+                        <MaterialFileIcon name={label} isDir={false} size={14} className="vs-paneTabIcon" />
+                      </TabGlyph>
+                      <span className="vs-paneTabLabel">{label}</span>
+                      <span
+                        className="vs-paneTabClose"
+                        role="button"
+                        tabIndex={0}
+                        title={t("term.closeTab")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void closePaneSurface(paneId, MEDIA_TAB);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.stopPropagation();
+                            void closePaneSurface(paneId, MEDIA_TAB);
                           }
                         }}
                       >
@@ -499,7 +912,8 @@ function PaneLeaf({
                 const s = sessions[key];
                 if (!s) return null;
                 const renaming = renamingId === key;
-                const active = !browserActive && key === activeId;
+                const active = !browserActive && !mediaActive && key === activeId;
+                const agentId = agentIdForSession(s, agentRuns);
                 return (
                   <button
                     key={key}
@@ -528,7 +942,11 @@ function PaneLeaf({
                     }}
                   >
                     <TabGlyph>
-                      <IconTerminal size={11} className="vs-paneTabIcon" />
+                      {agentId !== "shell" ? (
+                        <AgentBrandIcon id={agentId} size={12} className="vs-paneTabIcon" />
+                      ) : (
+                        <IconTerminal size={12} className="vs-paneTabIcon" />
+                      )}
                     </TabGlyph>
                     {renaming ? (
                       <input
@@ -559,17 +977,15 @@ function PaneLeaf({
                       className="vs-paneTabClose"
                       role="button"
                       tabIndex={0}
-                      title={tabIds.length > 1 || hasBrowser ? t("term.closeTab") : t("term.close")}
+                      title={t("term.closeTab")}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (tabIds.length > 1 || hasBrowser) void closeSession(key);
-                        else void closePane(paneId);
+                        void closePaneSurface(paneId, key);
                       }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.stopPropagation();
-                          if (tabIds.length > 1 || hasBrowser) void closeSession(key);
-                          else void closePane(paneId);
+                          void closePaneSurface(paneId, key);
                         }
                       }}
                     >
@@ -581,7 +997,7 @@ function PaneLeaf({
             </div>
             <PaneActions
               paneId={paneId}
-              sessionId={browserActive ? null : activeId}
+              sessionId={browserActive || mediaActive ? null : activeId}
               isBrowser={browserActive}
             />
           </div>
@@ -599,17 +1015,22 @@ function PaneLeaf({
                   url={browserUrl || ""}
                   onUrlChange={(url) => setPaneBrowserUrl(paneId, url)}
                   onMetaChange={setBrowserMeta}
-                  onClose={() => {
-                    if (tabIds.length === 0) void closePane(paneId);
-                    else closeBrowserTab(paneId);
-                  }}
+                  onClose={() => void closePaneSurface(paneId, BROWSER_TAB)}
                 />
+              </div>
+            ) : null}
+            {hasMedia && mediaPath ? (
+              <div
+                className={`vs-paneTabBody${mediaActive ? " is-visible" : ""}`}
+                hidden={!mediaActive}
+              >
+                <PaneMediaPreview paneId={paneId} absPath={mediaPath} />
               </div>
             ) : null}
             {tabIds.map((id) => {
               const s = sessions[id];
               if (!s || !mountedTabs.has(id)) return null;
-              const visible = !browserActive && id === activeId;
+              const visible = !browserActive && !mediaActive && id === activeId;
               return (
                 <div
                   key={id}
@@ -624,7 +1045,7 @@ function PaneLeaf({
                     onFocus={() => {
                       if (!focused) focusPane(paneId);
                     }}
-                    onClose={() => void closePane(paneId)}
+                    onClose={() => void closePaneSurface(paneId, s.id)}
                     onRestart={() => void restartSession(s.id)}
                   />
                 </div>
@@ -661,6 +1082,7 @@ function SplitView({ node }: { node: SplitNode }) {
         sessionIds={node.sessionIds}
         tabOrder={node.tabOrder}
         browserUrl={node.browserUrl ?? null}
+        mediaPath={node.mediaPath ?? null}
       />
     );
   }
@@ -724,6 +1146,13 @@ function SplitView({ node }: { node: SplitNode }) {
 }
 
 export function SplitGrid({ layout }: { layout: SplitNode }) {
+  const { activeWorkspace, handleFileDropAt, t } = useSpace();
+  useWorkspaceFileDrop({
+    cwd: activeWorkspace?.cwd || "",
+    t,
+    handleFileDropAt,
+  });
+
   return (
     <div className="vs-splitRoot">
       <SplitView node={layout} />

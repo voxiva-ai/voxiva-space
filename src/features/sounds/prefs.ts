@@ -16,7 +16,7 @@ export const DEFAULT_SOUND_PREFS: SoundPrefs = {
   enabled: true,
   onAttention: true,
   onExit: true,
-  preset: "bell",
+  preset: "soft",
   customDataUrl: null,
   activeWorkspaceOnly: false,
   mutedWorkspaces: [],
@@ -107,33 +107,40 @@ function tone(freqs: number[], duration = 0.35, gain = 0.12) {
 function playPreset(preset: SoundPreset, customDataUrl: string | null) {
   if (preset === "custom" && customDataUrl) {
     const audio = new Audio(customDataUrl);
-    audio.volume = 0.7;
+    audio.volume = 0.55;
     void audio.play().catch(() => undefined);
     return;
   }
   if (preset === "soft") {
-    tone([523.25, 659.25], 0.28, 0.08);
+    tone([523.25, 659.25], 0.22, 0.06);
     return;
   }
   if (preset === "chime") {
-    tone([784.0], 0.18, 0.1);
-    window.setTimeout(() => tone([1046.5], 0.32, 0.09), 120);
+    tone([784.0], 0.14, 0.07);
+    window.setTimeout(() => tone([1046.5], 0.22, 0.06), 100);
     return;
   }
   // bell
-  tone([880, 1320], 0.45, 0.11);
+  tone([880, 1320], 0.32, 0.08);
 }
 
 export type SoundEvent = "attention" | "exit";
 
-/** Global coalesce — burst of bots → one soft ping, not five. */
-const COALESCE_MS = 650;
-let lastPlayAt = 0;
-let lastPlayEvent: SoundEvent | null = null;
+/** Global burst coalesce — multiple panes finishing at once → one chime. */
+const GLOBAL_COALESCE_MS = 2800;
+const sessionCoalesceMs = 16_000;
+
+let lastGlobalPlayAt = 0;
+let lastGlobalEvent: SoundEvent | null = null;
+const sessionLastPlayAt = new Map<string, number>();
 
 export function playNotifySound(
   event: SoundEvent,
-  opts?: { workspaceId?: string | null; activeWorkspaceId?: string | null },
+  opts?: {
+    workspaceId?: string | null;
+    activeWorkspaceId?: string | null;
+    sessionId?: string | null;
+  },
 ) {
   const prefs = loadSoundPrefs();
   if (!prefs.enabled) return;
@@ -147,11 +154,18 @@ export function playNotifySound(
   }
 
   const now = Date.now();
-  // Same or any event within the window: skip (one pleasant chime for a burst).
-  if (lastPlayAt && now - lastPlayAt < COALESCE_MS) return;
-  lastPlayAt = now;
-  lastPlayEvent = event;
-  void lastPlayEvent;
+  const sessionId = opts?.sessionId ?? null;
+
+  if (sessionId) {
+    const lastSession = sessionLastPlayAt.get(sessionId) ?? 0;
+    if (now - lastSession < sessionCoalesceMs) return;
+    sessionLastPlayAt.set(sessionId, now);
+  }
+
+  const globalGap = now - lastGlobalPlayAt;
+  if (globalGap < GLOBAL_COALESCE_MS && lastGlobalEvent === event) return;
+  lastGlobalPlayAt = now;
+  lastGlobalEvent = event;
 
   try {
     playPreset(prefs.preset, prefs.customDataUrl);

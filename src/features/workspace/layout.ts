@@ -16,6 +16,7 @@ export function createLeaf(
     sessionIds: kind === "terminal" && sessionId ? [sessionId] : [],
     // null = no browser tab; "" / url = browser tab present (cmux-style).
     browserUrl: kind === "browser" ? (browserUrl ?? "") : null,
+    mediaPath: null,
   };
 }
 
@@ -44,8 +45,27 @@ export function mapLeaves(node: SplitNode, fn: (leaf: LeafNode) => LeafNode): Sp
 
 /** Sentinel id for the browser surface inside `tabOrder`. */
 export const BROWSER_TAB = "__browser__";
+/** Sentinel id for in-pane image / video / audio / PDF preview. */
+export const MEDIA_TAB = "__media__";
 
-/** Terminal tabs — kept even while the browser tab is active. */
+/** Media-only leaf (image / video / audio / PDF) — never auto-spawns a shell. */
+export function createMediaLeaf(mediaPath: string): LeafNode {
+  const path = mediaPath.trim();
+  return {
+    type: "leaf",
+    paneId: uid("pane"),
+    kind: "media",
+    sessionId: null,
+    sessionIds: [],
+    browserUrl: null,
+    mediaPath: path || null,
+    tabOrder: path ? [MEDIA_TAB] : [],
+  };
+}
+
+const SURFACE_SENTINELS = new Set([BROWSER_TAB, MEDIA_TAB]);
+
+/** Terminal tabs — kept even while the browser / media tab is active. */
 export function leafTabIds(leaf: LeafNode): string[] {
   const ids = leaf.sessionIds?.filter(Boolean) ?? [];
   if (ids.length) return ids;
@@ -57,21 +77,27 @@ export function leafHasBrowser(leaf: LeafNode): boolean {
   return leaf.browserUrl !== null;
 }
 
-/** Ordered tab keys: session ids + optional browser sentinel. */
+export function leafHasMedia(leaf: LeafNode): boolean {
+  return Boolean(leaf.mediaPath);
+}
+
+/** Ordered tab keys: session ids + optional browser / media sentinels. */
 export function leafTabOrder(leaf: LeafNode): string[] {
   const sessions = leafTabIds(leaf);
-  const hasBrowser = leafHasBrowser(leaf);
-  const valid = new Set<string>([...sessions, ...(hasBrowser ? [BROWSER_TAB] : [])]);
+  const extras = [
+    ...(leafHasBrowser(leaf) ? [BROWSER_TAB] : []),
+    ...(leafHasMedia(leaf) ? [MEDIA_TAB] : []),
+  ];
+  const valid = new Set<string>([...sessions, ...extras]);
   const kept = (leaf.tabOrder ?? []).filter((id) => valid.has(id));
-  const missing = [...sessions, ...(hasBrowser ? [BROWSER_TAB] : [])].filter(
-    (id) => !kept.includes(id),
-  );
+  const missing = [...sessions, ...extras].filter((id) => !kept.includes(id));
   return [...kept, ...missing];
 }
 
 function withTabOrder(leaf: LeafNode, order: string[]): LeafNode {
-  const sessions = order.filter((id) => id !== BROWSER_TAB);
+  const sessions = order.filter((id) => !SURFACE_SENTINELS.has(id));
   const hasBrowser = order.includes(BROWSER_TAB);
+  const hasMedia = order.includes(MEDIA_TAB);
   return {
     ...leaf,
     sessionIds: sessions,
@@ -79,6 +105,7 @@ function withTabOrder(leaf: LeafNode, order: string[]): LeafNode {
       leaf.sessionId && sessions.includes(leaf.sessionId) ? leaf.sessionId : sessions[0] ?? null,
     tabOrder: order,
     browserUrl: hasBrowser ? (leaf.browserUrl ?? "") : null,
+    mediaPath: hasMedia ? leaf.mediaPath || null : null,
   };
 }
 
@@ -104,15 +131,56 @@ export function closeBrowserTab(node: SplitNode, paneId: string): SplitNode {
   return mapLeaves(node, (leaf) => {
     if (leaf.paneId !== paneId) return leaf;
     const order = leafTabOrder(leaf).filter((id) => id !== BROWSER_TAB);
-    const tabs = order.filter((id) => id !== BROWSER_TAB);
+    const tabs = leafTabIds(leaf);
+    const nextKind: LeafNode["kind"] = order.includes(MEDIA_TAB)
+      ? "media"
+      : "terminal";
     return {
       ...withTabOrder({ ...leaf, browserUrl: null }, order),
       browserUrl: null,
-      kind: "terminal",
+      kind: nextKind,
       sessionId: leaf.sessionId && tabs.includes(leaf.sessionId) ? leaf.sessionId : tabs[0] ?? null,
       sessionIds: tabs,
     };
   });
+}
+
+/** Open / focus media preview tab (image / video / audio / PDF). */
+export function openMediaTab(node: SplitNode, paneId: string, mediaPath: string): SplitNode {
+  const path = mediaPath.trim();
+  if (!path) return node;
+  return mapLeaves(node, (leaf) => {
+    if (leaf.paneId !== paneId) return leaf;
+    const order = leafTabOrder({ ...leaf, mediaPath: path });
+    const nextOrder = order.includes(MEDIA_TAB) ? order : [...order, MEDIA_TAB];
+    return {
+      ...withTabOrder({ ...leaf, mediaPath: path }, nextOrder),
+      kind: "media",
+      mediaPath: path,
+    };
+  });
+}
+
+export function closeMediaTab(node: SplitNode, paneId: string): SplitNode {
+  return mapLeaves(node, (leaf) => {
+    if (leaf.paneId !== paneId) return leaf;
+    const order = leafTabOrder(leaf).filter((id) => id !== MEDIA_TAB);
+    const tabs = leafTabIds(leaf);
+    const nextKind: LeafNode["kind"] = order.includes(BROWSER_TAB) ? "browser" : "terminal";
+    return {
+      ...withTabOrder({ ...leaf, mediaPath: null }, order),
+      mediaPath: null,
+      kind: nextKind,
+      sessionId: leaf.sessionId && tabs.includes(leaf.sessionId) ? leaf.sessionId : tabs[0] ?? null,
+      sessionIds: tabs,
+    };
+  });
+}
+
+/** Open media as a sibling tab (center drop) or replace path when already open. */
+export function setLeafMedia(node: SplitNode, paneId: string, mediaPath: string | null): SplitNode {
+  if (!mediaPath) return closeMediaTab(node, paneId);
+  return openMediaTab(node, paneId, mediaPath);
 }
 
 /** Reorder a tab (session id or `BROWSER_TAB`) within a pane strip. */
@@ -135,6 +203,30 @@ export function reorderLeafTabs(
   });
 }
 
+/** Place `tabId` before `beforeId` (or at the end when `beforeId` is null). */
+export function placeLeafTab(
+  node: SplitNode,
+  paneId: string,
+  tabId: string,
+  beforeId: string | null,
+): SplitNode {
+  return mapLeaves(node, (leaf) => {
+    if (leaf.paneId !== paneId) return leaf;
+    const order = leafTabOrder(leaf);
+    if (!order.includes(tabId)) return leaf;
+    const rest = order.filter((id) => id !== tabId);
+    if (beforeId === null) {
+      if (order[order.length - 1] === tabId) return leaf;
+      return withTabOrder(leaf, [...rest, tabId]);
+    }
+    const at = rest.indexOf(beforeId);
+    if (at < 0) return leaf;
+    const next = [...rest.slice(0, at), tabId, ...rest.slice(at)];
+    if (next.every((id, i) => id === order[i])) return leaf;
+    return withTabOrder(leaf, next);
+  });
+}
+
 export function setLeafSession(node: SplitNode, paneId: string, sessionId: string | null): SplitNode {
   return mapLeaves(node, (leaf) =>
     leaf.paneId === paneId
@@ -151,30 +243,7 @@ export function setLeafSession(node: SplitNode, paneId: string, sessionId: strin
 
 /** Copy terminal/browser content (including all tabs) onto a target pane id. */
 export function setLeafContents(node: SplitNode, paneId: string, source: LeafNode): SplitNode {
-  return mapLeaves(node, (leaf) => {
-    if (leaf.paneId !== paneId) return leaf;
-    if (source.kind === "browser") {
-      return {
-        ...leaf,
-        kind: "browser",
-        sessionId: null,
-        sessionIds: [],
-        browserUrl: source.browserUrl,
-      };
-    }
-    const sessionIds = leafTabIds(source);
-    const sessionId =
-      source.sessionId && sessionIds.includes(source.sessionId)
-        ? source.sessionId
-        : sessionIds[0] ?? null;
-    return {
-      ...leaf,
-      kind: "terminal",
-      sessionId,
-      sessionIds,
-      browserUrl: null,
-    };
-  });
+  return mapLeaves(node, (leaf) => (leaf.paneId === paneId ? copyLeafSurfaces(leaf, source) : leaf));
 }
 
 /** Append a terminal tab; make it active. Keeps existing tabs alive. */
@@ -204,14 +273,45 @@ export function removeLeafSession(node: SplitNode, paneId: string, sessionId: st
   return mapLeaves(node, (leaf) => {
     if (leaf.paneId !== paneId) return leaf;
     const order = leafTabOrder(leaf).filter((id) => id !== sessionId);
-    const sessionIds = order.filter((id) => id !== BROWSER_TAB);
+    const sessionIds = order.filter((id) => !SURFACE_SENTINELS.has(id));
     const nextActive =
       leaf.sessionId === sessionId ? sessionIds[sessionIds.length - 1] ?? null : leaf.sessionId;
+    const nextKind: LeafNode["kind"] = order.includes(MEDIA_TAB)
+      ? "media"
+      : order.includes(BROWSER_TAB)
+        ? "browser"
+        : "terminal";
     return {
-      ...withTabOrder({ ...leaf, browserUrl: order.includes(BROWSER_TAB) ? leaf.browserUrl : null }, order),
+      ...withTabOrder(leaf, order),
       sessionIds,
       sessionId: nextActive && sessionIds.includes(nextActive) ? nextActive : sessionIds[0] ?? null,
-      kind: leaf.kind === "browser" && order.includes(BROWSER_TAB) ? "browser" : "terminal",
+      kind: nextKind,
+    };
+  });
+}
+
+/** Swap a tab id in-place (restore / respawn without dropping the tab strip). */
+export function replaceLeafSessionId(
+  node: SplitNode,
+  paneId: string,
+  fromId: string,
+  toId: string,
+): SplitNode {
+  return mapLeaves(node, (leaf) => {
+    if (leaf.paneId !== paneId) return leaf;
+    const order = leafTabOrder(leaf).map((id) => (id === fromId ? toId : id));
+    const sessionIds = order.filter((id) => !SURFACE_SENTINELS.has(id));
+    const nextActive =
+      leaf.sessionId === fromId
+        ? toId
+        : leaf.sessionId && sessionIds.includes(leaf.sessionId)
+          ? leaf.sessionId
+          : sessionIds[0] ?? null;
+    return {
+      ...withTabOrder(leaf, order),
+      sessionIds,
+      sessionId: nextActive,
+      kind: "terminal",
     };
   });
 }
@@ -255,6 +355,20 @@ export function moveTabToPane(
     let next = closeBrowserTab(layout, fromPaneId);
     next = openBrowserTab(next, toPaneId);
     next = setLeafBrowser(next, toPaneId, fromUrl);
+    return next;
+  }
+
+  if (tabId === MEDIA_TAB) {
+    if (!leafHasMedia(from) || !from.mediaPath) return layout;
+    const fromPath = from.mediaPath;
+    if (leafHasMedia(to)) {
+      const toPath = to.mediaPath ?? "";
+      let next = setLeafMedia(layout, fromPaneId, toPath || null);
+      next = setLeafMedia(next, toPaneId, fromPath);
+      return next;
+    }
+    let next = closeMediaTab(layout, fromPaneId);
+    next = setLeafMedia(next, toPaneId, fromPath);
     return next;
   }
 
@@ -429,8 +543,34 @@ export function movePane(
   return clampLayoutRatios(equalizeLayout(insertBeside(rest, toId, detached, zone)));
 }
 
-function leafSurfaceCount(leaf: LeafNode) {
-  return leafTabIds(leaf).length + (leafHasBrowser(leaf) ? 1 : 0);
+export function leafSurfaceCount(leaf: LeafNode) {
+  return leafTabIds(leaf).length + (leafHasBrowser(leaf) ? 1 : 0) + (leafHasMedia(leaf) ? 1 : 0);
+}
+
+/** Copy tabs + browser onto another leaf without dropping the other kind. */
+export function copyLeafSurfaces(target: LeafNode, source: LeafNode): LeafNode {
+  return {
+    type: "leaf",
+    paneId: target.paneId,
+    kind: source.kind,
+    sessionId: source.sessionId,
+    sessionIds: source.sessionIds ? [...source.sessionIds] : leafTabIds(source),
+    tabOrder: leafTabOrder(source),
+    browserUrl: source.browserUrl,
+    mediaPath: source.mediaPath ?? null,
+  };
+}
+
+export function remapLeafPaneIds(node: SplitNode, map: Record<string, string>): SplitNode {
+  if (node.type === "leaf") {
+    const nextId = map[node.paneId];
+    return nextId && nextId !== node.paneId ? { ...node, paneId: nextId } : node;
+  }
+  return {
+    ...node,
+    first: remapLeafPaneIds(node.first, map),
+    second: remapLeafPaneIds(node.second, map),
+  };
 }
 
 /**
@@ -477,6 +617,10 @@ export function dockTab(
     if (!leafHasBrowser(from)) return { layout, focusPaneId: fromPaneId };
     extracted = createBrowserLeaf(from.browserUrl ?? "");
     next = closeBrowserTab(next, fromPaneId);
+  } else if (tabId === MEDIA_TAB) {
+    if (!leafHasMedia(from) || !from.mediaPath) return { layout, focusPaneId: fromPaneId };
+    extracted = { ...createLeaf(null), kind: "media", mediaPath: from.mediaPath };
+    next = closeMediaTab(next, fromPaneId);
   } else {
     if (!leafTabIds(from).includes(tabId)) return { layout, focusPaneId: fromPaneId };
     extracted = createLeaf(tabId);
@@ -548,6 +692,23 @@ export function addBrowserAtZone(
 ): { layout: SplitNode; paneId: string } | null {
   if (!findLeaf(layout, paneId)) return null;
   const leaf = createBrowserLeaf("");
+  return {
+    layout: clampLayoutRatios(equalizeLayout(insertBeside(layout, paneId, leaf, zone))),
+    paneId: leaf.paneId,
+  };
+}
+
+/** Add a media preview pane on a specific edge — no shell spawn. */
+export function addMediaAtZone(
+  layout: SplitNode,
+  paneId: string,
+  zone: Exclude<DropZone, "center">,
+  mediaPath: string,
+): { layout: SplitNode; paneId: string } | null {
+  if (!findLeaf(layout, paneId)) return null;
+  const path = mediaPath.trim();
+  if (!path) return null;
+  const leaf = createMediaLeaf(path);
   return {
     layout: clampLayoutRatios(equalizeLayout(insertBeside(layout, paneId, leaf, zone))),
     paneId: leaf.paneId,
@@ -633,36 +794,8 @@ export function swapPaneContents(node: SplitNode, fromPaneId: string, toPaneId: 
   const to = findLeaf(node, toPaneId);
   if (!from || !to) return node;
   return mapLeaves(node, (leaf) => {
-    if (leaf.paneId === fromPaneId) {
-      const sessionIds = leafTabIds(to);
-      return {
-        ...leaf,
-        kind: to.kind ?? "terminal",
-        sessionId:
-          to.kind === "browser"
-            ? null
-            : to.sessionId && sessionIds.includes(to.sessionId)
-              ? to.sessionId
-              : sessionIds[0] ?? null,
-        sessionIds: to.kind === "browser" ? [] : sessionIds,
-        browserUrl: to.kind === "browser" ? to.browserUrl : null,
-      };
-    }
-    if (leaf.paneId === toPaneId) {
-      const sessionIds = leafTabIds(from);
-      return {
-        ...leaf,
-        kind: from.kind ?? "terminal",
-        sessionId:
-          from.kind === "browser"
-            ? null
-            : from.sessionId && sessionIds.includes(from.sessionId)
-              ? from.sessionId
-              : sessionIds[0] ?? null,
-        sessionIds: from.kind === "browser" ? [] : sessionIds,
-        browserUrl: from.kind === "browser" ? from.browserUrl : null,
-      };
-    }
+    if (leaf.paneId === fromPaneId) return copyLeafSurfaces(leaf, to);
+    if (leaf.paneId === toPaneId) return copyLeafSurfaces(leaf, from);
     return leaf;
   });
 }
@@ -795,6 +928,40 @@ export function shrinkLayoutToCount(layout: SplitNode, count: number): SplitNode
     guard += 1;
   }
   return next ?? createLeaf(null);
+}
+
+/** Rearrange existing panes into a snap template. Keeps pane ids and all tabs. */
+export function arrangeSnapLayout(
+  layout: SplitNode,
+  id: SnapLayoutId,
+  primaryPaneId?: string,
+): SplitNode {
+  const oldLeaves = [...collectLeaves(layout)];
+  if (oldLeaves.length === 0) return layout;
+  if (primaryPaneId) {
+    const idx = oldLeaves.findIndex((leaf) => leaf.paneId === primaryPaneId);
+    if (idx > 0) {
+      const [primary] = oldLeaves.splice(idx, 1);
+      oldLeaves.unshift(primary);
+    }
+  }
+
+  let next = buildSnapLayout(id);
+  const need = oldLeaves.length;
+  if (countLeaves(next) < need) next = expandLayoutToCount(next, need);
+  else if (countLeaves(next) > need) next = shrinkLayoutToCount(next, need);
+
+  const paneIds = collectPaneIds(next);
+  const idMap: Record<string, string> = {};
+  for (let i = 0; i < oldLeaves.length; i += 1) {
+    const prev = oldLeaves[i];
+    const paneId = paneIds[i];
+    if (!prev || !paneId) continue;
+    next = setLeafContents(next, paneId, prev);
+    if (prev.paneId !== paneId) idMap[paneId] = prev.paneId;
+  }
+  if (Object.keys(idMap).length) next = remapLeafPaneIds(next, idMap);
+  return clampLayoutRatios(next);
 }
 
 /** BridgeSpace-style workspace templates. */

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
@@ -9,14 +9,36 @@ import { clientError } from "@/lib/errors";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import { resizeTerminalSession, writeTerminalSession } from "../api";
 import {
-  formatPathsForPty,
   payloadFromDataTransfer,
+  rawPathsFromDataTransfer,
   registerTerminalOsDropTarget,
 } from "../drop";
-import { bracketedPaste, payloadFromClipboardSnapshot, payloadFromFileList, snapshotClipboard } from "../paste";
+import {
+  bracketedPaste,
+  formatAgentAttachment,
+  payloadFromClipboardSnapshot,
+  payloadFromFileList,
+  snapshotClipboard,
+  wrapAgentPaste,
+} from "../paste";
 import { nextXtermMountDelay } from "../spawnQueue";
 import type { TerminalExitEvent, TerminalOutputEvent } from "../types";
-import { readXtermTheme } from "../xtermTheme";
+import { subscribeTheme } from "@/features/theme";
+import { xtermThemeForId } from "../xtermTheme";
+import { subscribeZoom } from "@/features/ui/zoom";
+import { isAgentDrag } from "@/features/agents/drag";
+import { agentIdForSession } from "@/features/agents/sessionAgent";
+import { isAgentChatDropRelease } from "@/features/agents/agentChatDrop";
+import {
+  clearFileDropPaint,
+  emitPaneDrag,
+  isExternalFileDrag,
+  resetDragUi,
+} from "@/features/workspace/paneDropOverlay";
+import {
+  previewPathsFromDataTransfer,
+  resolvePreviewPathsFromDrop,
+} from "@/features/workspace/workspaceFileDrop";
 
 function keyEventToPty(event: KeyboardEvent): string | null {
   if (event.isComposing || event.defaultPrevented) return null;
@@ -129,7 +151,8 @@ export function TerminalPane({
   onRestart: () => void;
   onFocus: () => void;
 }) {
-  const { setError, t, theme, activeWorkspace } = useSpace();
+  const { setError, t, activeWorkspace, takePendingSessionPaste, handleFileDropAt, agentRuns } =
+    useSpace();
   const [dropping, setDropping] = useState(false);
   const [xtermReady, setXtermReady] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -171,59 +194,82 @@ export function TerminalPane({
     }, 8);
   };
 
-  const insertIntoPty = (data: string) => {
+  const insertIntoPty = (data: string, opts?: { focus?: boolean }) => {
     if (!data || session.status !== "online") return;
-    onFocus();
-    terminalRef.current?.focus();
+    if (opts?.focus !== false) {
+      onFocus();
+      terminalRef.current?.focus();
+    }
     sendToPty(data);
   };
+
+  const agentId = agentIdForSession(session, agentRuns);
+  const isAgentSession = agentId !== "shell";
+
+  const pasteInto = (payload: string) => {
+    insertIntoPty(isAgentSession ? wrapAgentPaste(agentId, payload) : bracketedPaste(payload));
+  };
+
+  useEffect(() => {
+    if (!isAgentSession || session.status !== "online") return;
+    const shell = shellRef.current;
+    if (!shell) return;
+    const id = `${paneId}:${session.id}`;
+    return registerTerminalOsDropTarget({
+      id,
+      el: shell,
+      setHighlight: (on) => {
+        if (isAgentSession) {
+          if (on) shell.classList.add("is-dropChat");
+          else shell.classList.remove("is-dropChat");
+        } else {
+          setDropping(on);
+        }
+      },
+      onPaths: (paths) => {
+        const attachment = formatAgentAttachment(agentId, paths);
+        if (attachment) pasteInto(attachment);
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAgentSession, session.id, session.status, agentId, paneId]);
 
   useEffect(() => {
     writeFailNotified.current = false;
   }, [session.id]);
 
-  // OS Explorer → absolute paths via Tauri drag-drop (HTML5 only gets basenames).
   useEffect(() => {
-    const el = shellRef.current;
-    if (!el || session.status !== "online") return;
-    const dropId = `${paneId}:${session.id}`;
-    return registerTerminalOsDropTarget({
-      id: dropId,
-      el,
-      setHighlight: setDropping,
-      onPaths: (paths) => {
-        const payload = formatPathsForPty(paths);
-        if (!payload) return;
-        onFocus();
-        terminalRef.current?.focus();
-        void writeTerminalSession(sessionIdRef.current, bracketedPaste(payload)).catch((err) => {
-          if (!writeFailNotified.current) {
-            writeFailNotified.current = true;
-            setError(clientError(err) || t("term.writeError"));
-          }
-        });
-      },
+    if (session.status !== "online") return;
+    const pending = takePendingSessionPaste(session.id);
+    if (!pending) return;
+    onFocus();
+    terminalRef.current?.focus();
+    void writeTerminalSession(sessionIdRef.current, pending).catch((err) => {
+      if (!writeFailNotified.current) {
+        writeFailNotified.current = true;
+        setError(clientError(err) || t("term.writeError"));
+      }
     });
-  }, [paneId, session.id, session.status, onFocus, setError, t]);
+  }, [session.id, session.status, onFocus, setError, t, takePendingSessionPaste]);
 
   useEffect(() => {
     pendingOutputRef.current = "";
     setXtermReady(false);
-    const delay = nextXtermMountDelay();
+    const delay = isActive ? 0 : nextXtermMountDelay();
     if (delay <= 0) {
       setXtermReady(true);
       return;
     }
     const timer = window.setTimeout(() => setXtermReady(true), delay);
     return () => window.clearTimeout(timer);
-  }, [session.id]);
+  }, [session.id, isActive]);
 
   useEffect(() => {
     if (!xtermReady) return;
     const host = containerRef.current;
     if (!host) return;
 
-    const { theme: xtermTheme, allowTransparency } = readXtermTheme(theme);
+    const { theme: xtermTheme, allowTransparency } = xtermThemeForId();
     const terminal = new XTerm({
       cursorBlink: true,
       // TUIs (OpenCode) break with convertEol — absolute cursor addressing gets double-advanced
@@ -238,6 +284,7 @@ export function TerminalPane({
       scrollOnUserInput: true,
       scrollSensitivity: 1,
       theme: xtermTheme,
+      windowsPty: { backend: "conpty" },
     });
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
@@ -251,13 +298,27 @@ export function TerminalPane({
 
     const dataDisposable = terminal.onData((data) => sendToPty(data));
 
-    // Prefer focusing so wheel / mouse mode reach the PTY, not parent panes.
-    const onWheel = () => {
-      if (document.activeElement !== terminal.textarea) {
-        terminal.focus();
+    // Scroll scrollback without stealing focus from another pane; click to type.
+    const onWheel = (event: WheelEvent) => {
+      if (document.body.classList.contains("is-agent-dragging")) {
+        resetDragUi();
+      }
+      const focused = document.activeElement === terminal.textarea;
+      if (!focused && event.deltaY !== 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        const lines = Math.max(1, Math.round(Math.abs(event.deltaY) / 40));
+        terminal.scrollLines(event.deltaY > 0 ? lines : -lines);
       }
     };
-    host.addEventListener("wheel", onWheel, { passive: true });
+    host.addEventListener("wheel", onWheel, { passive: false });
+    const onHostPointerDown = () => {
+      if (document.body.classList.contains("is-agent-dragging")) {
+        resetDragUi();
+      }
+      terminal.focus();
+    };
+    host.addEventListener("pointerdown", onHostPointerDown);
 
     let lastCols = 0;
     let lastRows = 0;
@@ -294,11 +355,25 @@ export function TerminalPane({
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
+    const syncTheme = () => {
+      const next = xtermThemeForId();
+      terminal.options.theme = next.theme;
+      terminal.options.allowTransparency = next.allowTransparency;
+      try {
+        if (terminal.rows > 0) terminal.refresh(0, terminal.rows - 1);
+      } catch {
+        // ignore
+      }
+    };
+    const unsubTheme = subscribeTheme(syncTheme);
+
     return () => {
+      unsubTheme();
       window.clearTimeout(t1);
       if (resizeRaf) window.cancelAnimationFrame(resizeRaf);
       observer.disconnect();
       host.removeEventListener("wheel", onWheel);
+      host.removeEventListener("pointerdown", onHostPointerDown);
       dataDisposable.dispose();
       resizeFnRef.current = null;
       flushPtyWrites();
@@ -309,25 +384,28 @@ export function TerminalPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id, xtermReady]);
 
-  useLayoutEffect(() => {
-    const terminal = terminalRef.current;
-    if (!terminal) return;
-    const { theme: xtermTheme, allowTransparency } = readXtermTheme(theme);
-    terminal.options.allowTransparency = allowTransparency;
-    terminal.options.theme = xtermTheme;
-    const bg = String(xtermTheme.background || "#000000");
-    const fg = String(xtermTheme.foreground || "#f0f0f0");
-    // Sync default PTY colors for shells that honor OSC 10/11 (hex only).
-    if (bg.startsWith("#") && (bg.length === 7 || bg.length === 9)) {
-      terminal.write(`\x1b]11;${bg.slice(0, 7)}\x07`);
-      terminal.write(`\x1b]10;${fg.startsWith("#") ? fg.slice(0, 7) : fg}\x07`);
-    }
-    try {
-      terminal.refresh(0, Math.max(0, terminal.rows - 1));
-    } catch {
-      // ignore
-    }
-  }, [theme]);
+  useEffect(() => {
+    return subscribeZoom(() => {
+      const terminal = terminalRef.current;
+      const fitAddon = fitAddonRef.current;
+      const host = containerRef.current;
+      if (!terminal || !fitAddon || !host) return;
+      const prev = terminal.options.scrollback;
+      terminal.options.scrollback = 0;
+      try {
+        fitAddon.fit();
+      } catch {
+        // ignore
+      }
+      terminal.options.scrollback = prev;
+      resizeFnRef.current?.();
+      try {
+        terminal.refresh(0, Math.max(0, terminal.rows - 1));
+      } catch {
+        // ignore
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (!isActive) return;
@@ -385,23 +463,41 @@ export function TerminalPane({
       const snap = snapshotClipboard(event);
       event.preventDefault();
       event.stopPropagation();
-      void payloadFromClipboardSnapshot(snap)
+      void payloadFromClipboardSnapshot(snap, { agentId: isAgentSession ? agentId : undefined })
         .then((payload) => {
           if (!payload) return;
-          insertIntoPty(bracketedPaste(payload));
+          pasteInto(payload);
         })
-        .catch((err) => {
-          if (!writeFailNotified.current) {
-            writeFailNotified.current = true;
-            setError(clientError(err) || t("term.writeError"));
-          }
-        });
+        .catch(() => undefined);
+    };
+
+    const onKeyPaste = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      if (event.key !== "v" && event.key !== "V") return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) &&
+        !target.classList.contains("xterm-helper-textarea")
+      ) {
+        return;
+      }
+      // Let the paste event own the payload when the browser fires it.
+      // If focus is on the pane but not textarea, still allow default paste → onPaste.
+      if (document.activeElement === terminalRef.current?.textarea) return;
+      try {
+        terminalRef.current?.focus();
+      } catch {
+        // ignore
+      }
     };
 
     window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("keydown", onKeyPaste, true);
     window.addEventListener("paste", onPaste, true);
     return () => {
       window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("keydown", onKeyPaste, true);
       window.removeEventListener("paste", onPaste, true);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -434,22 +530,42 @@ export function TerminalPane({
   }, [session.id]);
 
   const isOffline = session.status !== "online";
+  const showBootOverlay = isOffline || !xtermReady;
 
   return (
     <div
       ref={shellRef}
       data-term-drop={`${paneId}:${session.id}`}
-      className={`vs-terminalShell${isActive ? " is-active" : ""}${dropping ? " is-dropFile" : ""}`}
+      className={`vs-terminalShell${isActive ? " is-active" : ""}${isAgentSession ? " is-agentChat" : ""}${!isAgentSession && dropping ? " is-dropFile" : ""}`}
       data-drop-label={t("term.dropHint")}
       onMouseDown={() => {
         onFocus();
         terminalRef.current?.focus();
       }}
       onDragEnter={(event) => {
+        if (isAgentDrag(event.dataTransfer)) {
+          event.preventDefault();
+          return;
+        }
+        if (isAgentSession && isExternalFileDrag(event.dataTransfer.types)) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+          return;
+        }
         event.preventDefault();
         setDropping(true);
       }}
       onDragOver={(event) => {
+        if (isAgentDrag(event.dataTransfer)) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+          return;
+        }
+        if (isAgentSession && isExternalFileDrag(event.dataTransfer.types)) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+          return;
+        }
         event.preventDefault();
         event.dataTransfer.dropEffect = "copy";
         setDropping(true);
@@ -459,26 +575,84 @@ export function TerminalPane({
         setDropping(false);
       }}
       onDrop={(event) => {
-        event.preventDefault();
-        setDropping(false);
-        const cwd = session.cwd || activeWorkspace?.cwd || null;
-        const payload = payloadFromDataTransfer(event.dataTransfer, { cwd });
-        if (payload) {
-          insertIntoPty(bracketedPaste(payload));
+        if (isAgentDrag(event.dataTransfer)) {
           return;
         }
+        const cwd = session.cwd || activeWorkspace?.cwd || null;
         const files = event.dataTransfer.files;
+
+        if (isAgentSession && isExternalFileDrag(event.dataTransfer.types)) {
+          event.preventDefault();
+          event.stopPropagation();
+          setDropping(false);
+          clearFileDropPaint();
+          emitPaneDrag(false, "file");
+          const inChat = isAgentChatDropRelease(shellRef.current, event.clientY);
+
+          if (inChat) {
+            void (async () => {
+              if (files?.length) {
+                const fromFiles = await payloadFromFileList(files, { agentId });
+                if (fromFiles) {
+                  pasteInto(fromFiles);
+                  return;
+                }
+              }
+              const paths = await resolvePreviewPathsFromDrop(event.dataTransfer, { cwd });
+              if (paths.length) {
+                const attachment = formatAgentAttachment(agentId, paths);
+                if (attachment) pasteInto(attachment);
+                return;
+              }
+              const diskPaths = rawPathsFromDataTransfer(event.dataTransfer, { cwd });
+              if (diskPaths.length) {
+                const attachment = formatAgentAttachment(agentId, diskPaths);
+                if (attachment) pasteInto(attachment);
+                return;
+              }
+              const payload = payloadFromDataTransfer(event.dataTransfer, { cwd });
+              if (payload) pasteInto(payload);
+            })().catch(() => undefined);
+            return;
+          }
+
+          void (async () => {
+            const paths = await resolvePreviewPathsFromDrop(event.dataTransfer, { cwd });
+            if (paths[0]) {
+              await handleFileDropAt(paneId, "center", "", {
+                shiftKey: event.shiftKey,
+                rawPaths: paths,
+              });
+            }
+          })().catch(() => undefined);
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        setDropping(false);
+        clearFileDropPaint();
+        emitPaneDrag(false, "file");
+
+        const previewPaths = previewPathsFromDataTransfer(event.dataTransfer, { cwd });
+        if (previewPaths[0]) {
+          void handleFileDropAt(paneId, "center", "", {
+            shiftKey: event.shiftKey,
+            rawPaths: previewPaths,
+          });
+          return;
+        }
+        const payload = payloadFromDataTransfer(event.dataTransfer, { cwd });
+        if (payload) {
+          pasteInto(payload);
+          return;
+        }
         if (files?.length) {
           void payloadFromFileList(files)
             .then((fromFiles) => {
-              if (fromFiles) insertIntoPty(bracketedPaste(fromFiles));
+              if (fromFiles) pasteInto(fromFiles);
             })
-            .catch((err) => {
-              if (!writeFailNotified.current) {
-                writeFailNotified.current = true;
-                setError(clientError(err) || t("term.writeError"));
-              }
-            });
+            .catch(() => undefined);
         }
       }}
     >
@@ -531,12 +705,30 @@ export function TerminalPane({
         </div>
       ) : null}
       <div className="vs-xtermHost" ref={containerRef} />
-      {isOffline && (
-        <div className={`vs-terminalOverlay is-${session.status}`}>
-          <strong>{session.status === "error" ? t("term.error") : t("term.closed")}</strong>
-          <span>{t("term.restartHint")}</span>
+      {showBootOverlay ? (
+        <div className={`vs-terminalOverlay is-${session.status}${!xtermReady ? " is-mounting" : ""}`}>
+          {session.status === "error" ? (
+            <>
+              <strong>{t("term.error")}</strong>
+              <span>{t("term.restartHint")}</span>
+            </>
+          ) : session.status === "closed" ? (
+            <>
+              <strong>{t("term.closed")}</strong>
+              <span>{t("term.restartHint")}</span>
+            </>
+          ) : (
+            <>
+              <div className="vs-paneLoader" aria-hidden>
+                <span />
+                <span />
+                <span />
+              </div>
+              <strong>{t("term.starting")}</strong>
+            </>
+          )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

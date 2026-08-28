@@ -11,17 +11,26 @@
   position: relative;
   isolation: isolate;
   background: var(--vs-bg);
-  -webkit-app-region: drag;
-  app-region: drag;
+}
+
+.vs-welcomeChrome {
+  display: flex;
+  align-items: stretch;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.vs-welcomeChrome .vs-titleDrag {
+  flex: 1 1 auto;
+  min-width: 80px;
 }
 
 .vs-welcomeWin {
-  position: absolute;
-  top: 0;
-  right: 0;
+  position: relative;
+  top: auto;
+  right: auto;
   z-index: 20;
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
+  flex-shrink: 0;
 }
 
 .vs-welcomeWin .vs-winControls {

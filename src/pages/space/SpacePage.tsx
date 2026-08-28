@@ -1,20 +1,9 @@
-import { useEffect, useState } from "react";
 import { Plus, TerminalSquare } from "@untitledui/icons";
-import { LayoutSnapBar } from "@/features/workspace/LayoutSnapBar";
 import { SplitGrid } from "@/features/workspace/SplitGrid";
 import { useSpace } from "@/features/workspace/SpaceContext";
 
 export function SpacePage() {
-  const { activeWorkspace, isBusy, t } = useSpace();
-  const [snapOpen, setSnapOpen] = useState(false);
-
-  useEffect(() => {
-    const onDrag = (event: Event) => {
-      setSnapOpen(Boolean((event as CustomEvent<{ active?: boolean }>).detail?.active));
-    };
-    window.addEventListener("voxiva-pane-drag", onDrag);
-    return () => window.removeEventListener("voxiva-pane-drag", onDrag);
-  }, []);
+  const { activeWorkspace, t } = useSpace();
 
   if (!activeWorkspace) {
     return (
@@ -39,8 +28,7 @@ export function SpacePage() {
   }
 
   return (
-    <section className={`vs-space${snapOpen ? " is-snapping" : ""}`}>
-      {snapOpen ? <LayoutSnapBar floating disabled={isBusy} /> : null}
+    <section className="vs-space">
       <div className="vs-spaceStage">
         <SplitGrid layout={activeWorkspace.layout} />
       </div>
