@@ -9,9 +9,13 @@ import {
 } from "react";
 import type { Accent, AgentRun, PaneKind, SplitNode, Workspace } from "@/lib/types";
 import {
-  BROWSER_TAB,
   MEDIA_TAB,
+  activeBrowserTab,
+  findLeaf,
+  isBrowserTabKey,
   leafTabOrder,
+  makeBrowserTabKey,
+  normalizeBrowserTabs,
   type SnapLayoutId,
   type DropZone,
 } from "@/features/workspace/layout";
@@ -50,9 +54,8 @@ import { agentBots, resolveBotCommand, resumeCommandFor } from "@/features/agent
 import { PaneActions } from "@/features/workspace/PaneActions";
 import { PaneContextMenu, type PaneMenuState } from "@/features/workspace/PaneContextMenu";
 import { useSpace } from "@/features/workspace/SpaceContext";
-import { IconBrowser, IconGrip, IconTerminal, IconX } from "@/components/icons";
-import { AgentBrandIcon } from "@/components/agents/AgentBrandIcon";
-import { agentIdForSession } from "@/features/agents/sessionAgent";
+import { IconBrowser, IconGrip, IconX } from "@/components/icons";
+import { ShellTabIcon } from "@/components/shell/ShellTabIcon";
 
 function mediaKindForPath(path: string): "image" | "binary" {
   return isImagePath(path) ? "image" : "binary";
@@ -237,6 +240,8 @@ function PaneLeaf({
   sessionIds,
   tabOrder,
   browserUrl,
+  browserTabs,
+  activeBrowserId,
   mediaPath,
 }: {
   paneId: string;
@@ -245,6 +250,8 @@ function PaneLeaf({
   sessionIds?: string[];
   tabOrder?: string[];
   browserUrl: string | null;
+  browserTabs?: { id: string; url: string }[];
+  activeBrowserId?: string | null;
   mediaPath?: string | null;
 }) {
   const {
@@ -273,6 +280,7 @@ function PaneLeaf({
     setPaneBrowserUrl,
     dockPane,
     handleFileDropAt,
+    flashPaneId,
     t,
   } = useSpace();
   const focused = activeWorkspace?.focusedPaneId === paneId;
@@ -283,24 +291,29 @@ function PaneLeaf({
         ? [sessionId]
         : [];
   const activeId = sessionId && tabIds.includes(sessionId) ? sessionId : tabIds[0] ?? null;
-  const hasBrowser = browserUrl !== null;
+  const leafSnapshot = useMemo(
+    () => ({
+      type: "leaf" as const,
+      paneId,
+      kind,
+      sessionId,
+      sessionIds: tabIds,
+      tabOrder,
+      browserUrl,
+      browserTabs,
+      activeBrowserId,
+      mediaPath: mediaPath ?? null,
+    }),
+    [activeBrowserId, browserTabs, browserUrl, kind, mediaPath, paneId, sessionId, tabIds, tabOrder],
+  );
+  const browsers = useMemo(() => normalizeBrowserTabs(leafSnapshot), [leafSnapshot]);
+  const activeBrowser = useMemo(() => activeBrowserTab(leafSnapshot), [leafSnapshot]);
+  const hasBrowser = browsers.length > 0;
   const hasMedia = Boolean(mediaPath);
   const browserActive = kind === "browser" && hasBrowser;
   const mediaActive = kind === "media" && hasMedia;
-  const surfaceOrder = useMemo(
-    () =>
-      leafTabOrder({
-        type: "leaf",
-        paneId,
-        kind,
-        sessionId,
-        sessionIds: tabIds,
-        tabOrder,
-        browserUrl,
-        mediaPath: mediaPath ?? null,
-      }),
-    [browserUrl, kind, mediaPath, paneId, sessionId, tabIds, tabOrder],
-  );
+  const activeBrowserKey = activeBrowser ? makeBrowserTabKey(activeBrowser.id) : null;
+  const surfaceOrder = useMemo(() => leafTabOrder(leafSnapshot), [leafSnapshot]);
   const anyAttention = tabIds.some((id) => sessions[id]?.needsAttention);
   const spawning = useRef(false);
   const [mountedTabs, setMountedTabs] = useState<Set<string>>(() =>
@@ -311,7 +324,7 @@ function PaneLeaf({
   const [renameDraft, setRenameDraft] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
   const [menu, setMenu] = useState<PaneMenuState>(null);
-  const [browserMeta, setBrowserMeta] = useState<BrowserTabMeta | null>(null);
+  const [browserMetaById, setBrowserMetaById] = useState<Record<string, BrowserTabMeta>>({});
   const [draggingTab, setDraggingTab] = useState<string | null>(null);
   const [dragOverTab, setDragOverTab] = useState<string | null>(null);
   const suppressTabClickRef = useRef(false);
@@ -476,16 +489,35 @@ function PaneLeaf({
     action();
   };
 
-  // Reset page meta when the tab URL changes (favicon/title refresh on next load).
+  // Drop stale meta when a browser tab disappears.
   useEffect(() => {
-    setBrowserMeta(null);
-  }, [browserUrl]);
+    const ids = new Set(browsers.map((b) => b.id));
+    setBrowserMetaById((prev) => {
+      let changed = false;
+      const next: Record<string, BrowserTabMeta> = {};
+      for (const [id, meta] of Object.entries(prev)) {
+        if (ids.has(id)) next[id] = meta;
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [browsers]);
 
   useEffect(() => {
     if (!renamingId) return;
     renameInputRef.current?.focus();
     renameInputRef.current?.select();
   }, [renamingId]);
+
+  useEffect(() => {
+    const onRenameFocused = () => {
+      if (!focused || !activeId) return;
+      setRenameDraft(sessions[activeId]?.title ?? "Shell");
+      setRenamingId(activeId);
+    };
+    window.addEventListener("voxiva-rename-focused-tab", onRenameFocused);
+    return () => window.removeEventListener("voxiva-rename-focused-tab", onRenameFocused);
+  }, [activeId, focused, sessions]);
 
   const commitRename = () => {
     if (!renamingId) return;
@@ -528,6 +560,7 @@ function PaneLeaf({
           title: items[i]!.title ?? "Shell",
           command: items[i]!.command,
           accent: items[i]!.accent ?? "green",
+          agentId: items[i]!.agentId,
           paneId,
           mode: i === 0 ? "replace" : "tab",
           paste: items[i]!.paste,
@@ -553,12 +586,11 @@ function PaneLeaf({
     emptyPaneSpawnEpoch,
   ]);
 
-  const browserTabLabel =
-    prettyBrowserLabel(browserUrl || "", browserMeta?.title) || t("nav.browser");
-
   return (
     <div
-      className={`vs-pane${focused ? " is-focused" : ""}${anyAttention ? " is-attention" : ""}`}
+      className={`vs-pane${focused ? " is-focused" : ""}${anyAttention ? " is-attention" : ""}${
+        flashPaneId === paneId ? " is-flash" : ""
+      }`}
       data-pane-id={paneId}
       onContextMenu={(event) => {
         if ((event.target as HTMLElement).closest("input, textarea, a, [data-no-ctx]")) return;
@@ -567,20 +599,25 @@ function PaneLeaf({
         const tabKey =
           (event.target as HTMLElement).closest("[data-tab-key]")?.getAttribute("data-tab-key") ??
           null;
+        const onBrowser = tabKey ? isBrowserTabKey(tabKey) : browserActive;
         setMenu({
           paneId,
           x: event.clientX,
           y: event.clientY,
-          isBrowser: tabKey === BROWSER_TAB ? true : tabKey ? false : browserActive,
+          isBrowser: onBrowser,
           sessionId:
-            tabKey && tabKey !== BROWSER_TAB && tabKey !== MEDIA_TAB
+            tabKey && !isBrowserTabKey(tabKey) && tabKey !== MEDIA_TAB
               ? tabKey
-              : tabKey === BROWSER_TAB || tabKey === MEDIA_TAB
+              : tabKey && (isBrowserTabKey(tabKey) || tabKey === MEDIA_TAB)
                 ? null
                 : activeId,
           tabId:
             tabKey ??
-            (mediaActive ? MEDIA_TAB : browserActive ? BROWSER_TAB : activeId),
+            (mediaActive
+              ? MEDIA_TAB
+              : browserActive && activeBrowserKey
+                ? activeBrowserKey
+                : activeId),
         });
       }}
       onMouseDown={(event) => {
@@ -812,34 +849,40 @@ function PaneLeaf({
               ref={tabsStripRef}
             >
               {surfaceOrder.map((key) => {
-                if (key === BROWSER_TAB) {
+                if (isBrowserTabKey(key)) {
+                  const tab = browsers.find((b) => makeBrowserTabKey(b.id) === key);
+                  if (!tab) return null;
+                  const meta = browserMetaById[tab.id];
+                  const label =
+                    prettyBrowserLabel(tab.url || "", meta?.title) || t("nav.browser");
+                  const selected = browserActive && activeBrowserKey === key;
                   return (
                     <button
-                      key={BROWSER_TAB}
+                      key={key}
                       type="button"
                       role="tab"
-                      data-tab-key={BROWSER_TAB}
-                      aria-selected={browserActive}
-                      title={browserTabLabel}
-                      className={`vs-paneTab${browserActive ? " is-active" : ""}${
-                        draggingTab === BROWSER_TAB ? " is-dragging" : ""
-                      }${dragOverTab === BROWSER_TAB ? " is-drop" : ""}`}
-                      onPointerDown={(e) => beginTabDrag(BROWSER_TAB, e)}
+                      data-tab-key={key}
+                      aria-selected={selected}
+                      title={label}
+                      className={`vs-paneTab${selected ? " is-active" : ""}${
+                        draggingTab === key ? " is-dragging" : ""
+                      }${dragOverTab === key ? " is-drop" : ""}`}
+                      onPointerDown={(e) => beginTabDrag(key, e)}
                       onClick={() =>
                         onTabActivate(() => {
-                          focusBrowserInPane(paneId);
+                          focusBrowserInPane(paneId, key);
                           focusPane(paneId);
                         })
                       }
                     >
                       <TabGlyph>
-                        {(browserUrl || "").trim() ? (
-                          <BrowserTabIcon url={browserUrl || ""} pageFavicon={browserMeta?.favicon} />
+                        {(tab.url || "").trim() ? (
+                          <BrowserTabIcon url={tab.url || ""} pageFavicon={meta?.favicon} />
                         ) : (
                           <IconBrowser size={11} className="vs-paneTabIcon" />
                         )}
                       </TabGlyph>
-                      <span className="vs-paneTabLabel">{browserTabLabel}</span>
+                      <span className="vs-paneTabLabel">{label}</span>
                       <span
                         className="vs-paneTabClose"
                         role="button"
@@ -847,16 +890,16 @@ function PaneLeaf({
                         title={t("term.closeTab")}
                         onClick={(e) => {
                           e.stopPropagation();
-                          void closePaneSurface(paneId, BROWSER_TAB);
+                          void closePaneSurface(paneId, key);
                         }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.stopPropagation();
-                            void closePaneSurface(paneId, BROWSER_TAB);
+                            void closePaneSurface(paneId, key);
                           }
                         }}
                       >
-                        <IconX size={12} />
+                        <IconX size={11} />
                       </span>
                     </button>
                   );
@@ -903,7 +946,7 @@ function PaneLeaf({
                           }
                         }}
                       >
-                        <IconX size={12} />
+                        <IconX size={11} />
                       </span>
                     </button>
                   );
@@ -913,7 +956,6 @@ function PaneLeaf({
                 if (!s) return null;
                 const renaming = renamingId === key;
                 const active = !browserActive && !mediaActive && key === activeId;
-                const agentId = agentIdForSession(s, agentRuns);
                 return (
                   <button
                     key={key}
@@ -942,11 +984,7 @@ function PaneLeaf({
                     }}
                   >
                     <TabGlyph>
-                      {agentId !== "shell" ? (
-                        <AgentBrandIcon id={agentId} size={12} className="vs-paneTabIcon" />
-                      ) : (
-                        <IconTerminal size={12} className="vs-paneTabIcon" />
-                      )}
+                      <ShellTabIcon shell={s.shell} size={12} className="vs-paneTabIcon" />
                     </TabGlyph>
                     {renaming ? (
                       <input
@@ -989,7 +1027,7 @@ function PaneLeaf({
                         }
                       }}
                     >
-                      <IconX size={12} />
+                      <IconX size={11} />
                     </span>
                   </button>
                 );
@@ -1002,23 +1040,30 @@ function PaneLeaf({
             />
           </div>
           <div className="vs-paneTabBodies">
-            {hasBrowser ? (
-              <div
-                className={`vs-paneTabBody${browserActive ? " is-visible" : ""}`}
-                hidden={!browserActive}
-              >
-                <NativeBrowser
-                  compact
-                  active={browserActive}
-                  dragPaneId={paneId}
-                  instanceId={paneId}
-                  url={browserUrl || ""}
-                  onUrlChange={(url) => setPaneBrowserUrl(paneId, url)}
-                  onMetaChange={setBrowserMeta}
-                  onClose={() => void closePaneSurface(paneId, BROWSER_TAB)}
-                />
-              </div>
-            ) : null}
+            {browsers.map((tab) => {
+              const key = makeBrowserTabKey(tab.id);
+              const visible = browserActive && activeBrowser?.id === tab.id;
+              return (
+                <div
+                  key={key}
+                  className={`vs-paneTabBody${visible ? " is-visible" : ""}`}
+                  hidden={!visible}
+                >
+                  <NativeBrowser
+                    compact
+                    active={Boolean(focused && visible)}
+                    dragPaneId={paneId}
+                    instanceId={`${paneId}-${tab.id}`}
+                    url={tab.url || ""}
+                    onUrlChange={(url) => setPaneBrowserUrl(paneId, url, key)}
+                    onMetaChange={(meta) =>
+                      setBrowserMetaById((prev) => ({ ...prev, [tab.id]: meta }))
+                    }
+                    onClose={() => void closePaneSurface(paneId, key)}
+                  />
+                </div>
+              );
+            })}
             {hasMedia && mediaPath ? (
               <div
                 className={`vs-paneTabBody${mediaActive ? " is-visible" : ""}`}
@@ -1037,17 +1082,17 @@ function PaneLeaf({
                   className={`vs-paneTabBody${visible ? " is-visible" : ""}`}
                   hidden={!visible}
                 >
-                  <TerminalPane
+        <TerminalPane
                     isActive={focused && visible}
                     session={s}
-                    paneId={paneId}
+          paneId={paneId}
                     chrome="body"
-                    onFocus={() => {
-                      if (!focused) focusPane(paneId);
-                    }}
+          onFocus={() => {
+            if (!focused) focusPane(paneId);
+          }}
                     onClose={() => void closePaneSurface(paneId, s.id)}
                     onRestart={() => void restartSession(s.id)}
-                  />
+        />
                 </div>
               );
             })}
@@ -1082,6 +1127,8 @@ function SplitView({ node }: { node: SplitNode }) {
         sessionIds={node.sessionIds}
         tabOrder={node.tabOrder}
         browserUrl={node.browserUrl ?? null}
+        browserTabs={node.browserTabs}
+        activeBrowserId={node.activeBrowserId}
         mediaPath={node.mediaPath ?? null}
       />
     );
@@ -1146,16 +1193,18 @@ function SplitView({ node }: { node: SplitNode }) {
 }
 
 export function SplitGrid({ layout }: { layout: SplitNode }) {
-  const { activeWorkspace, handleFileDropAt, t } = useSpace();
+  const { activeWorkspace, handleFileDropAt, maximizedPaneId, t } = useSpace();
   useWorkspaceFileDrop({
     cwd: activeWorkspace?.cwd || "",
     t,
     handleFileDropAt,
   });
 
+  const maximizedLeaf = maximizedPaneId ? findLeaf(layout, maximizedPaneId) : null;
+
   return (
-    <div className="vs-splitRoot">
-      <SplitView node={layout} />
+    <div className={`vs-splitRoot${maximizedLeaf ? " is-maximized" : ""}`}>
+      <SplitView node={maximizedLeaf ?? layout} />
     </div>
   );
 }

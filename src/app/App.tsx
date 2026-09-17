@@ -5,7 +5,7 @@ import { AssistPanel, type AssistTab } from "@/components/shell/AssistPanel";
 import { NewSpaceModal } from "@/components/shell/NewSpaceModal";
 import { SpaceSettingsModal } from "@/components/shell/SpaceSettingsModal";
 import { useHotkeys } from "@/features/hotkeys/useHotkeys";
-import { eventMatchesBinding, isCapturingHotkey, isModalOpen, loadHotkeys } from "@/features/hotkeys/bindings";
+import { isCapturingHotkey } from "@/features/hotkeys/bindings";
 import { browserClose, browserCloseAll, browserHideAll } from "@/features/browser/api";
 import { SpaceProvider, useSpace, useView } from "@/features/workspace/SpaceContext";
 import { SpacePage } from "@/pages/space/SpacePage";
@@ -14,12 +14,11 @@ import { ZoomHud } from "@/components/shell/ZoomHud";
 import { revealMainWindow } from "@/features/ui/revealWindow";
 import { useWindowChrome } from "@/features/ui/useWindowChrome";
 import { applyAttentionPrefs } from "@/features/attention/prefs";
+import { CommandPalette } from "@/components/shell/CommandPalette";
+import { ensureAutoCookieImport } from "@/features/browser/autoCookies";
 import { WelcomePage } from "@/pages/welcome/WelcomePage";
 import type { ViewId } from "@/lib/types";
 
-const EditorPage = lazy(() =>
-  import("@/pages/editor/EditorPage").then((module) => ({ default: module.EditorPage })),
-);
 const AgentsPage = lazy(() =>
   import("@/pages/agents/AgentsPage").then((module) => ({ default: module.AgentsPage })),
 );
@@ -39,7 +38,6 @@ const SettingsPage = lazy(() =>
   import("@/pages/settings/SettingsPage").then((module) => ({ default: module.SettingsPage })),
 );
 
-const SIDEBAR_KEY = "voxiva-space-sidebar-collapsed";
 const ASSIST_KEY = "voxiva-space-assist-open";
 
 function GlobalToast() {
@@ -67,7 +65,7 @@ function GlobalToast() {
 }
 
 function AppShell() {
-  const { welcomeVisible, t, setBrowserUrl } = useSpace();
+  const { welcomeVisible, setBrowserUrl, isVsCodeFocusActive } = useSpace();
   const { view } = useView();
   useHotkeys();
   useWindowChrome();
@@ -78,7 +76,7 @@ function AppShell() {
       const target = event.target;
       if (!(target instanceof Element)) return;
       const btn = target.closest(
-        "button.vs-iconBtn, button.vs-btn, button.vs-railBtn, button.vs-navItem, button.vs-fileRow, button.vs-editorTabSelect, button.vs-editorTabClose, button.vs-mdPreviewBtn, button.vs-wsItemGear, button.vs-wsItemPin, button.vs-topbarCwdBtn",
+        "button.vs-iconBtn, button.vs-btn, button.vs-railBtn, button.vs-navItem, button.vs-fileRow, button.vs-wsItemMore",
       );
       if (!(btn instanceof HTMLElement)) return;
       event.preventDefault();
@@ -100,19 +98,12 @@ function AppShell() {
     });
     return () => window.cancelAnimationFrame(id);
   }, []);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem(SIDEBAR_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
   const [assistOpen, setAssistOpen] = useState(false);
-  const [assistTab, setAssistTab] = useState<AssistTab>("editor");
-  const [pendingPath, setPendingPath] = useState<string | null>(null);
+  const [assistTab, setAssistTab] = useState<AssistTab>("browser");
   const [pendingAssistUrl, setPendingAssistUrl] = useState<string | null>(null);
   const [newSpaceOpen, setNewSpaceOpen] = useState(false);
   const [spaceSettingsId, setSpaceSettingsId] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   // Mount each view once, then keep it alive (hidden) so switches don't remount/lag.
   const [mountedViews, setMountedViews] = useState<Set<ViewId>>(() => new Set(["space"]));
 
@@ -127,14 +118,6 @@ function AppShell() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? "1" : "0");
-    } catch {
-      // ignore
-    }
-  }, [sidebarCollapsed]);
-
-  useEffect(() => {
-    try {
       // Never restore assist open on next launch — only remember closed.
       localStorage.setItem(ASSIST_KEY, "0");
     } catch {
@@ -143,79 +126,68 @@ function AppShell() {
   }, [assistOpen]);
 
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (isCapturingHotkey()) return;
-      if (isModalOpen()) return;
-      const target = event.target;
-      if (target instanceof HTMLElement) {
-        const tag = target.tagName;
-        const inTerm = Boolean(
-          target.closest(".xterm") ||
-            target.closest(".vs-xtermHost") ||
-            target.classList.contains("xterm-helper-textarea"),
-        );
-        if (!inTerm && (tag === "TEXTAREA" || tag === "INPUT" || target.isContentEditable)) return;
-      }
-      const binding = loadHotkeys().sidebar;
-      if (!eventMatchesBinding(event, binding)) return;
-      if (
-        target instanceof HTMLElement &&
-        (target.closest(".xterm") || target.closest(".vs-xtermHost")) &&
-        !(binding.alt || binding.ctrl)
-      ) {
-        return;
-      }
-      event.preventDefault();
-      setSidebarCollapsed((v) => !v);
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, []);
-
-  useEffect(() => {
     const onNewSpace = () => setNewSpaceOpen(true);
     const onSpaceSettings = (event: Event) => {
       const id = (event as CustomEvent<{ workspaceId?: string }>).detail?.workspaceId;
       if (id) setSpaceSettingsId(id);
     };
+    const onVault = () => {
+      setAssistTab("agents");
+      setAssistOpen(true);
+    };
     window.addEventListener("voxiva-new-space", onNewSpace);
     window.addEventListener("voxiva-space-settings", onSpaceSettings);
+    window.addEventListener("voxiva-open-vault", onVault);
     return () => {
       window.removeEventListener("voxiva-new-space", onNewSpace);
       window.removeEventListener("voxiva-space-settings", onSpaceSettings);
+      window.removeEventListener("voxiva-open-vault", onVault);
     };
   }, []);
+
+  useEffect(() => {
+    if (welcomeVisible) return;
+    const idle = window.setTimeout(() => {
+      void ensureAutoCookieImport(false);
+    }, 1200);
+    return () => window.clearTimeout(idle);
+  }, [welcomeVisible]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (isCapturingHotkey()) return;
+      if (isVsCodeFocusActive) return;
+      const mod = event.ctrlKey || event.metaKey;
+      if (mod && event.shiftKey && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [isVsCodeFocusActive]);
 
   useEffect(() => {
     const onOpen = (event: Event) => {
       const detail =
         (event as CustomEvent<{ tab?: AssistTab; path?: string; url?: string }>).detail ?? {};
-      if (detail.path) setPendingPath(detail.path);
       if (detail.url) {
         setBrowserUrl(detail.url);
         setPendingAssistUrl(detail.url);
       }
-      if (detail.tab === "browser" || detail.tab === "editor" || detail.tab === "agents") setAssistTab(detail.tab);
-      else if (detail.path) setAssistTab("editor");
+      if (detail.tab === "browser" || detail.tab === "agents") setAssistTab(detail.tab);
       setAssistOpen(true);
     };
     window.addEventListener("voxiva-assist-open", onOpen);
-    const onOpenFile = () => {
-      setAssistOpen(true);
-      setAssistTab("editor");
-    };
-    window.addEventListener("voxiva-open-workspace-file", onOpenFile);
     return () => {
       window.removeEventListener("voxiva-assist-open", onOpen);
-      window.removeEventListener("voxiva-open-workspace-file", onOpenFile);
     };
   }, [setBrowserUrl]);
 
-  // Prefetch editor + agents after first paint so those views open instantly.
+  // Prefetch agents after first paint so the view opens instantly.
   useEffect(() => {
     if (welcomeVisible) return;
     const idle = window.setTimeout(() => {
-      void import("@/pages/editor/EditorPage");
       void import("@/pages/agents/AgentsPage");
     }, 400);
     return () => window.clearTimeout(idle);
@@ -236,7 +208,7 @@ function AppShell() {
       if (!assistBrowser) void browserClose("browser-assist").catch(() => undefined);
       return;
     }
-    // Editor / agents / projects / … — hide pane browsers, don't destroy them.
+    // Agents / projects / … — hide pane browsers, don't destroy them.
     void browserHideAll().catch(() => undefined);
     void browserClose("browser-page").catch(() => undefined);
     if (!assistBrowser) void browserClose("browser-assist").catch(() => undefined);
@@ -256,30 +228,21 @@ function AppShell() {
 
   return (
     <div
-      className={`vs-root${sidebarCollapsed ? " is-sidebarCollapsed" : ""}${assistOpen ? " is-assistOpen" : ""}${view === "space" ? " is-spaceView" : ""}`}
+      className={`vs-root${assistOpen ? " is-assistOpen" : ""}${view === "space" ? " is-spaceView" : ""}`}
     >
       <Sidebar
-        collapsed={sidebarCollapsed}
-        onExpand={() => setSidebarCollapsed(false)}
         onNewSpace={() => setNewSpaceOpen(true)}
+        assistOpen={assistOpen}
+        onToggleAssist={() => setAssistOpen((v) => !v)}
       />
       <main className="vs-main">
-        <Topbar
-          assistOpen={assistOpen}
-          onToggleAssist={() => setAssistOpen((v) => !v)}
-          sidebarCollapsed={sidebarCollapsed}
-          onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
-          onOpenHistory={() => {
-            setAssistTab("agents");
-            setAssistOpen(true);
-          }}
-        />
+        <Topbar />
         <GlobalToast />
         <ZoomHud />
         <div className="vs-mainBody">
           <div
             className={`vs-content${
-              view === "space" || view === "browser" || view === "editor" || view === "board" || view === "settings"
+              view === "space" || view === "browser" || view === "board" || view === "settings"
                 ? ""
                 : " is-scroll"
             }`}
@@ -287,13 +250,6 @@ function AppShell() {
             <div className={`vs-viewSlot${show("space") ? " is-active" : ""}`} hidden={!show("space")}>
               <SpacePage />
             </div>
-            {keep("editor") ? (
-              <div className={`vs-viewSlot${show("editor") ? " is-active" : ""}`} hidden={!show("editor")}>
-                <Suspense fallback={<div className="vs-empty">{t("editor.loading")}</div>}>
-                  <EditorPage />
-                </Suspense>
-              </div>
-            ) : null}
             {keep("projects") ? (
               <div className={`vs-viewSlot${show("projects") ? " is-active" : ""}`} hidden={!show("projects")}>
                 <Suspense fallback={null}>
@@ -342,8 +298,6 @@ function AppShell() {
             tab={assistTab}
             onTabChange={setAssistTab}
             onClose={() => setAssistOpen(false)}
-            pendingPath={pendingPath}
-            onPendingConsumed={() => setPendingPath(null)}
             pendingUrl={pendingAssistUrl}
             onPendingUrlConsumed={() => setPendingAssistUrl(null)}
           />
@@ -351,6 +305,7 @@ function AppShell() {
       </main>
       <NewSpaceModal open={newSpaceOpen} onClose={() => setNewSpaceOpen(false)} />
       <SpaceSettingsModal workspaceId={spaceSettingsId} onClose={() => setSpaceSettingsId(null)} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 }

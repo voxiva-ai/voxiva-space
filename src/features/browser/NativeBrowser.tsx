@@ -25,7 +25,7 @@ import {
 import { agentBots, isBotReady, resolveBotCommand } from "@/features/agents/bots";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import { clientError } from "@/lib/errors";
-import { openUrl, writeTerminalSession } from "@/features/terminal/api";
+import { openUrl, writeTerminalSession, isVsCodeServeWebUrl } from "@/features/terminal/api";
 import {
   localhostAlt,
   normalizeBrowserUrl,
@@ -93,6 +93,7 @@ export function NativeBrowser({
   const lastBounds = useRef<Bounds | null>(null);
   const rafRef = useRef(0);
   const inspectorRef = useRef(false);
+  const inspectorBusyRef = useRef(false);
   /** Last URL we intentionally applied — blocks parent↔child navigation loops. */
   const appliedUrlRef = useRef("");
   const navGenRef = useRef(0);
@@ -110,6 +111,7 @@ export function NativeBrowser({
   const [localError, setLocalError] = useState("");
   const [omniboxOpen, setOmniboxOpen] = useState(false);
   const [omniboxIndex, setOmniboxIndex] = useState(0);
+  const urlInputRef = useRef<HTMLInputElement>(null);
   const bindHost = useCallback((node: HTMLDivElement | null) => {
     hostRef.current = node;
     setHostEl(node);
@@ -120,6 +122,19 @@ export function NativeBrowser({
     () => getOmniboxSuggestions(draft, activeWorkspace?.cwd),
     [draft, activeWorkspace?.cwd],
   );
+
+  useEffect(() => {
+    const onFocusOmnibar = () => {
+      const input = urlInputRef.current;
+      if (!input) return;
+      input.focus();
+      input.select();
+      setOmniboxOpen(true);
+    };
+    window.addEventListener("voxiva-focus-omnibar", onFocusOmnibar);
+    return () => window.removeEventListener("voxiva-focus-omnibar", onFocusOmnibar);
+  }, []);
+
   const availableAgents = useMemo(
     () =>
       agentBots.filter((bot) => {
@@ -175,8 +190,8 @@ export function NativeBrowser({
   const openAt = useCallback(
     async (next: string, navigate = true) => {
       let bounds = readBounds();
-      for (let attempt = 0; attempt < 40 && !bounds; attempt += 1) {
-        await new Promise((resolve) => window.setTimeout(resolve, 25));
+      for (let attempt = 0; attempt < 16 && !bounds; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 16));
         if (!aliveRef.current) return;
         bounds = readBounds();
       }
@@ -376,12 +391,16 @@ export function NativeBrowser({
           setLoadedUrl(payload.url);
           onUrlChange(payload.url);
         }
-        if (inspectorRef.current) {
+        const vscodePage = isVsCodeServeWebUrl(payload.url);
+        if (vscodePage) {
+          inspectorRef.current = false;
+          setInspector(false);
+        } else if (inspectorRef.current) {
           void browserToggleInspector(label, true).catch(() => undefined);
+          void browserConfigureInspector(label, inspectorAgents, componentFiles).catch(
+            () => undefined,
+          );
         }
-        void browserConfigureInspector(label, inspectorAgents, componentFiles).catch(
-          () => undefined,
-        );
         // Refresh tab title / favicon from the live page.
         window.setTimeout(() => {
           if (!aliveRef.current) return;
@@ -409,12 +428,16 @@ export function NativeBrowser({
     const filesRef = { current: componentFiles };
     filesRef.current = componentFiles;
     const poll = async () => {
-      if (inFlight || !openedRef.current) return;
+      if (inFlight || !openedRef.current || document.hidden) return;
       inFlight = true;
       try {
         const event = await browserTakeInspectorEvent(label);
         if (!event) return;
-        // Action must run even if this effect is tearing down (setComponentFiles race).
+        // In-page "press active mode again" turns brush off — mirror toolbar state.
+        if (event.disabled) {
+          inspectorRef.current = false;
+          setInspector(false);
+        }
         if (event.action) {
           void sendActionRef.current(
             event.action.selection,
@@ -450,12 +473,11 @@ export function NativeBrowser({
     };
     void browserConfigureInspector(label, inspectorAgents, filesRef.current).catch(() => undefined);
     void poll();
-    const timer = window.setInterval(() => void poll(), 280);
+    const timer = window.setInterval(() => void poll(), 120);
     return () => {
       stopped = true;
       window.clearInterval(timer);
     };
-    // Intentionally omit componentFiles — configuring with a ref avoids dropping Send actions.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, activeWorkspace?.cwd, inspector, inspectorAgents, label, loadedUrl, scheduleBounds]);
 
@@ -503,31 +525,72 @@ export function NativeBrowser({
     });
   }
 
-  async function toggleInspector() {
+  const isVsCode = isVsCodeServeWebUrl(loadedUrl);
+
+  useEffect(() => {
+    scheduleBounds();
+  }, [inspector, scheduleBounds]);
+
+  useEffect(() => {
+    if (!isVsCode || !inspectorRef.current) return;
+    inspectorRef.current = false;
+    setInspector(false);
+    void browserToggleInspector(label, false).catch(() => undefined);
+  }, [isVsCode, label]);
+
+  async function setInspectorEnabled(next: boolean) {
     if (!openedRef.current) {
-      setError(t("browser.devtoolsNeedSite"));
-      return;
+      return false;
     }
-    const next = !inspectorRef.current;
-    const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+    if (isVsCodeServeWebUrl(loadedUrl || draft)) return false;
+
+    // Off must always win — never block disable behind an in-flight enable.
+    if (!next) {
+      inspectorBusyRef.current = false;
+      inspectorRef.current = false;
+      setInspector(false);
+      void browserToggleInspector(label, false).catch(() => undefined);
+      return true;
+    }
+
+    if (inspectorBusyRef.current) return inspectorRef.current;
+    inspectorBusyRef.current = true;
+    inspectorRef.current = true;
+    setInspector(true);
     try {
-      let enabled = false;
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        if (next) {
-          await browserConfigureInspector(label, inspectorAgents, componentFiles).catch(
+      let ok = false;
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        // User may have clicked off while we were retrying.
+        if (!inspectorRef.current) return false;
+        if (attempt === 0) {
+          void browserConfigureInspector(label, inspectorAgents, componentFiles).catch(
             () => undefined,
           );
         }
-        enabled = await browserToggleInspector(label, next);
-        if (enabled === next) break;
-        await wait(160 + attempt * 120);
+        ok = await browserToggleInspector(label, true);
+        if (ok) break;
+        await new Promise((r) => window.setTimeout(r, 60 + attempt * 70));
       }
-      inspectorRef.current = enabled;
-      setInspector(enabled);
+      if (!inspectorRef.current) return false;
+      if (!ok) {
+        inspectorRef.current = false;
+        setInspector(false);
+        // No scary toast — brush simply stays off; try again after navigation.
+        return false;
+      }
+      return true;
     } catch {
       inspectorRef.current = false;
       setInspector(false);
+      return false;
+    } finally {
+      inspectorBusyRef.current = false;
     }
+  }
+
+  function toggleInspector() {
+    if (!loadedUrl || isVsCode || (inspectorBusyRef.current && !inspectorRef.current)) return;
+    void setInspectorEnabled(!inspectorRef.current);
   }
 
   function openExternal() {
@@ -543,6 +606,27 @@ export function NativeBrowser({
     if (!instruction.trim()) return;
 
     const full = instruction.trim();
+
+    // Brush Copy already hands us pretty JSON — paste as-is, no markdown rewrite.
+    if (agentId === "clipboard") {
+      try {
+        await navigator.clipboard.writeText(full);
+      } catch {
+        const ta = document.createElement("textarea");
+        ta.value = full;
+        ta.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {
+          document.execCommand("copy");
+        } finally {
+          ta.remove();
+        }
+      }
+      return;
+    }
+
     let detailsPath = "";
     try {
       detailsPath = await writeAnnotateContext(full);
@@ -571,7 +655,9 @@ export function NativeBrowser({
             !line.startsWith("#") &&
             !line.startsWith(">") &&
             !line.startsWith("**") &&
-            !line.startsWith("Design-mode"),
+            !line.startsWith("Design-mode") &&
+            !line.startsWith("{") &&
+            !line.startsWith('"'),
         ) || "Update the selected UI elements.";
     const shortLines = [noteLine, ""];
     if (pageMatch) shortLines.push(`Page: ${pageMatch[1].trim()}`);
@@ -594,27 +680,6 @@ export function NativeBrowser({
       shortLines.push(full);
     }
     const short = shortLines.join("\n").trim();
-
-    if (agentId === "clipboard") {
-      // Full annotation for Ctrl+V into OpenCode / Claude / any chat.
-      const text = detailsPath ? `${full}\n\nDetails file: ${detailsPath}` : full;
-      try {
-        await navigator.clipboard.writeText(text);
-      } catch {
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        try {
-          document.execCommand("copy");
-        } finally {
-          ta.remove();
-        }
-      }
-      return;
-    }
 
     const compiled =
       /Design-mode annotation|## \d+\. |\nselector: |\nxpath: /.test(instruction) ||
@@ -703,6 +768,7 @@ export function NativeBrowser({
     <div className={`vs-browserUrlField${omniboxOpen && suggestions.length ? " is-suggesting" : ""}`}>
       {!compactField ? <IconSearch size={15} className="vs-browserSearchIcon" /> : null}
       <input
+        ref={urlInputRef}
         value={draft}
         onChange={(event) => {
           setDraft(event.target.value);
@@ -756,17 +822,19 @@ export function NativeBrowser({
       {compact ? (
         <div className="vs-browserNavBar" data-no-drag>
           {urlField(true)}
-          <button
-            type="button"
-            className={`vs-termIconBtn${inspector ? " is-active" : ""}`}
-            disabled={!loadedUrl}
-            title={t("browser.inspect")}
-            aria-label={t("browser.inspect")}
-            aria-pressed={inspector}
-            onClick={toggleInspector}
-          >
-            <IconInspect size={14} />
-          </button>
+          {!isVsCode ? (
+            <button
+              type="button"
+              className={`vs-termIconBtn${inspector ? " is-active" : ""}`}
+              disabled={!loadedUrl}
+              title={t("browser.inspectHint")}
+              aria-label={t("browser.inspect")}
+              aria-pressed={inspector}
+              onClick={toggleInspector}
+            >
+              <IconInspect size={14} />
+            </button>
+          ) : null}
           <button
             type="button"
             className="vs-termIconBtn"
@@ -800,17 +868,19 @@ export function NativeBrowser({
           >
             <IconRefresh size={15} />
           </button>
-          <button
-            type="button"
-            className={`vs-btn vs-browserUtilityBtn${inspector ? " is-active" : ""}`}
-            disabled={!loadedUrl}
-            title={t("browser.inspect")}
-            aria-label={t("browser.inspect")}
-            aria-pressed={inspector}
-            onClick={toggleInspector}
-          >
-            <IconInspect size={15} />
-          </button>
+          {!isVsCode ? (
+            <button
+              type="button"
+              className={`vs-btn vs-browserUtilityBtn${inspector ? " is-active" : ""}`}
+              disabled={!loadedUrl}
+              title={t("browser.inspectHint")}
+              aria-label={t("browser.inspect")}
+              aria-pressed={inspector}
+              onClick={toggleInspector}
+            >
+              <IconInspect size={15} />
+            </button>
+          ) : null}
           <button
             type="button"
             className="vs-btn vs-browserUtilityBtn"
@@ -833,7 +903,7 @@ export function NativeBrowser({
         </div>
       )}
 
-      {/* Host is always mounted so WebView2 bounds exist before the first navigate. */}
+      {/* Host is always mounted so WebView2 bounds exist before the first create. */}
       <div className="vs-browserViewport">
         <div className="vs-browserFrameWrap" ref={bindHost}>
           <div

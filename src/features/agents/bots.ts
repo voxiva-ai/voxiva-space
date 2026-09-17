@@ -1,6 +1,6 @@
 import type { AgentAvailability, AgentBot } from "@/lib/types";
 
-/** Агенты / CLI — installUrl ведёт на официальный установщик. */
+/** Agents / CLI tools detected via PATH scan. */
 export const agentBots: AgentBot[] = [
   {
     id: "shell",
@@ -9,12 +9,18 @@ export const agentBots: AgentBot[] = [
     accent: "green",
   },
   {
+    id: "voxiva",
+    name: "Voxiva CLI",
+    description: "Voxiva terminal agent — plans, models, ship flows.",
+    command: "voxiva",
+    accent: "blue",
+  },
+  {
     id: "opencode",
     name: "OpenCode",
     description: "Open-source агент в терминале.",
     command: "opencode",
     accent: "blue",
-    installUrl: "https://opencode.ai",
   },
   {
     id: "claude",
@@ -22,7 +28,6 @@ export const agentBots: AgentBot[] = [
     description: "CLI Anthropic Claude Code.",
     command: "claude",
     accent: "blue",
-    installUrl: "https://docs.anthropic.com/en/docs/claude-code/overview",
   },
   {
     id: "codex",
@@ -30,7 +35,6 @@ export const agentBots: AgentBot[] = [
     description: "OpenAI Codex CLI.",
     command: "codex",
     accent: "violet",
-    installUrl: "https://developers.openai.com/codex/cli/",
   },
   {
     id: "aider",
@@ -38,7 +42,6 @@ export const agentBots: AgentBot[] = [
     description: "Парное программирование в терминале.",
     command: "aider",
     accent: "gold",
-    installUrl: "https://aider.chat/",
   },
   {
     id: "gemini",
@@ -46,7 +49,6 @@ export const agentBots: AgentBot[] = [
     description: "Google Gemini CLI.",
     command: "gemini",
     accent: "violet",
-    installUrl: "https://github.com/google-gemini/gemini-cli",
   },
   {
     id: "cursor-agent",
@@ -55,7 +57,6 @@ export const agentBots: AgentBot[] = [
     command: "cursor-agent",
     commands: ["agent", "cursor"],
     accent: "blue",
-    installUrl: "https://cursor.com/docs/cli/overview",
   },
   {
     id: "amp",
@@ -63,7 +64,6 @@ export const agentBots: AgentBot[] = [
     description: "Amp coding agent.",
     command: "amp",
     accent: "gold",
-    installUrl: "https://ampcode.com/",
   },
   {
     id: "goose",
@@ -71,7 +71,6 @@ export const agentBots: AgentBot[] = [
     description: "Block Goose agent CLI.",
     command: "goose",
     accent: "green",
-    installUrl: "https://block.github.io/goose/",
   },
 ];
 
@@ -127,20 +126,22 @@ export function resumeCommandFor(
     case "opencode":
       return `${base} --continue`;
     case "claude":
+      // Prefer --continue (latest). Specific `--resume <id>` is attached from the vault when known.
       return `${base} --continue`;
     case "codex":
       return `${base} resume --last`;
     case "gemini":
-      return `${base} -r "latest"`;
+      return `${base} --resume`;
     case "aider":
       return `${base} --restore-chat-history`;
     case "goose":
       return `${base} session --resume`;
     case "cursor-agent":
-      return `${base} --continue`;
+      return `${base} --resume`;
     case "amp":
-      // amp has no single-binary resume flag; run the non-interactive threads subcommand.
       return "amp threads continue";
+    case "voxiva":
+      return `${base} chat`;
     default:
       return resolved || rawCommand || base;
   }

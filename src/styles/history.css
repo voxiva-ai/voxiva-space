@@ -1,37 +1,80 @@
-/* ── Agent history · cmux-style grouped list ─────────────────────── */
+/* ── History page · full layout + compact panel ─────────────────── */
 
 .vs-historyPage {
   display: flex;
   flex-direction: column;
-  gap: 0;
   padding: 0;
   max-width: none;
+  overflow: hidden;
+}
+
+.vs-historyLayout {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.vs-historyListCol {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border-right: 1px solid var(--vs-border);
+  background: color-mix(in srgb, var(--vs-bg-raised) 42%, transparent);
 }
 
 .vs-historyPageHead {
-  padding: 1.1rem 1.25rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1rem 1rem 0.75rem;
   border-bottom: 1px solid var(--vs-border);
 }
 
-.vs-historyPageHead h1 {
-  margin: 0 0 0.25rem;
+.vs-historyPageHeadMain h1 {
+  margin: 0 0 0.2rem;
   font-size: 1.05rem;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
-.vs-historyPageHead p {
+.vs-historyPageHeadMain p {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: var(--vs-muted);
   line-height: 1.4;
+}
+
+.vs-historyStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.vs-historyStat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  padding: 0.22rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--vs-text) 6%, transparent);
+  color: var(--vs-muted);
+  font-size: 0.66rem;
+}
+
+.vs-historyStat strong {
+  color: var(--vs-text);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .vs-agentHistoryToolbar {
   display: flex;
   flex-direction: column;
   gap: 0.38rem;
-  padding: 0.42rem 0.48rem 0.32rem;
+  padding: 0.55rem 0.65rem 0.45rem;
   border-bottom: 1px solid color-mix(in srgb, var(--vs-border) 62%, transparent);
 }
 
@@ -39,10 +82,10 @@
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.3rem 0.42rem;
+  padding: 0.35rem 0.48rem;
   border: 0;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--vs-bg-raised) 82%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--vs-bg) 88%, transparent);
   color: var(--vs-muted);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vs-border) 72%, transparent);
   animation: vs-vaultSearchIn 120ms ease-out;
@@ -54,23 +97,25 @@
   border: 0;
   background: transparent;
   color: var(--vs-text);
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   outline: none;
 }
 
-.vs-agentHistoryFilters {
+.vs-agentHistoryFilters,
+.vs-agentHistoryDateFilters {
   display: flex;
   align-items: center;
-  gap: 0.1rem;
+  flex-wrap: wrap;
+  gap: 0.12rem;
 }
 
 .vs-agentHistoryFilter {
-  padding: 0.22rem 0.42rem;
+  padding: 0.26rem 0.48rem;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   background: transparent;
   color: var(--vs-muted);
-  font-size: 0.67rem;
+  font-size: 0.68rem;
   font-weight: 560;
   cursor: pointer;
 }
@@ -125,17 +170,15 @@
   color: var(--vs-muted);
 }
 
-.vs-historyPageBody {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  max-width: 480px;
-}
-
 .vs-agentHistory {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  flex: 1;
+}
+
+.vs-agentHistory.is-page {
+  overflow: hidden;
 }
 
 .vs-agentHistory.is-compact .vs-agentHistoryTitle {
@@ -146,45 +189,23 @@
   border-top: 0;
 }
 
-.vs-agentHistoryHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.35rem;
-  padding: 0.55rem 0.65rem 0.35rem;
-}
-
-.vs-agentHistoryTitle {
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--vs-muted);
-}
-
-.vs-agentHistoryActions .vs-iconBtn {
-  width: 21px;
-  height: 21px;
-  color: var(--vs-muted);
-}
-
-.vs-agentHistoryActions .vs-iconBtn:hover {
-  color: var(--vs-danger);
-}
-
 .vs-agentHistoryEmpty {
   margin: 0;
-  padding: 0.35rem 0.65rem 0.75rem;
-  font-size: 0.72rem;
-  line-height: 1.4;
+  padding: 1.25rem 0.85rem;
+  font-size: 0.76rem;
+  line-height: 1.45;
   color: var(--vs-muted);
 }
 
 .vs-agentHistoryGroups {
   display: flex;
   flex-direction: column;
-  gap: 0.12rem;
-  padding: 0.28rem 0.34rem 0.65rem;
+  gap: 0.18rem;
+  padding: 0.35rem 0.45rem 0.85rem;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .vs-agentHistoryGroup {
@@ -194,12 +215,12 @@
 
 .vs-agentHistoryGroupHead {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) 14px;
+  grid-template-columns: 18px minmax(0, 1fr) auto 14px;
   align-items: center;
-  column-gap: 0.42rem;
+  column-gap: 0.45rem;
   width: 100%;
-  min-height: 27px;
-  padding: 0.22rem 0.36rem;
+  min-height: 30px;
+  padding: 0.28rem 0.45rem;
   border: 0;
   border-radius: var(--vs-radius-sm);
   background: transparent;
@@ -217,9 +238,21 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 0.74rem;
+  font-size: 0.76rem;
   font-weight: 650;
   letter-spacing: -0.01em;
+}
+
+.vs-agentHistoryGroupCount {
+  justify-self: end;
+  min-width: 1.15rem;
+  padding: 0.05rem 0.32rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--vs-text) 8%, transparent);
+  color: var(--vs-muted);
+  font-size: 0.6rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .vs-agentHistoryChevron {
@@ -238,37 +271,33 @@
   width: 18px;
   height: 18px;
   color: var(--vs-text);
-  background: transparent;
-  box-shadow: none;
-  border-radius: 0;
-}
-
-.vs-agentHistoryMark .vs-brandMark {
-  color: var(--vs-text);
 }
 
 .vs-agentHistoryMark .vs-brandMark,
 .vs-agentHistoryMark svg {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
 }
 
 .vs-agentHistoryItems {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  padding: 0 0.35rem 0.22rem calc(0.35rem + 18px + 0.42rem);
+  gap: 0.04rem;
+  /* Tree spine centered under the 18px mark (pad 0.45rem + 9px). */
+  margin: 0.02rem 0 0.22rem calc(0.45rem + 9px);
+  padding: 0.06rem 0.35rem 0.18rem calc(9px + 0.45rem);
+  border-left: 1px solid color-mix(in srgb, var(--vs-border) 75%, transparent);
 }
 
 .vs-agentHistoryItem {
   display: grid;
-  grid-template-columns: 13px minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.32rem;
+  gap: 0.42rem;
   width: 100%;
   min-width: 0;
   margin: 0;
-  padding: 0.16rem 0.2rem;
+  padding: 0.28rem 0.38rem;
   border: 0;
   border-radius: var(--vs-radius-sm);
   background: transparent;
@@ -280,12 +309,24 @@
   user-select: none;
 }
 
+.vs-agentHistoryItem.is-page {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  padding: 0.38rem 0.42rem;
+}
+
 .vs-agentHistoryItemIcon {
   width: 12px;
   height: 12px;
   color: color-mix(in srgb, var(--vs-text) 72%, var(--vs-muted));
   opacity: 0.82;
   pointer-events: none;
+  margin-top: 0.12rem;
+}
+
+.vs-agentHistoryItem.is-page .vs-agentHistoryItemIcon {
+  width: 16px;
+  height: 16px;
 }
 
 .vs-agentHistoryItem:active,
@@ -299,6 +340,15 @@
 
 .vs-agentHistoryItem:hover:not(:disabled) {
   background: var(--vs-bg-hover);
+}
+
+.vs-agentHistoryItem.is-selected {
+  background: color-mix(in srgb, var(--vs-accent) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vs-accent) 28%, transparent);
+}
+
+.vs-agentHistoryItem.is-live .vs-agentHistoryItemText {
+  color: var(--vs-text);
 }
 
 .vs-agentHistoryItem.is-gone,
@@ -344,35 +394,63 @@ body.is-agent-dragging .vs-pane {
   opacity: 1;
 }
 
+.vs-agentHistoryItemBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  pointer-events: none;
+}
+
 .vs-agentHistoryItemText {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 0.69rem;
+  font-size: 0.72rem;
   line-height: 1.25;
-  color: color-mix(in srgb, var(--vs-text) 88%, var(--vs-muted));
-  pointer-events: none;
+  color: color-mix(in srgb, var(--vs-text) 92%, var(--vs-muted));
+}
+
+.vs-agentHistoryItem.is-page .vs-agentHistoryItemText {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.vs-agentHistoryItemSub {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.64rem;
+  line-height: 1.25;
+  color: var(--vs-muted);
+}
+
+.vs-agentHistoryLiveDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 0.35rem;
+  border-radius: 50%;
+  background: var(--vs-ok);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vs-ok) 18%, transparent);
+  vertical-align: middle;
 }
 
 .vs-agentHistoryItemWhen {
   flex-shrink: 0;
   pointer-events: none;
-  font-size: 0.59rem;
+  font-size: 0.62rem;
   font-variant-numeric: tabular-nums;
   color: var(--vs-muted);
   white-space: nowrap;
-}
-
-.vs-agentHistoryItemRemove {
-  display: none;
+  margin-top: 0.1rem;
 }
 
 .vs-agentHistoryMore {
   align-self: flex-start;
-  margin: 0.08rem 0 0.12rem 0;
-  padding: 0.12rem 0.2rem;
+  margin: 0.12rem 0 0.08rem;
+  padding: 0.18rem 0.28rem;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -386,6 +464,157 @@ body.is-agent-dragging .vs-pane {
   background: var(--vs-bg-hover);
 }
 
-.vs-agentHistory.is-compact .vs-agentHistoryItemText {
+/* Detail pane */
+.vs-historyDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+  min-height: 0;
+  padding: 1.35rem 1.75rem 2rem;
+  overflow: auto;
+}
+
+.vs-historyDetailHero {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.vs-historyDetailIcon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--vs-text) 6%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vs-border) 80%, transparent);
+  flex-shrink: 0;
+}
+
+.vs-historyDetailTitles h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.vs-historyDetailTitles p {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--vs-muted);
+  word-break: break-word;
+}
+
+.vs-historyDetailMeta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
+  margin: 0;
+}
+
+.vs-historyDetailMeta > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.vs-historyDetailMeta > div.is-wide {
+  grid-column: 1 / -1;
+}
+
+.vs-historyDetailMeta dt {
+  margin: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vs-muted);
+}
+
+.vs-historyDetailMeta dd {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.vs-historyDetailMeta code {
+  display: block;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--vs-bg-raised) 90%, transparent);
+  font-family: var(--vs-mono);
+  font-size: 0.72rem;
+  overflow-x: auto;
+}
+
+.vs-historyDetailRel {
+  display: block;
+  margin-top: 0.15rem;
   font-size: 0.68rem;
+  color: var(--vs-muted);
+}
+
+.vs-historyDetailBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.vs-historyDetailActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.vs-historyDetailHint {
+  margin: auto 0 0;
+  padding-top: 0.5rem;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--vs-muted);
+}
+
+.vs-historyDetailEmpty {
+  display: grid;
+  place-content: center;
+  gap: 0.35rem;
+  flex: 1;
+  min-height: 220px;
+  text-align: center;
+  color: var(--vs-muted);
+}
+
+.vs-historyDetailEmpty p {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--vs-text);
+}
+
+.vs-historyDetailEmpty span {
+  font-size: 0.76rem;
+  line-height: 1.45;
+  max-width: 22rem;
+}
+
+@media (max-width: 900px) {
+  .vs-historyLayout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .vs-historyListCol {
+    border-right: 0;
+    border-bottom: 1px solid var(--vs-border);
+  }
+
+  .vs-historyDetail {
+    max-height: 42vh;
+  }
 }

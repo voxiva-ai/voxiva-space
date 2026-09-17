@@ -1,96 +1,55 @@
 import {
-
   ArrowRight,
-
+  Bell01,
   Brush01,
-
   Code02,
-
   CodeBrowser,
-
   DotsGrid,
-
   FilePlus02,
-
   FolderPlus,
-
   Globe02,
-
   LinkExternal01,
-
+  Plus,
   RefreshCw01,
-
   SearchMd,
-
+  Settings01,
   TerminalBrowser,
-
   TerminalSquare,
-
 } from "@untitledui/icons";
 
 import type { ReactNode } from "react";
 
-
-
 type IconProps = { size?: number; className?: string };
 
 const props = ({ size = 14, className }: IconProps) => ({
-
   size,
-
   className,
-
   "aria-hidden": true,
-
-  focusable: false,
-
+  focusable: false as const,
 });
 
-
-
 function Codicon({
-
   size = 16,
-
   className,
-
   children,
-
 }: IconProps & { children: ReactNode }) {
-
   return (
-
     <svg
-
       width={size}
-
       height={size}
-
       viewBox="0 0 16 16"
-
       fill="currentColor"
-
       xmlns="http://www.w3.org/2000/svg"
-
       className={className}
-
       aria-hidden
-
       focusable={false}
-
     >
-
       {children}
-
     </svg>
-
   );
-
 }
 
-
-
-/** Geometric X — two equal diagonals through the center. */
+/** Geometric X — two equal diagonals; keep stroke/size identical everywhere. */
 export const IconX = ({ size = 14, className }: IconProps) => (
   <svg
     width={size}
@@ -98,20 +57,20 @@ export const IconX = ({ size = 14, className }: IconProps) => (
     viewBox="0 0 16 16"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
-    className={className}
+    className={`vs-iconX${className ? ` ${className}` : ""}`}
     aria-hidden
     focusable={false}
   >
     <path
-      d="M4 4 12 12"
+      d="M4.25 4.25 11.75 11.75"
       stroke="currentColor"
-      strokeWidth="1.75"
+      strokeWidth="1.5"
       strokeLinecap="round"
     />
     <path
-      d="M12 4 4 12"
+      d="M11.75 4.25 4.25 11.75"
       stroke="currentColor"
-      strokeWidth="1.75"
+      strokeWidth="1.5"
       strokeLinecap="round"
     />
   </svg>
@@ -278,6 +237,12 @@ export const IconHistory = ({ size = 16, className }: IconProps) => (
   </svg>
 );
 
+export const IconSettings = (iconProps: IconProps) => <Settings01 {...props(iconProps)} />;
+
+export const IconBell = (iconProps: IconProps) => <Bell01 {...props(iconProps)} />;
+
+export const IconPlusStroke = (iconProps: IconProps) => <Plus {...props(iconProps)} />;
+
 /** Right assist panel toggle — stroke only, symmetric. */
 export const IconAssistPanel = ({ size = 16, className }: IconProps) => (
   <svg
@@ -290,8 +255,16 @@ export const IconAssistPanel = ({ size = 16, className }: IconProps) => (
     aria-hidden
     focusable={false}
   >
-    <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
-    <path d="M10 2.5v11" stroke="currentColor" strokeWidth="1.25" />
+    <rect
+      x="2.75"
+      y="2.75"
+      width="10.5"
+      height="10.5"
+      rx="1.5"
+      stroke="currentColor"
+      strokeWidth="1.25"
+    />
+    <path d="M10.25 2.75v10.5" stroke="currentColor" strokeWidth="1.25" />
   </svg>
 );
 
@@ -311,6 +284,55 @@ export const IconChevronRight = ({ size = 16, className }: IconProps) => (
       d="M6 3.75 10.25 8 6 12.25"
       stroke="currentColor"
       strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+export const IconChevronLeft = ({ size = 16, className }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    aria-hidden
+    focusable={false}
+  >
+    <path
+      d="M10 3.75 5.75 8 10 12.25"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+/** Reopen closed — circular arrow. */
+export const IconReopen = ({ size = 16, className }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    aria-hidden
+    focusable={false}
+  >
+    <path
+      d="M3.2 8a4.8 4.8 0 1 0 1.35-3.3"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    />
+    <path
+      d="M3 3.2v3.1h3.1"
+      stroke="currentColor"
+      strokeWidth="1.4"
       strokeLinecap="round"
       strokeLinejoin="round"
     />

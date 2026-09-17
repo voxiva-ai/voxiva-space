@@ -1,0 +1,166 @@
+.vs-paletteRoot {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: start center;
+  padding: 12vh 1rem 1rem;
+}
+
+.vs-paletteScrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: color-mix(in srgb, #000 46%, transparent);
+  cursor: default;
+}
+
+.vs-palette {
+  position: relative;
+  z-index: 1;
+  width: min(40rem, calc(100vw - 2rem));
+  max-height: min(32rem, 72vh);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--vs-border-strong);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--vs-bg-raised) 98%, #050505);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.52);
+  overflow: hidden;
+}
+
+.vs-paletteInput {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--vs-border);
+  background: transparent;
+  color: var(--vs-text);
+  padding: 1rem 1.15rem;
+  font-size: 0.98rem;
+  letter-spacing: -0.01em;
+  outline: none;
+}
+
+.vs-paletteInput:focus {
+  box-shadow: none;
+}
+
+.vs-paletteInput::placeholder {
+  color: var(--vs-muted);
+}
+
+.vs-paletteList {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.35rem 0.45rem 0.55rem;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--vs-muted) 35%, transparent) transparent;
+}
+
+.vs-paletteList::-webkit-scrollbar {
+  width: 8px;
+}
+
+.vs-paletteList::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--vs-muted) 28%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.vs-paletteGroup {
+  padding: 0.55rem 0.75rem 0.28rem;
+  color: var(--vs-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vs-paletteItem {
+  display: grid;
+  grid-template-columns: 3px minmax(0, 1fr) max-content;
+  align-items: center;
+  column-gap: 0.75rem;
+  width: 100%;
+  min-height: 2.2rem;
+  padding: 0.45rem 0.7rem 0.45rem 0.55rem;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--vs-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.vs-paletteItemRail {
+  width: 3px;
+  height: 1.15rem;
+  border-radius: 999px;
+  background: transparent;
+  justify-self: center;
+}
+
+.vs-paletteItemRail.is-on {
+  background: var(--vs-ws-rail, var(--vs-accent));
+}
+
+.vs-paletteItem:hover,
+.vs-paletteItem.is-active {
+  background: var(--vs-accent-soft);
+}
+
+.vs-paletteItemLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.vs-paletteItemHint {
+  flex-shrink: 0;
+  justify-self: end;
+  color: var(--vs-muted);
+  font-size: 0.72rem;
+  font-family: var(--vs-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.vs-paletteEmpty {
+  padding: 1.35rem 0.75rem;
+  color: var(--vs-muted);
+  font-size: 0.86rem;
+  text-align: center;
+}
+
+.vs-paletteFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.85rem;
+  padding: 0.55rem 0.95rem;
+  border-top: 1px solid var(--vs-border);
+  color: var(--vs-muted);
+  font-size: 0.68rem;
+}
+
+.vs-paletteKbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  padding: 0.12rem 0.35rem;
+  border-radius: 5px;
+  border: 1px solid var(--vs-border);
+  background: color-mix(in srgb, var(--vs-bg) 70%, transparent);
+  color: color-mix(in srgb, var(--vs-text) 78%, var(--vs-muted));
+  font-family: var(--vs-mono, ui-monospace, monospace);
+  font-size: 0.64rem;
+  font-weight: 600;
+}

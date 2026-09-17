@@ -1,6 +1,13 @@
 import type { ITheme } from "@xterm/xterm";
 import { getTheme } from "@/features/theme/catalog.generated";
 
+function selectionInactive(active: string) {
+  const value = active.trim();
+  if (/^#[0-9a-f]{8}$/i.test(value)) return `${value.slice(0, 7)}22`;
+  if (/^#[0-9a-f]{6}$/i.test(value)) return `${value}22`;
+  return value;
+}
+
 /** Build xterm palette from the active app theme (term tokens + catalog ANSI). */
 export function xtermThemeForId(themeId?: string | null): {
   theme: ITheme;
@@ -17,6 +24,7 @@ export function xtermThemeForId(themeId?: string | null): {
       cursor: tokens.termCursor,
       cursorAccent: tokens.termBg,
       selectionBackground: tokens.termSelection,
+      selectionInactiveBackground: selectionInactive(tokens.termSelection),
       selectionForeground: undefined,
       black: ansi.black,
       red: ansi.red,

@@ -5,11 +5,14 @@ import { agentBots } from "@/features/agents/bots";
 import { beginAgentDragSession } from "@/features/agents/drag";
 import {
   botDisplayName,
+  filterRunsByRange,
   folderLabel,
+  formatDateTime,
   formatRelativeTime,
   groupRunsByAgent,
   groupRunsByFolder,
-  runQueryLabel,
+  runDisplayLines,
+  type DateRange,
 } from "@/features/agents/history";
 import { scanVaultSessions } from "@/features/vault/api";
 import {
@@ -58,10 +61,18 @@ function vaultToRun(entry: VaultSession, workspaceId: string, workspaceName: str
 type Props = {
   workspaceId?: string | null;
   compact?: boolean;
+  layout?: "compact" | "page";
   onResume?: () => void;
 };
 
 type GroupMode = "agent" | "folder";
+
+const DATE_RANGE_LABELS: Record<DateRange, "history.rangeAll" | "history.rangeToday" | "history.rangeWeek" | "history.rangeMonth"> = {
+  all: "history.rangeAll",
+  today: "history.rangeToday",
+  week: "history.rangeWeek",
+  month: "history.rangeMonth",
+};
 
 function ensureDragGhost(label: string) {
   let ghost = document.getElementById("vs-history-drag-ghost") as HTMLDivElement | null;
@@ -95,6 +106,7 @@ function focusPaneTerminal(paneId: string) {
 export function AgentHistoryPanel({
   workspaceId,
   compact = false,
+  layout = "compact",
   onResume,
 }: Props) {
   const {
@@ -108,12 +120,15 @@ export function AgentHistoryPanel({
     t,
   } = useSpace();
   const { setView } = useView();
+  const isPage = layout === "page";
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(isPage);
   const [groupMode, setGroupMode] = useState<GroupMode>("agent");
   const [scopeCurrent, setScopeCurrent] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange>("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
   const [vaultEntries, setVaultEntries] = useState<VaultSession[]>([]);
   const suppressClickRef = useRef(false);
@@ -160,8 +175,31 @@ export function AgentHistoryPanel({
     return merged;
   }, [agentRuns, workspaceId, vaultEntries, scopeWs, activeWorkspace]);
 
-  const agentGroups = useMemo(() => groupRunsByAgent(mergedRuns), [mergedRuns]);
-  const folderGroups = useMemo(() => groupRunsByFolder(mergedRuns), [mergedRuns]);
+  const filteredRuns = useMemo(
+    () => filterRunsByRange(mergedRuns, dateRange),
+    [mergedRuns, dateRange],
+  );
+
+  const stats = useMemo(() => {
+    const available = filteredRuns.filter(
+      (run) => workspaces.some((w) => w.id === run.workspaceId) || run.vaultId,
+    ).length;
+    return { total: mergedRuns.length, filtered: filteredRuns.length, available };
+  }, [filteredRuns, mergedRuns.length, workspaces]);
+
+  const agentGroups = useMemo(() => groupRunsByAgent(filteredRuns), [filteredRuns]);
+  const folderGroups = useMemo(() => groupRunsByFolder(filteredRuns), [filteredRuns]);
+
+  const selectedRun = useMemo(
+    () => filteredRuns.find((run) => run.id === selectedId) ?? null,
+    [filteredRuns, selectedId],
+  );
+
+  useEffect(() => {
+    if (!isPage) return;
+    if (selectedId && filteredRuns.some((run) => run.id === selectedId)) return;
+    setSelectedId(filteredRuns[0]?.id ?? null);
+  }, [filteredRuns, isPage, selectedId]);
 
   const resumeRun = (run: AgentRun) => {
     if (!resumeAgentRun) return;
@@ -214,7 +252,7 @@ export function AgentHistoryPanel({
 
     const startX = event.clientX;
     const startY = event.clientY;
-    const label = runQueryLabel(run, sessions);
+    const { title } = runDisplayLines(run, sessions);
     let active = false;
     let finished = false;
     let overPane: string | null = null;
@@ -242,7 +280,7 @@ export function AgentHistoryPanel({
         beginAgentDragSession();
         emitPaneDrag(true, "history");
         document.body.classList.add("is-agent-dragging");
-        ensureDragGhost(label);
+        ensureDragGhost(title);
       }
       if (!active) return;
 
@@ -329,7 +367,8 @@ export function AgentHistoryPanel({
     const ws = workspaces.find((w) => w.id === run.workspaceId);
     const gone = !ws && !run.vaultId;
     const live = isRunLive(run, workspaces, sessions);
-    const label = runQueryLabel(run, sessions);
+    const { title, subtitle } = runDisplayLines(run, sessions);
+    const selected = selectedId === run.id;
 
     return (
       <button
@@ -337,7 +376,9 @@ export function AgentHistoryPanel({
         type="button"
         className={`vs-agentHistoryItem${gone ? " is-gone" : ""}${live ? " is-live" : ""}${
           run.vaultId ? " is-vault" : ""
-        }${draggingId === run.id ? " is-dragging" : ""}`}
+        }${draggingId === run.id ? " is-dragging" : ""}${selected ? " is-selected" : ""}${
+          isPage ? " is-page" : ""
+        }`}
         disabled={gone}
         title={
           gone
@@ -355,10 +396,22 @@ export function AgentHistoryPanel({
         onClick={(event) => {
           event.preventDefault();
           if (suppressClickRef.current || gone) return;
+          if (isPage) setSelectedId(run.id);
+        }}
+        onDoubleClick={(event) => {
+          event.preventDefault();
+          if (gone) return;
+          resumeRun(run);
         }}
       >
-        <AgentBrandIcon id={run.agentId} size={12} className="vs-agentHistoryItemIcon" />
-        <span className="vs-agentHistoryItemText">{label}</span>
+        <AgentBrandIcon id={run.agentId} size={isPage ? 16 : 12} className="vs-agentHistoryItemIcon" />
+        <span className="vs-agentHistoryItemBody">
+          <span className="vs-agentHistoryItemText">
+            {title}
+            {live ? <span className="vs-agentHistoryLiveDot" aria-hidden /> : null}
+          </span>
+          {isPage ? <span className="vs-agentHistoryItemSub">{subtitle}</span> : null}
+        </span>
         <time className="vs-agentHistoryItemWhen" dateTime={new Date(run.at).toISOString()}>
           {formatRelativeTime(run.at, locale)}
         </time>
@@ -381,11 +434,41 @@ export function AgentHistoryPanel({
           runs: g.runs,
         }));
 
-  return (
+  const detailRun = selectedRun;
+  const detailGone =
+    detailRun && !workspaces.some((w) => w.id === detailRun.workspaceId) && !detailRun.vaultId;
+  const detailLive = detailRun ? isRunLive(detailRun, workspaces, sessions) : false;
+
+  const listPanel = (
     <section
-      className={`vs-agentHistory${compact ? " is-compact" : ""}${workspaceId ? " is-scoped" : ""}`}
+      className={`vs-agentHistory${compact ? " is-compact" : ""}${workspaceId ? " is-scoped" : ""}${
+        isPage ? " is-page" : ""
+      }`}
       aria-label={t("history.title")}
     >
+      {isPage ? (
+        <header className="vs-historyPageHead">
+          <div className="vs-historyPageHeadMain">
+            <h1>{t("history.title")}</h1>
+            <p>{t("history.lead")}</p>
+          </div>
+          <div className="vs-historyStats">
+            <span className="vs-historyStat">
+              <strong>{stats.total}</strong>
+              {t("history.statsTotal")}
+            </span>
+            <span className="vs-historyStat">
+              <strong>{stats.available}</strong>
+              {t("history.statsActive")}
+            </span>
+            <span className="vs-historyStat">
+              <strong>{stats.filtered}</strong>
+              {t("history.statsFiltered")}
+            </span>
+          </div>
+        </header>
+      ) : null}
+
       <div className="vs-agentHistoryToolbar">
         <div className="vs-agentHistoryFilters">
           <button
@@ -410,17 +493,35 @@ export function AgentHistoryPanel({
           >
             {t("history.scopeCurrent")}
           </button>
-          <button
-            type="button"
-            className={`vs-agentHistorySearchToggle${searchOpen ? " is-on" : ""}`}
-            aria-label={t("history.vaultSearch")}
-            aria-expanded={searchOpen}
-            onClick={() => setSearchOpen((open) => !open)}
-          >
-            <SearchMd size={14} aria-hidden />
-          </button>
+          {!isPage ? (
+            <button
+              type="button"
+              className={`vs-agentHistorySearchToggle${searchOpen ? " is-on" : ""}`}
+              aria-label={t("history.vaultSearch")}
+              aria-expanded={searchOpen}
+              onClick={() => setSearchOpen((open) => !open)}
+            >
+              <SearchMd size={14} aria-hidden />
+            </button>
+          ) : null}
         </div>
-        {searchOpen ? (
+
+        {isPage ? (
+          <div className="vs-agentHistoryDateFilters">
+            {(["all", "today", "week", "month"] as DateRange[]).map((range) => (
+              <button
+                key={range}
+                type="button"
+                className={`vs-agentHistoryFilter${dateRange === range ? " is-on" : ""}`}
+                onClick={() => setDateRange(range)}
+              >
+                {t(DATE_RANGE_LABELS[range])}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {searchOpen || isPage ? (
           <label className="vs-agentHistorySearch">
             <SearchMd size={13} aria-hidden />
             <input
@@ -429,7 +530,7 @@ export function AgentHistoryPanel({
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("history.vaultSearch")}
               spellCheck={false}
-              autoFocus
+              autoFocus={searchOpen && !isPage}
             />
           </label>
         ) : null}
@@ -441,6 +542,7 @@ export function AgentHistoryPanel({
         <div className="vs-agentHistoryGroups">
           {groups.map((group) => {
             const isCollapsed = collapsed.has(group.key);
+            const visibleLimit = isPage ? 12 : 5;
 
             return (
               <section key={group.key} className="vs-agentHistoryGroup">
@@ -460,15 +562,17 @@ export function AgentHistoryPanel({
                     </span>
                   )}
                   <strong title={group.key}>{group.title}</strong>
+                  <span className="vs-agentHistoryGroupCount">{group.runs.length}</span>
                   <ChevronDown size={14} className="vs-agentHistoryChevron" aria-hidden />
                 </button>
 
                 {!isCollapsed ? (
                   <div className="vs-agentHistoryItems">
-                    {(expandedGroups.has(group.key) ? group.runs : group.runs.slice(0, 5)).map(
-                      renderRun,
-                    )}
-                    {group.runs.length > 5 && !expandedGroups.has(group.key) ? (
+                    {(expandedGroups.has(group.key)
+                      ? group.runs
+                      : group.runs.slice(0, visibleLimit)
+                    ).map(renderRun)}
+                    {group.runs.length > visibleLimit && !expandedGroups.has(group.key) ? (
                       <button
                         type="button"
                         className="vs-agentHistoryMore"
@@ -476,7 +580,7 @@ export function AgentHistoryPanel({
                           setExpandedGroups((current) => new Set(current).add(group.key))
                         }
                       >
-                        {t("history.showMore")}
+                        {t("history.showMore")} ({group.runs.length - visibleLimit})
                       </button>
                     ) : null}
                   </div>
@@ -488,4 +592,91 @@ export function AgentHistoryPanel({
       )}
     </section>
   );
+
+  const detailPanel = isPage ? (
+    <aside className="vs-historyDetail" aria-label={t("history.detailTitle")}>
+      {detailRun ? (
+        <>
+          <div className="vs-historyDetailHero">
+            <span className="vs-historyDetailIcon" aria-hidden>
+              <AgentBrandIcon id={detailRun.agentId} size={36} />
+            </span>
+            <div className="vs-historyDetailTitles">
+              <h2>{runDisplayLines(detailRun, sessions).title}</h2>
+              <p>{runDisplayLines(detailRun, sessions).subtitle}</p>
+            </div>
+          </div>
+
+          <dl className="vs-historyDetailMeta">
+            <div>
+              <dt>{t("history.detailAgent")}</dt>
+              <dd>{botDisplayName(detailRun.agentId)}</dd>
+            </div>
+            <div>
+              <dt>{t("history.detailWorkspace")}</dt>
+              <dd>{detailRun.workspaceName || "—"}</dd>
+            </div>
+            <div>
+              <dt>{t("history.detailFolder")}</dt>
+              <dd title={detailRun.cwd}>{detailRun.cwd || "—"}</dd>
+            </div>
+            <div>
+              <dt>{t("history.detailWhen")}</dt>
+              <dd>
+                {formatDateTime(detailRun.at, locale)}
+                <span className="vs-historyDetailRel">
+                  {formatRelativeTime(detailRun.at, locale)}
+                </span>
+              </dd>
+            </div>
+            {detailRun.resumeCommand ? (
+              <div className="is-wide">
+                <dt>{t("history.detailCommand")}</dt>
+                <dd>
+                  <code>{detailRun.resumeCommand}</code>
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+
+          <div className="vs-historyDetailBadges">
+            {detailLive ? <span className="vs-badge is-ok">{t("recentAgents.live")}</span> : null}
+            {detailRun.vaultId ? (
+              <span className="vs-badge">{t("history.vaultTitle")}</span>
+            ) : null}
+            {detailGone ? <span className="vs-badge">{t("history.gone")}</span> : null}
+          </div>
+
+          <div className="vs-historyDetailActions">
+            <button
+              type="button"
+              className="vs-btn vs-btnPrimary"
+              disabled={Boolean(detailGone)}
+              onClick={() => resumeRun(detailRun)}
+            >
+              {detailRun.vaultId ? t("history.vaultResume") : t("recentAgents.resume")}
+            </button>
+          </div>
+
+          <p className="vs-historyDetailHint">{t("history.dragHint")}</p>
+        </>
+      ) : (
+        <div className="vs-historyDetailEmpty">
+          <p>{t("history.selectSession")}</p>
+          <span>{t("history.dragHint")}</span>
+        </div>
+      )}
+    </aside>
+  ) : null;
+
+  if (isPage) {
+    return (
+      <div className="vs-historyLayout">
+        <div className="vs-historyListCol">{listPanel}</div>
+        {detailPanel}
+      </div>
+    );
+  }
+
+  return listPanel;
 }

@@ -7,7 +7,7 @@ import { IconX } from "@/components/icons";
 import { useFolderBrowse } from "@/features/workspace/useFolderBrowse";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import { clientError } from "@/lib/errors";
-import { SPACE_COLORS, type SpaceColor } from "@/lib/types";
+import { type SpaceColor } from "@/lib/types";
 import { Folder } from "@untitledui/icons";
 
 type NewSpaceModalProps = {
@@ -22,10 +22,8 @@ function normalizeFolderPath(path: string) {
   return trimmed.replace(/\//g, "\\").replace(/\\{2,}/g, "\\");
 }
 
-function nextColor(used: Set<string>, count: number): SpaceColor {
-  return (
-    SPACE_COLORS.find((c) => !used.has(c)) ?? SPACE_COLORS[count % SPACE_COLORS.length]
-  );
+function nextColor(_used: Set<string>, _count: number): SpaceColor {
+  return "default";
 }
 
 export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
@@ -38,7 +36,7 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
     grid: 2,
     agentIds: [],
     includeBrowser: false,
-    color: "green",
+    color: "default",
   });
 
   useEffect(() => {
@@ -88,10 +86,6 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
 
   async function confirm() {
     const folder = normalizeFolderPath(cwd);
-    if (!folder) {
-      setError(t("projects.needFolder"));
-      return;
-    }
     setBusy(true);
     try {
       await createWorkspace({
@@ -130,7 +124,7 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
             aria-label={t("space.close")}
             title={t("space.close")}
           >
-            <IconX size={16} />
+            <IconX size={14} />
           </button>
         </div>
 
@@ -146,13 +140,13 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
         </div>
 
         <div className="vs-modalSection">
-          <span className="vs-modalLabel">{t("projects.folder")}</span>
+          <span className="vs-modalLabel">{t("projects.folderOptional")}</span>
           <div className="vs-modalPathRow">
             <Folder size={15} aria-hidden />
             <input
               value={cwd}
               onChange={(e) => setCwd(normalizeFolderPath(e.target.value))}
-              placeholder="D:/projects/app"
+              placeholder={t("projects.folderLaterPh")}
               spellCheck={false}
             />
             <button
@@ -163,6 +157,7 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
               {t("projects.browse")}
             </button>
           </div>
+          <p className="vs-modalHint">{t("projects.folderLaterHint")}</p>
         </div>
 
         <CreateSpaceSetup
@@ -182,7 +177,7 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
           <button
             type="button"
             className="vs-btn vs-btnPrimary"
-            disabled={busy || !cwd.trim()}
+            disabled={busy}
             onClick={() => void confirm()}
           >
             {t("projects.create")}

@@ -11,7 +11,7 @@ import {
 
 export { isExternalFileDrag, isPanePreviewMime, resolveFileDropZone };
 
-/** Image / video / audio / PDF — open in the drop target pane (Shift → assist). */
+/** Image / video / audio / PDF — open in the drop target pane. */
 export function isPreviewDropPath(path: string) {
   return isPanePreviewPath(path);
 }
@@ -71,14 +71,6 @@ export async function resolvePreviewPathsFromDrop(
     }
   }
   return paths;
-}
-
-export function openWorkspaceFilePreview(absPath: string) {
-  const trimmed = absPath.trim();
-  if (!trimmed) return;
-  window.dispatchEvent(
-    new CustomEvent("voxiva-open-workspace-file", { detail: { absPath: trimmed } }),
-  );
 }
 
 export async function payloadFromHtml5FileDrop(

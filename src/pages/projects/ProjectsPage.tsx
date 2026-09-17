@@ -1,3 +1,4 @@
+import { type CSSProperties } from "react";
 import { useState } from "react";
 import {
   CreateSpaceSetup,
@@ -9,8 +10,7 @@ import { openInExplorer, pickWorkspaceFolder } from "@/features/terminal";
 import { collectLeaves, collectSessionIds, countLeaves, leafHasBrowser } from "@/features/workspace/layout";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import { clientError } from "@/lib/errors";
-import { SPACE_COLORS, type SpaceColor, type Workspace } from "@/lib/types";
-import { TerminalSquare } from "@untitledui/icons";
+import { SPACE_COLOR_HEX, type Workspace } from "@/lib/types";
 
 function workspaceHasContent(ws: Workspace) {
   if (collectSessionIds(ws.layout).length > 0) return true;
@@ -53,18 +53,11 @@ export function ProjectsPage() {
   }
 
   function openCreateModal() {
-    if (!cwd.trim()) {
-      setError(t("projects.needFolder"));
-      return;
-    }
-    const used = new Set(workspaces.map((ws) => ws.color));
-    const free =
-      SPACE_COLORS.find((c) => !used.has(c)) ?? SPACE_COLORS[workspaces.length % SPACE_COLORS.length];
     setSetup({
       grid: 2,
       agentIds: [],
       includeBrowser: false,
-      color: free as SpaceColor,
+      color: "default",
     });
     setModalOpen(true);
   }
@@ -124,7 +117,6 @@ export function ProjectsPage() {
           <button
             type="button"
             className="vs-btn vs-btnPrimary"
-            disabled={!cwd.trim()}
             onClick={openCreateModal}
           >
             {t("projects.add")}
@@ -191,9 +183,15 @@ export function ProjectsPage() {
                 />
               ) : (
                 <strong>
-                  <span className={`vs-wsAvatar is-${ws.color}`} aria-hidden>
-                    <TerminalSquare size={22} strokeWidth={2.35} />
-                  </span>
+                  <span
+                    className={`vs-projectRail${ws.color !== "default" ? " is-on" : ""}`}
+                    style={
+                      ws.color !== "default" && ws.color in SPACE_COLOR_HEX
+                        ? ({ ["--vs-ws-rail"]: SPACE_COLOR_HEX[ws.color as keyof typeof SPACE_COLOR_HEX] } as CSSProperties)
+                        : undefined
+                    }
+                    aria-hidden
+                  />
                   {ws.name}
                   {activeWorkspace?.id === ws.id ? (
                     <span className="vs-badge">{t("projects.active")}</span>

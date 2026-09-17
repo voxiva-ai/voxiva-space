@@ -1,6 +1,7 @@
 import claudeSvg from "@/assets/brand/claude.svg?raw";
 import codexSvg from "@/assets/brand/codex.svg?raw";
 import geminiSvg from "@/assets/brand/gemini.svg?raw";
+import voxivaCliSvg from "@/assets/brand/voxiva-cli.svg?raw";
 import opencodeSvg from "@/assets/brand/opencode.svg?raw";
 import cursorSvg from "@/assets/brand/cursor.svg?raw";
 import ampSvg from "@/assets/brand/amp.svg?raw";
@@ -35,6 +36,7 @@ function BrandMark({ svg, size, className }: { svg: string; size: number; classN
 }
 
 const MARK: Record<string, string> = {
+  voxiva: voxivaCliSvg,
   opencode: opencodeSvg,
   claude: claudeSvg,
   codex: codexSvg,

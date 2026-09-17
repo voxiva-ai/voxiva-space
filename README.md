@@ -2,6 +2,10 @@
 
 Desktop agent workspace (Tauri + React): vertical workspaces, split terminals, bot presets, attention rings, task board, and embedded browser.
 
+## Browser (Chromium)
+
+Embedded panes use **WebView2** — Microsoft Edge’s **Chromium** engine (same approach as cmux/Simux-style hosts on Windows). Brush design-mode injects a floating composer: hover → click → chat flies in → **Copy** JSON for any agent.
+
 ## Local development
 
 ```powershell

@@ -1,137 +1,217 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import markUrl from "@/assets/brand/voxiva-space-mark.svg";
+import { AgentBrandIcon } from "@/components/agents/AgentBrandIcon";
+import { WelcomeTypedLines } from "@/components/shell/WelcomeTypedLines";
+import {
+  dwellMsForPane,
+  termLineClass,
+  welcomePreviewCells,
+  welcomePreviewForGrid,
+  type WelcomePreviewPane,
+} from "@/components/shell/welcomePreviewLines";
 import type { GridPreset } from "@/features/workspace/layout";
 
-type PreviewPane = {
-  title: string;
-  lines: string[];
-  accent: "shell" | "agent" | "browser";
-};
+function BrowserMockBody({ focused }: { focused: boolean }) {
+  return (
+    <div className={`vs-welcomeBrowserMock${focused ? " is-active" : ""}`}>
+      <span className="vs-welcomeBrowserUrl">localhost:3000/pricing</span>
+      <div className="vs-welcomeBrowserBlocks">
+        <span />
+        <span className="is-accent" />
+        <span />
+      </div>
+      <div className="vs-welcomeBrowserPick">
+        <span className="vs-welcomeBrowserPickRing" />
+        Hero.tsx · #pricing-hero
+      </div>
+    </div>
+  );
+}
 
-const LAYOUTS: Record<GridPreset, PreviewPane[]> = {
-  1: [
-    {
-      title: "Shell",
-      lines: ["$ cd ./apps/web", "$ npm run dev", "ready on :3000"],
-      accent: "shell",
-    },
-  ],
-  2: [
-    {
-      title: "Shell",
-      lines: ["$ npm run dev", "listening…", "http://127.0.0.1:3000"],
-      accent: "shell",
-    },
-    {
-      title: "Shell",
-      lines: ["> opencode", "ready", "awaiting prompt"],
-      accent: "agent",
-    },
-  ],
-  4: [
-    {
-      title: "Shell",
-      lines: ["$ npm run dev", "ready on :3000"],
-      accent: "shell",
-    },
-    {
-      title: "OpenCode",
-      lines: ["> opencode", "implement pricing"],
-      accent: "agent",
-    },
-    {
-      title: "Claude",
-      lines: ["> claude", "reviewing diff"],
-      accent: "agent",
-    },
-    {
-      title: "Shell",
-      lines: ["$ git status", "clean"],
-      accent: "shell",
-    },
-  ],
-  8: [
-    {
-      title: "Shell",
-      lines: ["$ npm run dev", "ready"],
-      accent: "shell",
-    },
-    {
-      title: "OpenCode",
-      lines: ["> opencode", "listening"],
-      accent: "agent",
-    },
-    {
-      title: "Claude",
-      lines: ["> claude", "review"],
-      accent: "agent",
-    },
-    {
-      title: "Browser",
-      lines: ["localhost:3000", "ok"],
-      accent: "browser",
-    },
-    {
-      title: "Codex",
-      lines: ["> codex", "plan"],
-      accent: "agent",
-    },
-    {
-      title: "Git",
-      lines: ["$ git status", "clean"],
-      accent: "shell",
-    },
-    {
-      title: "Aider",
-      lines: ["> aider", "edit"],
-      accent: "agent",
-    },
-    {
-      title: "Logs",
-      lines: ["tail -f", "ready"],
-      accent: "browser",
-    },
-  ],
-};
+function PreviewPaneCard({
+  pane,
+  index,
+  focused,
+  motionOk,
+  resetBase,
+  dense,
+}: {
+  pane: WelcomePreviewPane;
+  index: number;
+  focused: boolean;
+  motionOk: boolean;
+  resetBase: number;
+  dense?: boolean;
+}) {
+  if (pane.accent === "browser") {
+    return (
+      <div
+        className={`vs-welcomePreviewPane is-browser${focused ? " is-typing" : ""}`}
+        style={{ animationDelay: `${index * 55}ms` }}
+      >
+        <div className="vs-welcomePreviewBar">
+          <AgentBrandIcon id="shell" size={14} />
+          <b>Browser</b>
+          <i className={focused ? "is-blue" : undefined} />
+        </div>
+        <BrowserMockBody focused={focused} />
+      </div>
+    );
+  }
 
-/** Static grid preview — no timers so welcome screen stays smooth on launch. */
-export function LiveGridPreview({ panes = 4 }: { panes?: GridPreset }) {
-  const visible = useMemo(() => LAYOUTS[panes] ?? LAYOUTS[4], [panes]);
+  const staticLines = dense ? pane.lines.slice(-3) : pane.lines.slice(-4);
 
   return (
-    <div className="vs-welcomePreview" aria-hidden>
+    <div
+      className={`vs-welcomePreviewPane is-${pane.accent}${focused ? " is-typing" : ""}`}
+      style={{ animationDelay: `${index * 55}ms` }}
+    >
+      <div className="vs-welcomePreviewBar">
+        <AgentBrandIcon id={pane.agentId} size={14} />
+        <b>{pane.title}</b>
+        <i className={focused ? "is-blue" : undefined} />
+      </div>
+      {focused && motionOk ? (
+        <WelcomeTypedLines
+          lines={pane.lines}
+          live
+          resetKey={resetBase + index}
+          typing={pane.typing}
+        />
+      ) : (
+        <div className={`vs-welcomePreviewCode is-static${dense ? " is-dense" : ""}`}>
+          {staticLines.map((line, li) => (
+            <div key={`${pane.title}-${li}`} className={`vs-welcomePreviewLine ${termLineClass(line)}`}>
+              {line}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type Props = {
+  panes?: GridPreset;
+};
+
+/** Marketing-style live grid — one typing pane at a time to stay smooth. */
+export function LiveGridPreview({ panes = 4 }: Props) {
+  const layout = useMemo(() => welcomePreviewForGrid(panes), [panes]);
+  const cells = useMemo(() => welcomePreviewCells(panes), [panes]);
+  const focusables = useMemo(
+    () => (layout.mode === "browser-column" ? [...layout.terminals, layout.browser] : cells),
+    [cells, layout],
+  );
+
+  const [focusPane, setFocusPane] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [motionOk, setMotionOk] = useState(true);
+  const rotateRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setMotionOk(!mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    if (rotateRef.current) window.clearTimeout(rotateRef.current);
+    if (paused || !motionOk || focusables.length <= 1) return;
+
+    let index = 0;
+    setFocusPane(0);
+
+    const tick = () => {
+      const pane = focusables[index];
+      const wait = pane ? dwellMsForPane(pane) : 6000;
+      rotateRef.current = window.setTimeout(() => {
+        if (document.hidden) {
+          tick();
+          return;
+        }
+        index = (index + 1) % focusables.length;
+        setFocusPane(index);
+        tick();
+      }, wait);
+    };
+
+    tick();
+    return () => {
+      if (rotateRef.current) window.clearTimeout(rotateRef.current);
+    };
+  }, [paused, motionOk, focusables, panes]);
+
+  const gridClass = [
+    "vs-welcomePreviewGrid",
+    `is-${panes}`,
+    layout.mode === "browser-column" ? "is-withBrowser" : "",
+    layout.mode === "browser-in-grid" ? "is-browserCell" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const resetBase = panes * 100;
+  const dense = panes >= 8;
+
+  return (
+    <div
+      className="vs-welcomePreview"
+      aria-hidden
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
       <div className="vs-welcomePreviewChrome">
-        <span />
-        <span />
-        <span />
-        <strong>
-          {panes === 1
-            ? "1 terminal"
-            : panes === 2
-              ? "2 terminals"
-              : `${panes} panes`}
-        </strong>
+        <img src={markUrl} alt="" className="vs-welcomePreviewMark" />
+        <div className="vs-welcomePreviewMeta">
+          <strong>My Space</strong>
+          <span>./project · main</span>
+        </div>
+        <span className="vs-livePill">
+          <i className="vs-livePillDot" />
+          Live
+        </span>
       </div>
-      <div className={`vs-welcomePreviewGrid is-${panes}`}>
-        {visible.map((pane, index) => (
-          <div
-            key={`${pane.title}-${index}`}
-            className={`vs-welcomePreviewPane is-${pane.accent}`}
-            style={{ animationDelay: `${index * 55}ms` }}
-          >
-            <div className="vs-welcomePreviewBar">
-              <b>{pane.title}</b>
-              <i />
-            </div>
-            <div className="vs-welcomePreviewCode">
-              {pane.lines.map((line, li) => (
-                <div key={`${pane.title}-${li}`} className="vs-welcomePreviewLine">
-                  {line}
-                </div>
-              ))}
-            </div>
+
+      {layout.mode === "browser-column" ? (
+        <div className={gridClass}>
+          <div className="vs-welcomePreviewTerminals">
+            {layout.terminals.map((pane, index) => (
+              <PreviewPaneCard
+                key={`${pane.title}-${index}`}
+                pane={pane}
+                index={index}
+                focused={index === focusPane}
+                motionOk={motionOk}
+                resetBase={resetBase}
+              />
+            ))}
           </div>
-        ))}
-      </div>
+          <PreviewPaneCard
+            pane={layout.browser}
+            index={layout.terminals.length}
+            focused={focusPane === layout.terminals.length}
+            motionOk={motionOk}
+            resetBase={resetBase}
+          />
+        </div>
+      ) : (
+        <div className={gridClass}>
+          {cells.map((pane, index) => (
+            <PreviewPaneCard
+              key={`${pane.title}-${index}`}
+              pane={pane}
+              index={index}
+              focused={index === focusPane}
+              motionOk={motionOk}
+              resetBase={resetBase}
+              dense={dense}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

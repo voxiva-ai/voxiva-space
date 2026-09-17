@@ -4,21 +4,9 @@ export type FileEntry = {
   isDir: boolean;
 };
 
-export type EditorKind = "text" | "image" | "binary";
-
 export type TextFile = {
   path: string;
   content: string;
-};
-
-export type EditorTab = TextFile & {
-  savedContent: string;
-  dirty: boolean;
-  kind?: EditorKind;
-  mime?: string;
-  size?: number;
-  /** Absolute disk path for asset:// preview (images / video / audio / PDF). */
-  absPath?: string;
 };
 
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|bmp|ico|avif|svg)$/i;
@@ -103,14 +91,6 @@ export function isPanePreviewMime(mime: string) {
     m === "text/plain" ||
     m === "application/zip"
   );
-}
-
-export function editorKindForPath(path: string): EditorKind {
-  return isImagePath(path) ? "image" : "binary";
-}
-
-export function isMarkdownPath(path: string) {
-  return /\.(md|mdx|markdown)$/i.test(path.replace(/\\/g, "/"));
 }
 
 export function formatBytes(size: number) {

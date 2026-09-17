@@ -1,8 +1,10 @@
 //! Voxiva Space native shell. Real connectors grow behind Tauri commands here.
 
 mod browser;
+mod browser_cookies;
 mod companion;
 mod vault;
+mod vscode_web;
 
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
@@ -26,9 +28,12 @@ use tauri::{
 
 use browser::{
     browser_close, browser_close_all, browser_configure_inspector, browser_hide, browser_hide_all,
-    browser_navigate, browser_open, browser_open_devtools, browser_page_meta, browser_reload,
-    browser_set_bounds, browser_take_selection, browser_toggle_inspector, write_annotate_context,
-    BrowserRegistry,
+    browser_inspector_snapshot, browser_navigate, browser_open, browser_open_devtools,
+    browser_page_meta, browser_reload, browser_set_bounds, browser_take_selection,
+    browser_toggle_inspector, write_annotate_context, BrowserRegistry,
+};
+use browser_cookies::{
+    browser_import_cookies, browser_list_cookie_sources, browser_passkey_support,
 };
 use companion::{
     companion_append_output, companion_push_snapshot, companion_set_workspace, companion_start,
@@ -849,7 +854,7 @@ fn program_exists_on_disk(program: &str) -> bool {
 }
 
 /// GUI apps often miss npm / user tool dirs that interactive shells have.
-fn enriched_path() -> Option<String> {
+pub(crate) fn enriched_path() -> Option<String> {
     let current = std::env::var("PATH").unwrap_or_default();
     let mut extras: Vec<String> = Vec::new();
     #[cfg(windows)]
@@ -1507,6 +1512,20 @@ pub fn run() {
                 std::mem::forget(tray);
             }
 
+            // Fallback: always surface the main window even if the webview
+            // never calls revealMainWindow (vite stall / JS error / race).
+            {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(900));
+                    if let Some(w) = handle.get_webview_window("main") {
+                        let _ = w.show();
+                        let _ = w.unminimize();
+                        let _ = w.set_focus();
+                    }
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1529,6 +1548,8 @@ pub fn run() {
             kill_terminal_session,
             open_in_explorer,
             open_in_code,
+            vscode_web::ensure_vscode_serve_web,
+            vscode_web::vscode_serve_web_folder_url,
             open_url,
             browser_open,
             browser_set_bounds,
@@ -1542,8 +1563,12 @@ pub fn run() {
             browser_page_meta,
             browser_toggle_inspector,
             browser_take_selection,
+            browser_inspector_snapshot,
             browser_configure_inspector,
             write_annotate_context,
+            browser_list_cookie_sources,
+            browser_import_cookies,
+            browser_passkey_support,
             companion_status,
             companion_start,
             companion_stop,
@@ -1552,8 +1577,13 @@ pub fn run() {
             companion_append_output,
             scan_vault_sessions,
         ])
-        .run(tauri::generate_context!())
-        .expect("failed to start Voxiva Space");
+        .build(tauri::generate_context!())
+        .expect("failed to build Voxiva Space")
+        .run(|_app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                vscode_web::shutdown_vscode_serve_web();
+            }
+        });
 }
 
 #[cfg(test)]

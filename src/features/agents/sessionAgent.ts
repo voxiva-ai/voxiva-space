@@ -6,9 +6,8 @@ function escapeRegExp(value: string) {
 }
 
 /** Match agent CLI name as a token in title + initialCommand (not substring noise). */
-function hayMatchesBot(hay: string, bot: (typeof agentBots)[number]): boolean {
+function hayMatchesBotCommand(hay: string, bot: (typeof agentBots)[number]): boolean {
   const lower = hay.toLowerCase();
-  if (lower.includes(bot.name.toLowerCase())) return true;
   for (const name of botCommandNames(bot)) {
     const token = name.toLowerCase();
     if (!token) continue;
@@ -39,21 +38,26 @@ export function agentIdFromCommand(command?: string | null): string | null {
   return null;
 }
 
-function agentIdFromTitleCommand(session: { title: string; initialCommand?: string }): string {
-  const hay = `${session.title} ${session.initialCommand ?? ""}`.trim();
-  if (!hay) return "shell";
+export function isIdleShellTitle(title: string) {
+  return /^(shell|terminal)$/i.test(title.trim());
+}
 
-  for (const bot of botsByCommandLength) {
-    if (hayMatchesBot(hay, bot)) return bot.id;
-  }
+function agentIdFromTitle(title: string, initialCommand?: string): string {
+  const trimmed = title.trim();
+  if (isIdleShellTitle(trimmed)) return "shell";
 
-  if (/^shell$/i.test(session.title.trim()) || /^terminal$/i.test(session.title.trim())) {
-    return "shell";
-  }
+  const fromCmd = agentIdFromCommand(initialCommand);
+  if (fromCmd) return fromCmd;
+
+  const bot = agentBots.find(
+    (b) => b.id !== "shell" && b.name.toLowerCase() === trimmed.toLowerCase(),
+  );
+  if (bot) return bot.id;
+
   return "shell";
 }
 
-/** Map a live terminal session to an agent catalog id for icons / file attach. */
+/** Map a live terminal session to an agent catalog id for tab icons / file attach. */
 export function agentIdForSession(
   session: {
     id: string;
@@ -61,41 +65,35 @@ export function agentIdForSession(
     initialCommand?: string;
     agentId?: string;
   },
-  agentRuns?: Pick<AgentRun, "sessionId" | "agentId">[],
+  _agentRuns?: Pick<AgentRun, "sessionId" | "agentId">[],
 ): string {
-  if (session.agentId && session.agentId !== "shell") return session.agentId;
-
-  const fromRun = agentRuns?.find((run) => run.sessionId === session.id)?.agentId;
-  if (fromRun && fromRun !== "shell") return fromRun;
-
   const fromCmd = agentIdFromCommand(session.initialCommand);
+
+  // Plain Shell tab — icon stays shell until a command is launched or detected.
+  if (isIdleShellTitle(session.title) && !fromCmd) return "shell";
+
+  if (session.agentId) return session.agentId;
   if (fromCmd) return fromCmd;
 
-  return agentIdFromTitleCommand(session);
+  return agentIdFromTitle(session.title, session.initialCommand);
 }
 
-/**
- * Detect an agent CLI starting inside an existing PTY.
- * Conservative: own-line command echo or a known product banner — never spawn a tab.
- */
+/** Own-line CLI echo only — no product banners (avoids false icons in plain Shell). */
 export function detectAgentFromOutput(chunk: string): string | null {
   const text = chunk
     .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "")
     .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "");
 
   const tests: Array<[RegExp, string]> = [
-    [/\bOpenCode\b/, "opencode"],
-    [/(?:^|\n)\s*opencode(?:\.exe)?\s*(?:\r?\n|$)/i, "opencode"],
-    [/\bClaude Code\b/, "claude"],
-    [/(?:^|\n)\s*claude(?:\.exe)?\s*(?:\r?\n|$)/i, "claude"],
-    [/\bOpenAI Codex\b/i, "codex"],
-    [/(?:^|\n)\s*codex(?:\.exe)?\s*(?:\r?\n|$)/i, "codex"],
-    [/\bGemini CLI\b/i, "gemini"],
-    [/(?:^|\n)\s*gemini(?:\.exe)?\s*(?:\r?\n|$)/i, "gemini"],
-    [/(?:^|\n)\s*aider(?:\.exe)?\s*(?:\r?\n|$)/i, "aider"],
-    [/(?:^|\n)\s*(?:cursor-agent|cursor)\s*(?:\r?\n|$)/i, "cursor-agent"],
-    [/(?:^|\n)\s*goose(?:\.exe)?\s*(?:\r?\n|$)/i, "goose"],
-    [/(?:^|\n)\s*amp(?:\.exe)?\s*(?:\r?\n|$)/i, "amp"],
+    [/(?:^|\n)\s*voxiva(?:\.exe)?(?:\s|$)/i, "voxiva"],
+    [/(?:^|\n)\s*opencode(?:\.exe)?(?:\s|$)/i, "opencode"],
+    [/(?:^|\n)\s*claude(?:\.exe)?(?:\s|$)/i, "claude"],
+    [/(?:^|\n)\s*codex(?:\.exe)?(?:\s|$)/i, "codex"],
+    [/(?:^|\n)\s*gemini(?:\.exe)?(?:\s|$)/i, "gemini"],
+    [/(?:^|\n)\s*aider(?:\.exe)?(?:\s|$)/i, "aider"],
+    [/(?:^|\n)\s*(?:cursor-agent|cursor)(?:\.exe)?(?:\s|$)/i, "cursor-agent"],
+    [/(?:^|\n)\s*goose(?:\.exe)?(?:\s|$)/i, "goose"],
+    [/(?:^|\n)\s*amp(?:\.exe)?(?:\s|$)/i, "amp"],
   ];
 
   for (const [re, id] of tests) {
@@ -104,6 +102,8 @@ export function detectAgentFromOutput(chunk: string): string | null {
   return null;
 }
 
-export function isIdleShellTitle(title: string) {
-  return /^(shell|terminal)$/i.test(title.trim());
+/** @deprecated internal — kept for tests / paste routing if needed */
+export function hayMatchesBot(hay: string, bot: (typeof agentBots)[number]): boolean {
+  if (bot.name && hay.toLowerCase() === bot.name.toLowerCase()) return true;
+  return hayMatchesBotCommand(hay, bot);
 }

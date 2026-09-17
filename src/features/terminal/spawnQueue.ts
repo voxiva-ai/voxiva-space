@@ -2,7 +2,7 @@
 let tail: Promise<unknown> = Promise.resolve();
 
 /** Gap between ConPTY creates — keep small so grids feel instant; queue still serializes. */
-const SPAWN_GAP_MS = 80;
+const SPAWN_GAP_MS = 100;
 
 export function enqueueTerminalSpawn<T>(fn: () => Promise<T>): Promise<T> {
   const run = tail.then(

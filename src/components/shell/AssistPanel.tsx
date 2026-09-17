@@ -1,44 +1,10 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-} from "react";
-import {
-  IconAssistPanel,
-  IconFilePlus,
-  IconFolderPlus,
-  IconRefresh,
-  IconX,
-} from "@/components/icons";
-import { Folder } from "@untitledui/icons";
-import { PromptDialog } from "@/components/PromptDialog";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { IconAssistPanel, IconX } from "@/components/icons";
 import { AgentHistoryPanel } from "@/components/shell/AgentHistoryPanel";
 import { NativeBrowser } from "@/features/browser/NativeBrowser";
-import { EditorTabs } from "@/features/editor/EditorTabs";
-import { FileTree } from "@/features/editor/FileTree";
-import { createDirectory, getWorkspaceFileInfo, readTextFile, writeTextFile } from "@/features/editor/api";
-import { MediaPreview } from "@/features/editor/MediaPreview";
-import type { EditorTab } from "@/features/editor/types";
-import { editorKindForPath, isBinaryPreviewPath } from "@/features/editor/types";
 import { useSpace } from "@/features/workspace/SpaceContext";
-import { relPathFromWorkspace } from "@/features/workspace/workspaceFileDrop";
-import { getTheme } from "@/features/theme";
-import { clientError } from "@/lib/errors";
-import {
-  fileUrlFromWorkspace,
-  isPreviewReloadPath,
-  isWebLookingPath,
-} from "@/features/browser/url";
 
-const CodeEditor = lazy(() =>
-  import("@/features/editor/CodeEditor").then((m) => ({ default: m.CodeEditor })),
-);
-
-export type AssistTab = "editor" | "browser" | "agents";
+export type AssistTab = "browser" | "agents";
 
 const WIDTH_KEY = "voxiva-space-assist-w";
 const MIN_W = 320;
@@ -50,27 +16,19 @@ type AssistPanelProps = {
   tab: AssistTab;
   onTabChange: (tab: AssistTab) => void;
   onClose: () => void;
-  pendingPath?: string | null;
-  onPendingConsumed?: () => void;
   pendingUrl?: string | null;
   onPendingUrlConsumed?: () => void;
 };
-
-function baseName(path: string) {
-  return path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || path;
-}
 
 export function AssistPanel({
   open,
   tab,
   onTabChange,
   onClose,
-  pendingPath,
-  onPendingConsumed,
   pendingUrl,
   onPendingUrlConsumed,
 }: AssistPanelProps) {
-  const { activeWorkspace, theme, setError, t, suggestPreviewUrl } = useSpace();
+  const { activeWorkspace, t } = useSpace();
   const [width, setWidth] = useState(() => {
     try {
       const n = Number(localStorage.getItem(WIDTH_KEY));
@@ -80,15 +38,8 @@ export function AssistPanel({
     }
     return DEFAULT_W;
   });
-  const [tabs, setTabs] = useState<EditorTab[]>([]);
-  const [activePath, setActivePath] = useState<string | null>(null);
-  const [treeKey, setTreeKey] = useState(0);
   const [assistUrl, setAssistUrl] = useState("");
-  const [filesOpen, setFilesOpen] = useState(true);
-  const [promptKind, setPromptKind] = useState<"file" | "folder" | null>(null);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
-  const dark = getTheme(theme).appearance !== "light";
-  const activeTab = tabs.find((item) => item.path === activePath) ?? null;
 
   useEffect(() => {
     try {
@@ -99,101 +50,8 @@ export function AssistPanel({
   }, [width]);
 
   useEffect(() => {
-    setTabs([]);
-    setActivePath(null);
     setAssistUrl("");
-    setTreeKey((k) => k + 1);
   }, [activeWorkspace?.id]);
-
-  const openFile = useCallback(
-    async (rel: string) => {
-      if (!activeWorkspace) return;
-      if (tabs.some((tabItem) => tabItem.path === rel)) {
-        setActivePath(rel);
-        onTabChange("editor");
-        if (isWebLookingPath(rel)) {
-          suggestPreviewUrl(fileUrlFromWorkspace(activeWorkspace.cwd, rel));
-        }
-        return;
-      }
-      try {
-        if (isBinaryPreviewPath(rel)) {
-          const file = await getWorkspaceFileInfo(activeWorkspace.cwd, rel);
-          setTabs((current) => [
-            ...current,
-            {
-              path: file.path,
-              content: "",
-              savedContent: "",
-              dirty: false,
-              kind: editorKindForPath(file.path),
-              mime: file.mime,
-              size: file.size,
-              absPath: file.absolutePath,
-            },
-          ]);
-          setActivePath(file.path);
-          onTabChange("editor");
-          return;
-        }
-        const file = await readTextFile(activeWorkspace.cwd, rel);
-        setTabs((current) => [
-          ...current,
-          {
-            path: file.path,
-            content: file.content,
-            savedContent: file.content,
-            dirty: false,
-            kind: "text",
-          },
-        ]);
-        setActivePath(file.path);
-        onTabChange("editor");
-        if (isWebLookingPath(file.path)) {
-          suggestPreviewUrl(fileUrlFromWorkspace(activeWorkspace.cwd, file.path));
-        }
-      } catch (error) {
-        setError(clientError(error));
-      }
-    },
-    [activeWorkspace, onTabChange, setError, suggestPreviewUrl, tabs],
-  );
-
-  useEffect(() => {
-    if (!open || !pendingPath) return;
-    void openFile(pendingPath).finally(() => onPendingConsumed?.());
-  }, [open, openFile, onPendingConsumed, pendingPath]);
-
-  useEffect(() => {
-    const onOpenAbs = (event: Event) => {
-      const absPath = (event as CustomEvent<{ absPath: string }>).detail?.absPath?.trim();
-      if (!absPath || !activeWorkspace) return;
-      const rel = relPathFromWorkspace(activeWorkspace.cwd, absPath);
-      if (rel !== null) {
-        void openFile(rel || absPath.split(/[/\\]/).pop() || "file");
-        return;
-      }
-      const name = absPath.split(/[/\\]/).pop() || "file";
-      setTabs((current) => {
-        if (current.some((tabItem) => tabItem.path === absPath)) return current;
-        return [
-          ...current,
-          {
-            path: absPath,
-            content: "",
-            savedContent: "",
-            dirty: false,
-            kind: editorKindForPath(name),
-            absPath,
-          },
-        ];
-      });
-      setActivePath(absPath);
-      onTabChange("editor");
-    };
-    window.addEventListener("voxiva-open-workspace-file", onOpenAbs);
-    return () => window.removeEventListener("voxiva-open-workspace-file", onOpenAbs);
-  }, [activeWorkspace, onTabChange, openFile]);
 
   useEffect(() => {
     if (!open || !pendingUrl) return;
@@ -221,77 +79,12 @@ export function AssistPanel({
     dragRef.current = null;
   }
 
-  async function saveActive() {
-    if (!activeWorkspace || !activeTab?.dirty) return;
-    if (activeTab.kind && activeTab.kind !== "text") return;
-    try {
-      await writeTextFile(activeWorkspace.cwd, activeTab.path, activeTab.content);
-      setTabs((current) =>
-        current.map((item) =>
-          item.path === activeTab.path
-            ? { ...item, savedContent: item.content, dirty: false }
-            : item,
-        ),
-      );
-      if (isPreviewReloadPath(activeTab.path)) {
-        window.dispatchEvent(new Event("voxiva-preview-reload"));
-      }
-    } catch (error) {
-      setError(clientError(error));
-    }
-  }
-
-  useEffect(() => {
-    if (!open || tab !== "editor") return;
-    const onKey = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s") return;
-      event.preventDefault();
-      void saveActive();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, tab, activeTab, activeWorkspace]);
-
-  async function createFile(name: string) {
-    if (!activeWorkspace) return;
-    const rel = name.trim().replace(/\\/g, "/").replace(/^\/+/, "");
-    if (!rel) return;
-    try {
-      await writeTextFile(activeWorkspace.cwd, rel, "");
-      setTreeKey((k) => k + 1);
-      await openFile(rel);
-    } catch (error) {
-      setError(clientError(error));
-    }
-  }
-
-  async function createFolder(name: string) {
-    if (!activeWorkspace) return;
-    const rel = name.trim().replace(/\\/g, "/").replace(/^\/+/, "");
-    if (!rel) return;
-    try {
-      await createDirectory(activeWorkspace.cwd, rel);
-      setTreeKey((k) => k + 1);
-    } catch (error) {
-      setError(clientError(error));
-    }
-  }
-
-  function closeTab(path: string) {
-    const index = tabs.findIndex((item) => item.path === path);
-    const remaining = tabs.filter((item) => item.path !== path);
-    setTabs(remaining);
-    if (activePath === path) {
-      setActivePath(remaining[Math.min(index, remaining.length - 1)]?.path ?? null);
-    }
-  }
-
   if (!open) {
     return null;
   }
 
   return (
-    <aside className={`vs-assist is-open`} style={{ width }} aria-label={t("assist.title")}>
+    <aside className="vs-assist is-open" style={{ width }} aria-label={t("assist.title")}>
       <div
         className="vs-assistResize"
         onPointerDown={onResizeStart}
@@ -304,15 +97,6 @@ export function AssistPanel({
       />
       <header className="vs-assistHead">
         <div className="vs-assistTabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            className={`vs-assistTab${tab === "editor" ? " is-active" : ""}`}
-            aria-selected={tab === "editor"}
-            onClick={() => onTabChange("editor")}
-          >
-            {t("assist.editor")}
-          </button>
           <button
             type="button"
             role="tab"
@@ -339,7 +123,7 @@ export function AssistPanel({
           aria-label={t("assist.close")}
           onClick={onClose}
         >
-          <IconX size={16} />
+          <IconX size={14} />
         </button>
       </header>
 
@@ -350,112 +134,9 @@ export function AssistPanel({
         </div>
       ) : (
         <div className="vs-assistBody">
-          {tab === "editor" && (
-            <div className="vs-assistEditor">
-              <div className="vs-assistEditorToolbar">
-                <button
-                  type="button"
-                  className={`vs-assistFilesToggle${filesOpen ? " is-active" : ""}`}
-                  title={t("assist.files")}
-                  aria-pressed={filesOpen}
-                  onClick={() => setFilesOpen((v) => !v)}
-                >
-                  <Folder size={14} aria-hidden />
-                </button>
-                <strong title={activeWorkspace.cwd}>{baseName(activeWorkspace.cwd)}</strong>
-                <span className="vs-spacer" />
-                <button
-                  type="button"
-                  className="vs-iconBtn"
-                  title={t("editor.refresh")}
-                  onClick={() => setTreeKey((k) => k + 1)}
-                >
-                  <IconRefresh size={14} />
-                </button>
-                <button type="button" className="vs-iconBtn" title={t("editor.newFile")} onClick={() => setPromptKind("file")}>
-                  <IconFilePlus size={14} />
-                </button>
-                <button
-                  type="button"
-                  className="vs-iconBtn"
-                  title={t("editor.newFolder")}
-                  onClick={() => setPromptKind("folder")}
-                >
-                  <IconFolderPlus size={14} />
-                </button>
-              </div>
-              <div className={`vs-assistEditorBody${filesOpen ? " has-files" : ""}`}>
-                {filesOpen && (
-                  <aside className="vs-assistFiles">
-                    <FileTree
-                      key={`${activeWorkspace.cwd}:${treeKey}`}
-                      root={activeWorkspace.cwd}
-                      activePath={activePath}
-                      onOpen={(rel) => void openFile(rel)}
-                      onError={(error) => setError(clientError(error))}
-                      loadingLabel={t("editor.loading")}
-                      emptyLabel={t("editor.emptyFolder")}
-                    />
-                  </aside>
-                )}
-                <div className="vs-assistCode">
-                  {tabs.length > 0 && (
-                    <EditorTabs
-                      tabs={tabs}
-                      activePath={activePath}
-                      onSelect={setActivePath}
-                      onClose={closeTab}
-                    />
-                  )}
-                  {activeTab ? (
-                    <Suspense fallback={<div className="vs-assistEmpty">{t("editor.loading")}</div>}>
-                      {activeTab.kind === "image" || activeTab.kind === "binary" ? (
-                        <MediaPreview
-                          path={activeTab.path}
-                          mime={activeTab.mime || "application/octet-stream"}
-                          size={activeTab.size}
-                          kind={activeTab.kind}
-                          workspaceRoot={activeWorkspace.cwd}
-                          absPath={activeTab.absPath}
-                        />
-                      ) : (
-                        <CodeEditor
-                          path={activeTab.path}
-                          value={activeTab.content}
-                          dark={dark}
-                          onChange={(content) => {
-                            setTabs((current) =>
-                              current.map((item) =>
-                                item.path === activeTab.path
-                                  ? {
-                                      ...item,
-                                      content,
-                                      dirty: content !== item.savedContent,
-                                    }
-                                  : item,
-                              ),
-                            );
-                          }}
-                        />
-                      )}
-                    </Suspense>
-                  ) : (
-                    <div className="vs-assistEmpty">
-                      <p>{t("assist.pickFile")}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
           {tab === "browser" && (
             <div className="vs-assistBrowser">
-              <NativeBrowser
-                instanceId="assist"
-                url={assistUrl}
-                onUrlChange={setAssistUrl}
-              />
+                  <NativeBrowser instanceId="assist" url={assistUrl} onUrlChange={setAssistUrl} />
             </div>
           )}
 
@@ -466,33 +147,6 @@ export function AssistPanel({
           )}
         </div>
       )}
-
-      <PromptDialog
-        open={promptKind === "file"}
-        title={t("editor.newFile")}
-        label={t("editor.newFilePrompt")}
-        initialValue="untitled.ts"
-        confirmLabel={t("toast.ok")}
-        cancelLabel={t("projects.cancel")}
-        onCancel={() => setPromptKind(null)}
-        onConfirm={(value) => {
-          setPromptKind(null);
-          void createFile(value);
-        }}
-      />
-      <PromptDialog
-        open={promptKind === "folder"}
-        title={t("editor.newFolder")}
-        label={t("editor.newFolderPrompt")}
-        initialValue="src"
-        confirmLabel={t("toast.ok")}
-        cancelLabel={t("projects.cancel")}
-        onCancel={() => setPromptKind(null)}
-        onConfirm={(value) => {
-          setPromptKind(null);
-          void createFolder(value);
-        }}
-      />
     </aside>
   );
 }

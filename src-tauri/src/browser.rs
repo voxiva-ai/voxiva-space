@@ -11,7 +11,7 @@ use tauri::{
 #[derive(Default)]
 pub struct BrowserRegistry {
     /// label → allowed to show (false after hide; set_bounds must not re-show)
-    labels: Mutex<HashMap<String, bool>>,
+    pub(crate) labels: Mutex<HashMap<String, bool>>,
 }
 
 #[derive(Clone, Serialize)]
@@ -28,6 +28,18 @@ pub struct BrowserPageMeta {
 }
 
 const INSPECTOR_SCRIPT: &str = include_str!("inspector/inject.js");
+/// Bump when inject.js ships a behavior change so cargo always relinks.
+const INSPECTOR_VERSION: u32 = 34;
+const _INSPECTOR_FORCE_RELINK: &str = "brush-v34-exclusive-modes";
+
+/// WebView2 is Chromium (Edge). Args keep panes snappy like cmux/Simux browser hosts.
+#[cfg(windows)]
+const WEBVIEW2_CHROMIUM_ARGS: &str = concat!(
+    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection ",
+    "--enable-features=msEdgeFluentOverlayScrollbar ",
+    "--disable-backgrounding-occluded-windows ",
+    "--disable-renderer-backgrounding"
+);
 
 fn parse_external_url(raw: &str) -> Result<url::Url, String> {
     let trimmed = raw.trim();
@@ -114,14 +126,20 @@ pub async fn browser_open(
     let blank = url::Url::parse("about:blank").map_err(|e| e.to_string())?;
     let profile_dir = browser_profile_dir(&app)?;
     std::fs::create_dir_all(&profile_dir).map_err(|e| e.to_string())?;
+    // Child WebView2 = Chromium engine (same class of stack cmux/Simux use on Windows).
+    let mut builder = WebviewBuilder::new(&label, WebviewUrl::External(blank))
+                .data_directory(profile_dir)
+                // Real Chromium DevTools (separate OS window).
+                .devtools(true)
+                // Preload Brush before page CSP can block eval — works on YouTube etc.
+                .initialization_script(INSPECTOR_SCRIPT);
+    #[cfg(windows)]
+    {
+        builder = builder.additional_browser_args(WEBVIEW2_CHROMIUM_ARGS);
+    }
     let webview = main
         .add_child(
-            WebviewBuilder::new(&label, WebviewUrl::External(blank))
-                .initialization_script(INSPECTOR_SCRIPT)
-                .data_directory(profile_dir)
-                // Real Chromium DevTools (separate OS window). In-app side panel
-                // is the Simux-style dock; WebView2 cannot embed DevTools UI.
-                .devtools(true)
+            builder
                 // Allow about:/data: — WebView2 uses about:blank during load; blocking it = white page.
                 .on_navigation(|nav_url| {
                     matches!(
@@ -138,6 +156,7 @@ pub async fn browser_open(
                     )
                 })
                 .on_new_window(move |url, _features| {
+                    // Allow OS popup — VS Code / OAuth / account sign-in need a real window.
                     let _ = popup_app.emit(
                         "browser://new-window",
                         BrowserLoadPayload {
@@ -146,12 +165,9 @@ pub async fn browser_open(
                             state: "started",
                         },
                     );
-                    NewWindowResponse::Deny
+                    NewWindowResponse::Allow
                 })
-                .on_page_load(move |webview, payload| {
-                    if matches!(payload.event(), PageLoadEvent::Finished) {
-                        let _ = webview.eval(INSPECTOR_SCRIPT);
-                    }
+                .on_page_load(move |_webview, payload| {
                     let state = match payload.event() {
                         PageLoadEvent::Started => "started",
                         PageLoadEvent::Finished => "finished",
@@ -333,7 +349,7 @@ async fn eval_js_bool(webview: &tauri::Webview, script: &str) -> Result<bool, St
         })
         .map_err(|e| e.to_string())?;
     let raw = tauri::async_runtime::spawn_blocking(move || {
-        receiver.recv_timeout(std::time::Duration::from_millis(1800))
+        receiver.recv_timeout(std::time::Duration::from_millis(4000))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -342,7 +358,7 @@ async fn eval_js_bool(webview: &tauri::Webview, script: &str) -> Result<bool, St
     Ok(trimmed == "true" || trimmed == "1")
 }
 
-fn browser_profile_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+pub(crate) fn browser_profile_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     app.path()
         .resolve(
             "browser-profile",
@@ -351,10 +367,19 @@ fn browser_profile_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
         .map_err(|e| e.to_string())
 }
 
-fn ensure_inspector_script(webview: &tauri::Webview) -> Result<(), String> {
-    webview
-        .eval(INSPECTOR_SCRIPT)
-        .map_err(|e| format!("Failed to inject brush inspector: {e}"))
+/// Inject Brush runtime and WAIT until it reports a version (`eval` alone races setEnabled).
+/// Fast path: skip the ~64KB payload when the page already has the current VERSION.
+async fn ensure_inspector_script(webview: &tauri::Webview) -> Result<bool, String> {
+    let probe = format!(
+        "(function(){{ try {{ return Boolean(window.__voxivaInspector && window.__voxivaInspector.v === {INSPECTOR_VERSION}); }} catch(e) {{ return false; }} }})()"
+    );
+    if eval_js_bool(webview, &probe).await.unwrap_or(false) {
+        return Ok(true);
+    }
+    let script = String::from("(function(){ try {\n")
+        + INSPECTOR_SCRIPT
+        + "\n; return Boolean(window.__voxivaInspector && window.__voxivaInspector.v); } catch (e) { console.error('[voxiva-brush]', e); return false; } })()";
+    eval_js_bool(webview, &script).await
 }
 
 #[tauri::command]
@@ -366,24 +391,33 @@ pub async fn browser_toggle_inspector(
     let webview = app
         .get_webview(&label)
         .ok_or_else(|| "Browser not open — open a site first".to_string())?;
-    let flag = if enabled { "true" } else { "false" };
-    let script = format!(
-        "(function(){{ try {{ if (!window.__voxivaInspector) return false; return Boolean(window.__voxivaInspector.setEnabled({flag})); }} catch(e) {{ return false; }} }})()"
-    );
-    for attempt in 0..6 {
+
+    for attempt in 0..5 {
         if attempt > 0 {
-            let delay = 120 + attempt * 100;
+            let delay = 80 + attempt * 90;
             tauri::async_runtime::spawn_blocking(move || {
                 std::thread::sleep(std::time::Duration::from_millis(delay));
             })
             .await
             .map_err(|e| e.to_string())?;
         }
-        ensure_inspector_script(&webview)?;
-        if let Ok(ok) = eval_js_bool(&webview, &script).await {
-            if ok || !enabled {
-                return Ok(ok);
-            }
+        let injected = ensure_inspector_script(&webview).await.unwrap_or(false);
+        if enabled && !injected {
+            continue;
+        }
+
+        let script = if enabled {
+            "(function(){ try { if (!window.__voxivaInspector?.setEnabled) return false; window.__voxivaInspector.setEnabled(true); return Boolean(window.__voxivaInspector.enabled); } catch(e) { return false; } })()".to_string()
+        } else {
+            // Always report success after force-off — a false return left the hit-layer forever.
+            "(function(){ try { const api = window.__voxivaInspector; if (!api) return true; try { if (api.forceOff) api.forceOff(); else api.setEnabled(false); } catch (_) {} try { const h = document.getElementById('__voxiva-inspector-host'); if (h) h.style.display = 'none'; } catch (_) {} return true; } catch(e) { return true; } })()".to_string()
+        };
+
+        match eval_js_bool(&webview, &script).await {
+            Ok(ok) if enabled && ok => return Ok(true),
+            Ok(_) if !enabled => return Ok(true),
+            Err(_) if !enabled => return Ok(true),
+            _ => {}
         }
     }
     Ok(false)
@@ -420,6 +454,37 @@ pub async fn browser_take_selection(
     Ok((!value.is_null()).then_some(value))
 }
 
+/// Live Brush state for the React chrome (optional). Inject chat is primary — cmux-style fly-in.
+#[tauri::command]
+pub async fn browser_inspector_snapshot(
+    app: AppHandle,
+    label: String,
+) -> Result<serde_json::Value, String> {
+    let webview = app
+        .get_webview(&label)
+        .ok_or_else(|| "Browser not open".to_string())?;
+    let _ = ensure_inspector_script(&webview).await;
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    webview
+        .eval_with_callback(
+            "(function(){ try { const s = window.__voxivaInspector?.snapshot?.(); return s || { enabled: false, selections: [] }; } catch (e) { return { enabled: false, selections: [], lastError: String(e) }; } })()",
+            move |value| {
+                let _ = sender.send(value);
+            },
+        )
+        .map_err(|e| e.to_string())?;
+    let raw = tauri::async_runtime::spawn_blocking(move || {
+        receiver.recv_timeout(std::time::Duration::from_millis(800))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|_| "Inspector snapshot timed out".to_string())?;
+    let value: serde_json::Value = serde_json::from_str(&raw).unwrap_or_else(|_| {
+        serde_json::json!({ "enabled": false, "selections": [], "raw": raw })
+    });
+    Ok(value)
+}
+
 #[tauri::command]
 pub async fn browser_configure_inspector(
     app: AppHandle,
@@ -430,7 +495,7 @@ pub async fn browser_configure_inspector(
     let webview = app
         .get_webview(&label)
         .ok_or_else(|| "Browser not open".to_string())?;
-    ensure_inspector_script(&webview)?;
+    let _ = ensure_inspector_script(&webview).await;
     let agents = serde_json::to_string(&agents).map_err(|e| e.to_string())?;
     let files = serde_json::to_string(&files).map_err(|e| e.to_string())?;
     webview
@@ -484,7 +549,11 @@ pub async fn browser_close_all(
     let labels: Vec<String> = app
         .webviews()
         .into_keys()
-        .filter(|label| label.starts_with("browser-") && label != &keep)
+        .filter(|label| {
+            label.starts_with("browser-")
+                && label != &keep
+                && !crate::browser_cookies::is_cookie_seed_label(label)
+        })
         .collect();
     for label in labels {
         if let Some(webview) = app.get_webview(&label) {

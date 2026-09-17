@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JobHunter · Brush demo</title>
+  <style>
+    :root {
+      --bg: #0e1116;
+      --panel: #161b22;
+      --line: #2a3340;
+      --text: #e8edf5;
+      --muted: #8b97a8;
+      --accent: #3b82f6;
+      --ok: #3ecf8e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font: 15px/1.45 "Segoe UI", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(900px 420px at 10% -10%, rgba(59,130,246,.18), transparent 60%),
+        radial-gradient(700px 380px at 90% 0%, rgba(62,207,142,.1), transparent 55%),
+        var(--bg);
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 1.35rem;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in srgb, var(--panel) 88%, #000);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      font-weight: 750;
+      letter-spacing: -0.02em;
+    }
+    .mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), #60a5fa);
+    }
+    .hint {
+      color: var(--muted);
+      font-size: 0.82rem;
+      max-width: 34rem;
+    }
+    main {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 0;
+      min-height: calc(100vh - 64px);
+    }
+    nav {
+      padding: 1rem 0.75rem;
+      border-right: 1px solid var(--line);
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    nav button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      margin: 0 0 0.3rem;
+      padding: 0.55rem 0.7rem;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      cursor: pointer;
+    }
+    nav button.is-on,
+    nav button:hover {
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+    }
+    .board {
+      padding: 1.25rem 1.4rem 2rem;
+    }
+    h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.55rem;
+      letter-spacing: -0.03em;
+    }
+    .sub {
+      margin: 0 0 1.25rem;
+      color: var(--muted);
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 0.85rem;
+    }
+    .card {
+      padding: 1rem 1.05rem;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+    }
+    .card h2 {
+      margin: 0 0 0.35rem;
+      font-size: 1rem;
+    }
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+    .pill {
+      display: inline-block;
+      margin-top: 0.75rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      background: rgba(62,207,142,.14);
+      color: var(--ok);
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .cta {
+      margin-top: 1.25rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1rem;
+      border: 0;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      font: 650 0.92rem/1 "Segoe UI", system-ui, sans-serif;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <span>JobHunter</span>
+    </div>
+    <p class="hint">
+      Brush demo: включи кисть в Space → наведи на карточку / заголовок → клик →
+      чат должен подлететь. Напиши, что поменять.
+    </p>
+  </header>
+  <main>
+    <nav>
+      <button type="button" class="is-on">Вакансии</button>
+      <button type="button">Отклики</button>
+      <button type="button">Компании</button>
+      <button type="button">Настройки</button>
+    </nav>
+    <section class="board">
+      <h1>Найди работу быстрее</h1>
+      <p class="sub">Демо-страница для проверки Brush в Voxiva Space.</p>
+      <div class="cards">
+        <article class="card">
+          <h2>Frontend Engineer</h2>
+          <p>React · TypeScript · удалёнка. Зарплата от 250k.</p>
+          <span class="pill">Новое</span>
+        </article>
+        <article class="card">
+          <h2>Product Designer</h2>
+          <p>Figma · design systems · B2B SaaS.</p>
+          <span class="pill">Hot</span>
+        </article>
+        <article class="card">
+          <h2>DevOps</h2>
+          <p>Kubernetes · CI/CD · on-call раз в месяц.</p>
+          <span class="pill">Remote</span>
+        </article>
+      </div>
+      <button type="button" class="cta">Откликнуться на первую</button>
+    </section>
+  </main>
+</body>
+</html>

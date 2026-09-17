@@ -47,6 +47,7 @@ export type PersistedState = {
     shell: string;
     accent: "blue" | "gold" | "green" | "violet";
     initialCommand?: string;
+    resumeCommand?: string;
     agentId?: string;
   }>;
   /** Saved workspace layout templates (cmux-style builds). */

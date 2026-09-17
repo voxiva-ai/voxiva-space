@@ -4,7 +4,7 @@ import { agentBots, isBotReady } from "@/features/agents/bots";
 import type { GridPreset } from "@/features/workspace/layout";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import type { MsgKey } from "@/i18n";
-import { SPACE_COLORS, type SpaceColor } from "@/lib/types";
+import { SPACE_COLOR_HEX, SPACE_TAB_COLORS, type SpaceColor } from "@/lib/types";
 
 const LAYOUTS: Array<{ id: GridPreset; cells: number; labelKey: MsgKey; hintKey: MsgKey }> = [
   { id: 1, cells: 1, labelKey: "welcome.single", hintKey: "welcome.singleHint" },
@@ -172,11 +172,18 @@ export function CreateSpaceSetup({
           <div className="vs-modalSection">
             <span className="vs-modalLabel">{t("projects.color")}</span>
             <div className="vs-colorRow">
-              {SPACE_COLORS.map((c) => (
+              <button
+                type="button"
+                className={`vs-colorDot is-default${value.color === "default" ? " is-active" : ""}`}
+                aria-label={t("spaces.colorDefault")}
+                onClick={() => patch({ color: "default" })}
+              />
+              {SPACE_TAB_COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
                   className={`vs-colorDot is-${c}${value.color === c ? " is-active" : ""}`}
+                  style={{ background: SPACE_COLOR_HEX[c] }}
                   aria-label={c}
                   onClick={() => patch({ color: c })}
                 />

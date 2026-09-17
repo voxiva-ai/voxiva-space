@@ -76,23 +76,57 @@
 }
 
 .vs-settingsPanelBody {
-  max-width: none;
+  max-width: 44rem;
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
 }
 
 .vs-settingsPanelBody h2 {
-  margin: 0 0 0.4rem;
+  margin: 0 0 0.35rem;
   font-size: 1.5rem;
   font-weight: 750;
   letter-spacing: -0.04em;
 }
 
 .vs-settingsHint {
-  margin: 0 0 1.5rem;
-  max-width: 42rem;
+  margin: 0 0 1.15rem;
+  max-width: none;
   color: var(--vs-muted);
   font-size: 0.9rem;
   line-height: 1.5;
+}
+
+.vs-settingsBlock {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 0.75rem;
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--vs-border);
+  border-radius: var(--vs-radius);
+  background: var(--vs-bg-raised);
+}
+
+.vs-settingsBlock:last-child {
+  margin-bottom: 0;
+}
+
+.vs-settingsBlock h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.vs-settingsBlock > .vs-settingsHint {
+  margin: 0 0 0.85rem;
+  font-size: 0.82rem;
+}
+
+.vs-settingsBlock .vs-settingsField + .vs-settingsField,
+.vs-settingsBlock .vs-settingsField + .vs-btn,
+.vs-settingsBlock .vs-btn + .vs-settingsHint {
+  margin-top: 0.65rem;
 }
 
 .vs-hotkeyGroup {
@@ -572,18 +606,6 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.vs-settingsBlock {
-  padding: 0.9rem;
-  border: 1px solid var(--vs-border);
-  border-radius: var(--vs-radius);
-  background: var(--vs-bg-raised);
-}
-
-.vs-settingsBlock h3 {
-  margin: 0 0 0.35rem;
-  font-size: 0.95rem;
-}
-
 .vs-settingsBlock p,
 .vs-settingsBlock li {
   color: var(--vs-muted);
@@ -594,6 +616,36 @@
 .vs-settingsBlock ul {
   margin: 0.4rem 0 0;
   padding-left: 1.1rem;
+}
+
+.vs-settingsRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.vs-settingsRow h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.vs-settingsField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.75rem 0;
+  font-size: 0.85rem;
+}
+
+.vs-settingsField select,
+.vs-settingsField input {
+  max-width: 28rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--vs-border);
+  background: var(--vs-bg-raised);
+  color: inherit;
 }
 
 .vs-companionCard {

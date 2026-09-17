@@ -83,6 +83,58 @@ export function folderLabel(cwd: string) {
   return parts[parts.length - 1] || norm;
 }
 
+export type DateRange = "all" | "today" | "week" | "month";
+
+export function filterRunsByRange(runs: AgentRun[], range: DateRange, now = Date.now()) {
+  if (range === "all") return runs;
+  const day = 86_400_000;
+  const start =
+    range === "today"
+      ? startOfLocalDay(now)
+      : range === "week"
+        ? now - 7 * day
+        : now - 30 * day;
+  return runs.filter((run) => run.at >= start);
+}
+
+function startOfLocalDay(now: number) {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+export function runDisplayLines(
+  run: AgentRun,
+  sessions: Record<string, { title: string } | undefined>,
+) {
+  const query = runQueryLabel(run, sessions);
+  const generic = isGenericAgentTitle(query);
+  const folder = folderLabel(run.cwd);
+  const agent = botDisplayName(run.agentId);
+
+  const title = generic ? (folder !== "—" ? folder : agent) : query;
+  const subtitleParts: string[] = [];
+  if (!generic) subtitleParts.push(agent);
+  if (run.cwd?.trim()) subtitleParts.push(run.cwd.replace(/\\/g, "/"));
+  else if (run.workspaceName) subtitleParts.push(run.workspaceName);
+
+  return {
+    title,
+    subtitle: subtitleParts.join(" · ") || agent,
+  };
+}
+
+export function formatDateTime(at: number, locale: string) {
+  try {
+    return new Date(at).toLocaleString(locale.startsWith("ru") ? "ru-RU" : "en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch {
+    return String(at);
+  }
+}
+
 export function groupRunsByFolder(runs: AgentRun[]) {
   const map = new Map<string, AgentRun[]>();
   for (const run of runs) {

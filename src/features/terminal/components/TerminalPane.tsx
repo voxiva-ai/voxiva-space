@@ -269,6 +269,9 @@ export function TerminalPane({
     const host = containerRef.current;
     if (!host) return;
 
+    const mono =
+      getComputedStyle(document.documentElement).getPropertyValue("--vs-mono").trim() ||
+      '"JetBrains Mono", "Cascadia Code", ui-monospace, Menlo, monospace';
     const { theme: xtermTheme, allowTransparency } = xtermThemeForId();
     const terminal = new XTerm({
       cursorBlink: true,
@@ -276,11 +279,11 @@ export function TerminalPane({
       convertEol: false,
       disableStdin: false,
       allowTransparency,
-      fontFamily: "Cascadia Code, Consolas, JetBrains Mono, monospace",
+      fontFamily: mono,
       fontSize: 13,
-      lineHeight: 1,
+      lineHeight: 1.18,
       letterSpacing: 0,
-      scrollback: 4000,
+      scrollback: 8000,
       scrollOnUserInput: true,
       scrollSensitivity: 1,
       theme: xtermTheme,

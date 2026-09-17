@@ -109,6 +109,15 @@
   color: var(--vs-accent);
 }
 
+.vs-welcomeKicker {
+  margin: 0 0 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--vs-muted);
+}
+
 .vs-welcomeLead {
   margin: 0.7rem 0 0;
   max-width: 30rem;
@@ -145,43 +154,7 @@
 }
 
 .vs-shellChoices {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.45rem;
-}
-
-.vs-shellChoice {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.16rem;
-  padding: 0.58rem 0.65rem;
-  border: 1px solid var(--vs-border);
-  border-radius: var(--vs-radius-sm);
-  background: var(--vs-bg-raised);
-  color: var(--vs-muted);
-  text-align: left;
-}
-
-.vs-shellChoice:hover {
-  border-color: var(--vs-border-strong);
-  color: var(--vs-text);
-}
-
-.vs-shellChoice.is-active {
-  border-color: rgba(77, 157, 255, 0.5);
-  background: var(--vs-accent-soft);
-  color: var(--vs-text);
-}
-
-.vs-shellChoice strong {
-  font-size: 0.78rem;
-  font-weight: 650;
-}
-
-.vs-shellChoice small {
-  font-size: 0.65rem;
-  color: var(--vs-muted);
+  display: none;
 }
 
 .vs-layoutCard {
@@ -205,8 +178,8 @@
 }
 
 .vs-layoutCard.is-active {
-  border-color: var(--vs-border-strong);
-  background: var(--vs-bg-hover);
+  border-color: color-mix(in srgb, var(--vs-accent) 45%, var(--vs-border));
+  background: var(--vs-accent-soft);
 }
 
 .vs-layoutCard strong {
@@ -255,6 +228,25 @@
   grid-template-rows: 1fr 1fr;
 }
 
+.vs-layoutPreview.is-4.has-browserCol {
+  grid-template-columns: 1fr 1fr 0.34fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.vs-layoutPreview.is-4.has-browserCol::after {
+  content: "";
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--vs-accent) 28%, rgba(255, 255, 255, 0.08));
+  border: 1px solid color-mix(in srgb, var(--vs-accent) 35%, rgba(255, 255, 255, 0.1));
+}
+
+.vs-layoutPreview.is-8.has-browserCell span:nth-child(4) {
+  background: color-mix(in srgb, var(--vs-accent) 32%, rgba(255, 255, 255, 0.1));
+  border-color: color-mix(in srgb, var(--vs-accent) 40%, rgba(255, 255, 255, 0.12));
+}
+
 .vs-welcomeCta {
   width: 100%;
   min-height: 44px;
@@ -264,7 +256,7 @@
   box-shadow: none;
   outline: none;
   background: var(--vs-accent);
-  color: #fff;
+  color: var(--vs-on-accent);
 }
 
 .vs-welcomeCta:focus,
@@ -287,6 +279,24 @@
   margin: 0;
   color: var(--vs-muted);
   font-size: 0.82rem;
+}
+
+.vs-welcomeExisting.is-strong {
+  color: var(--vs-text);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.vs-welcomeNote {
+  margin: 0;
+  color: var(--vs-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.vs-welcomeBack {
+  align-self: flex-start;
+  padding-left: 0;
 }
 
 .vs-welcomeDivider {
@@ -336,50 +346,93 @@
   flex-direction: column;
   min-height: 0;
   height: 100%;
-  border: 1px solid rgba(120, 150, 190, 0.18);
+  border: 1px solid color-mix(in srgb, var(--vs-border-strong) 85%, var(--vs-accent) 15%);
   border-radius: 18px;
   overflow: hidden;
-  background: linear-gradient(180deg, #0a0e15 0%, #07090d 100%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--vs-bg-raised) 96%, #000) 0%, var(--vs-bg) 100%);
   box-shadow:
-    0 30px 70px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+    0 24px 60px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .vs-welcomePreviewChrome {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.6rem 0.8rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(16, 20, 28, 0.95);
+  gap: 0.65rem;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--vs-border);
+  background: color-mix(in srgb, var(--vs-bg-raised) 92%, var(--vs-accent) 8%);
 }
 
-.vs-welcomePreviewChrome span {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.18);
+.vs-welcomePreviewMark {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  flex-shrink: 0;
 }
 
-.vs-welcomePreviewChrome span:nth-child(1) {
-  background: #ff5f57;
-}
-.vs-welcomePreviewChrome span:nth-child(2) {
-  background: #febc2e;
-}
-.vs-welcomePreviewChrome span:nth-child(3) {
-  background: #28c840;
+.vs-welcomePreviewMeta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
 }
 
-.vs-welcomePreviewChrome strong {
-  margin-left: 0.35rem;
-  font-size: 0.72rem;
-  color: #9aa3b5;
-  font-weight: 600;
+.vs-welcomePreviewMeta strong {
+  font-size: 0.74rem;
+  font-weight: 650;
+  color: var(--vs-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vs-welcomePreviewMeta span {
+  font-family: var(--vs-mono);
+  font-size: 0.58rem;
+  color: var(--vs-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .vs-livePill {
-  display: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--vs-ok) 22%, var(--vs-border));
+  background: color-mix(in srgb, var(--vs-ok) 8%, transparent);
+  color: color-mix(in srgb, var(--vs-ok) 88%, var(--vs-text));
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.vs-livePillDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vs-ok);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--vs-ok) 20%, transparent);
+  animation: vsLivePulse 2s ease-in-out infinite;
+}
+
+@keyframes vsLivePulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
 }
 
 .vs-welcomePreviewGrid {
@@ -387,6 +440,40 @@
   display: grid;
   gap: 0.45rem;
   padding: 0.7rem;
+  min-height: 0;
+}
+
+.vs-welcomePreviewGrid.is-withBrowser {
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.85fr);
+  gap: 0.45rem;
+}
+
+.vs-welcomePreviewTerminals {
+  display: grid;
+  gap: 0.45rem;
+  min-height: 0;
+  min-width: 0;
+}
+
+.vs-welcomePreviewGrid.is-withBrowser.is-1 .vs-welcomePreviewTerminals {
+  grid-template-columns: 1fr;
+}
+
+.vs-welcomePreviewGrid.is-withBrowser.is-2 .vs-welcomePreviewTerminals {
+  grid-template-columns: 1fr 1fr;
+}
+
+.vs-welcomePreviewGrid.is-withBrowser.is-4 .vs-welcomePreviewTerminals {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.vs-welcomePreviewGrid.is-withBrowser.is-8 .vs-welcomePreviewTerminals {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+}
+
+.vs-welcomePreviewGrid.is-withBrowser > .vs-welcomePreviewPane.is-browser {
   min-height: 0;
 }
 
@@ -411,37 +498,48 @@
 .vs-welcomePreviewPane {
   display: flex;
   flex-direction: column;
-  border: 1px solid rgba(77, 157, 255, 0.22);
+  border: 1px solid color-mix(in srgb, var(--vs-accent) 28%, var(--vs-border));
   border-radius: 8px;
-  background: #07090d;
+  background: var(--vs-term-bg);
   overflow: hidden;
   animation: vsPaneIn 0.45s ease both;
   min-width: 0;
 }
 
 .vs-welcomePreviewPane.is-agent {
-  border-color: rgba(77, 157, 255, 0.35);
+  border-color: color-mix(in srgb, var(--vs-accent) 42%, var(--vs-border));
 }
 
 .vs-welcomePreviewPane.is-browser {
-  border-color: rgba(240, 193, 75, 0.3);
+  border-color: color-mix(in srgb, var(--vs-attention) 35%, var(--vs-border));
 }
 
 .vs-welcomePreviewBar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 26px;
+  gap: 0.4rem;
+  height: 28px;
   padding: 0 0.55rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(90deg, rgba(77, 157, 255, 0.16), transparent 70%);
+  border-bottom: 1px solid var(--vs-border);
+  background: linear-gradient(90deg, var(--vs-accent-soft), transparent 70%);
+}
+
+.vs-welcomePreviewBar .vs-brandMark,
+.vs-welcomePreviewBar .vs-brandMark svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 .vs-welcomePreviewBar b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: 0.68rem;
   font-weight: 650;
-  /* Preview is always a dark mock — never inherit light-theme text */
-  color: #e8edf5;
+  color: var(--vs-term-chrome-text);
 }
 
 .vs-welcomePreviewBar i {
@@ -449,19 +547,36 @@
   height: 6px;
   border-radius: 50%;
   background: var(--vs-ok);
-  box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.18);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vs-ok) 18%, transparent);
+  flex-shrink: 0;
+}
+
+.vs-welcomePreviewBar i.is-blue {
+  background: var(--vs-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vs-accent) 22%, transparent);
+}
+
+.vs-welcomePreviewGrid.is-browserCell .vs-welcomePreviewPane.is-browser {
+  border-color: color-mix(in srgb, var(--vs-accent) 45%, var(--vs-border));
 }
 
 .vs-welcomePreviewCode {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.32rem;
   padding: 0.55rem 0.6rem;
   font-family: var(--vs-mono);
   font-size: 0.64rem;
   line-height: 1.35;
   color: rgba(230, 233, 239, 0.78);
-  min-height: 64px;
+  min-height: 72px;
+}
+
+.vs-welcomePreviewCode.is-dense {
+  min-height: 56px;
+  font-size: 0.58rem;
+  gap: 0.28rem;
+  padding: 0.42rem 0.45rem;
 }
 
 .vs-welcomePreviewGrid.is-8 .vs-welcomePreviewCode {
@@ -474,17 +589,125 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  animation: vsTypeIn 0.55s ease both;
 }
 
-.vs-welcomePreviewLine:nth-child(2) {
-  animation-delay: 0.12s;
-  color: rgba(141, 255, 196, 0.85);
+.vs-welcomePreviewLine.is-settled {
+  animation: vsTypeIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.vs-welcomePreviewLine:nth-child(3) {
-  animation-delay: 0.22s;
-  color: rgba(77, 157, 255, 0.9);
+.vs-welcomePreviewPane.is-typing .vs-welcomePreviewLine:not(.is-settled) {
+  animation: vsTypeIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.vs-welcomePreviewLine.is-ok {
+  color: rgba(141, 255, 196, 0.92);
+}
+
+.vs-welcomePreviewLine.is-spin {
+  color: rgba(240, 193, 75, 0.9);
+}
+
+.vs-welcomePreviewLine.is-prompt {
+  color: rgba(230, 233, 239, 0.82);
+}
+
+.vs-welcomePreviewLine.is-cmd {
+  color: rgba(77, 157, 255, 0.95);
+}
+
+.vs-welcomePreviewLine.is-edit {
+  color: rgba(180, 190, 210, 0.78);
+}
+
+.vs-welcomePreviewLine.is-url {
+  color: rgba(120, 200, 255, 0.88);
+}
+
+.vs-welcomePreviewLine.is-warn {
+  color: rgba(240, 193, 75, 0.85);
+}
+
+.vs-welcomePreviewCode.is-static {
+  opacity: 0.88;
+}
+
+.vs-welcomeBrowserMock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.55rem 0.6rem;
+  min-height: 64px;
+  font-family: var(--vs-mono);
+  font-size: 0.62rem;
+}
+
+.vs-welcomeBrowserUrl {
+  color: rgba(120, 200, 255, 0.88);
+}
+
+.vs-welcomeBrowserBlocks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+}
+
+.vs-welcomeBrowserBlocks span {
+  height: 28px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.vs-welcomeBrowserBlocks span.is-accent {
+  background: color-mix(in srgb, var(--vs-accent) 35%, transparent);
+  box-shadow: inset 0 0 0 1px rgba(90, 166, 255, 0.35);
+}
+
+.vs-welcomeBrowserPick {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: auto;
+  padding: 0.28rem 0.38rem;
+  border-radius: 6px;
+  background: rgba(124, 108, 255, 0.14);
+  color: rgba(230, 233, 239, 0.88);
+  font-size: 0.58rem;
+}
+
+.vs-welcomeBrowserPickRing {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  border: 2px solid #7c6cff;
+  box-shadow: 0 0 0 2px rgba(124, 108, 255, 0.25);
+}
+
+.vs-welcomeBrowserMock.is-active .vs-welcomeBrowserPickRing {
+  animation: vsBrushRing 1.6s ease-in-out infinite;
+}
+
+.vs-welcomeBrowserMock.is-active .vs-welcomeBrowserBlocks span.is-accent {
+  animation: vsBlockGlow 2.4s ease-in-out infinite;
+}
+
+@keyframes vsBrushRing {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px rgba(124, 108, 255, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(124, 108, 255, 0.45);
+  }
+}
+
+@keyframes vsBlockGlow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
 }
 
 .vs-welcomePreviewPane.is-typing {
@@ -593,15 +816,22 @@
   .vs-welcomeStage {
     grid-template-columns: 1fr;
     overflow: auto;
+    align-items: start;
+    padding-top: clamp(1rem, 2vh, 1.5rem);
   }
 
   .vs-welcomePreviewSlot {
-    height: min(320px, 42vh);
+    height: min(360px, 44vh);
     order: -1;
   }
 
   .vs-welcomePreview {
-    min-height: 0;
+    min-height: 280px;
+  }
+
+  .vs-welcomePreviewGrid.is-withBrowser {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1.2fr) minmax(0, 0.8fr);
   }
 }
 
@@ -610,8 +840,27 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .vs-welcomePreviewGrid.is-8 {
+  .vs-welcomePreviewGrid.is-8:not(.is-withBrowser) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-rows: repeat(4, minmax(0, 1fr));
+  }
+
+  .vs-welcomePreviewGrid.is-withBrowser.is-8 .vs-welcomePreviewTerminals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .vs-welcomePreviewMeta span {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vs-livePillDot,
+  .vs-welcomeBrowserMock.is-active .vs-welcomeBrowserPickRing,
+  .vs-welcomeBrowserMock.is-active .vs-welcomeBrowserBlocks span.is-accent,
+  .vs-welcomePreviewPane,
+  .vs-welcomePreviewLine.is-settled {
+    animation: none !important;
   }
 }

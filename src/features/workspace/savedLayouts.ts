@@ -1,12 +1,14 @@
 import type { Accent, PaneKind, SplitDirection, SplitNode, TerminalSession, Workspace } from "@/lib/types";
 import { uid } from "@/lib/constants";
 import {
-  BROWSER_TAB,
   createBrowserLeaf,
   createLeaf,
+  isBrowserTabKey,
   leafHasBrowser,
   leafTabIds,
   leafTabOrder,
+  makeBrowserTabKey,
+  normalizeBrowserTabs,
   type LeafNode,
 } from "@/features/workspace/layout";
 
@@ -18,9 +20,12 @@ export type SavedShellSpec = {
 
 export type SavedPaneSpec = {
   kind: PaneKind;
+  /** @deprecated prefer browserTabs */
   browserUrl?: string | null;
+  /** Count / urls of browser tabs to restore (URLs optional). */
+  browserTabs?: Array<{ url?: string | null }>;
   shells: SavedShellSpec[];
-  /** Session ids replaced by shells on restore; `"__browser__"` = browser tab. */
+  /** Session ids replaced by shells on restore; browser keys = `"__browser__:<id>"`. */
   tabOrder?: string[];
 };
 
@@ -72,11 +77,14 @@ function captureNode(node: SplitNode, sessions: Record<string, TerminalSession>)
     shells.push({ title: "Shell", accent: "green" });
   }
 
+  const browsers = normalizeBrowserTabs(node);
+
   return {
     type: "leaf",
     spec: {
       kind,
-      browserUrl: leafHasBrowser(node) ? node.browserUrl : null,
+      browserUrl: browsers[0]?.url ?? null,
+      browserTabs: browsers.map((t) => ({ url: t.url })),
       shells,
       tabOrder: leafTabOrder(node),
     },
@@ -99,13 +107,36 @@ export function captureWorkspaceLayout(
 
 function buildLeaf(spec: SavedPaneSpec): { leaf: LeafNode; shells: SavedShellSpec[] } {
   const paneId = uid("pane");
-  const hasBrowser = spec.browserUrl !== undefined && spec.browserUrl !== null;
-  const base = hasBrowser ? createBrowserLeaf(spec.browserUrl ?? "") : createLeaf(null, "terminal", null);
-  const tabOrder = spec.tabOrder?.length
-    ? spec.tabOrder.map((id) => (id === BROWSER_TAB ? BROWSER_TAB : id))
-    : hasBrowser
-      ? [BROWSER_TAB]
-      : [];
+  const browserSpecs =
+    spec.browserTabs && spec.browserTabs.length
+      ? spec.browserTabs
+      : spec.browserUrl !== undefined && spec.browserUrl !== null
+        ? [{ url: spec.browserUrl }]
+        : [];
+  const hasBrowser = browserSpecs.length > 0;
+  const base = hasBrowser
+    ? createBrowserLeaf(browserSpecs[0]?.url ?? "")
+    : createLeaf(null, "terminal", null);
+
+  const browserTabs = hasBrowser
+    ? browserSpecs.map((b, i) => ({
+        id: i === 0 && base.browserTabs?.[0] ? base.browserTabs[0].id : uid("b"),
+        url: b.url ?? "",
+      }))
+    : [];
+
+  const browserKeys = browserTabs.map((t) => makeBrowserTabKey(t.id));
+  const tabOrder = (spec.tabOrder?.length ? spec.tabOrder : [...browserKeys])
+    .map((id) => {
+      if (!isBrowserTabKey(id)) return id;
+      // Remap any legacy/single browser key onto restored browser tabs in order.
+      return id;
+    })
+    .filter((id) => !isBrowserTabKey(id) || browserKeys.length > 0);
+
+  // Rebuild order: keep non-browser keys + append restored browser keys.
+  const nonBrowser = tabOrder.filter((id) => !isBrowserTabKey(id));
+  const nextOrder = [...nonBrowser, ...browserKeys];
 
   const leaf: LeafNode = {
     ...base,
@@ -113,8 +144,10 @@ function buildLeaf(spec: SavedPaneSpec): { leaf: LeafNode; shells: SavedShellSpe
     kind: hasBrowser && !spec.shells.length ? "browser" : spec.kind,
     sessionId: null,
     sessionIds: [],
-    browserUrl: hasBrowser ? (spec.browserUrl ?? "") : null,
-    tabOrder: tabOrder.filter((id) => id === BROWSER_TAB || spec.shells.length > 0),
+    browserUrl: hasBrowser ? (browserTabs[browserTabs.length - 1]?.url ?? "") : null,
+    browserTabs: hasBrowser ? browserTabs : undefined,
+    activeBrowserId: browserTabs[browserTabs.length - 1]?.id ?? null,
+    tabOrder: nextOrder.filter((id) => isBrowserTabKey(id) || spec.shells.length > 0),
   };
 
   if (hasBrowser && spec.shells.length) {

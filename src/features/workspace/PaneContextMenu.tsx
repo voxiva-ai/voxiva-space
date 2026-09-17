@@ -7,9 +7,12 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Plus } from "@untitledui/icons";
-import { IconBrowser, IconRefresh, IconTerminal, IconX } from "@/components/icons";
+import { IconBrowser, IconCodeBrowser, IconRefresh, IconTerminal, IconX } from "@/components/icons";
+import { agentBots } from "@/features/agents/bots";
 import { useSpace } from "@/features/workspace/SpaceContext";
-import { BROWSER_TAB, findLeaf, leafSurfaceCount } from "@/features/workspace/layout";
+import { openInCode } from "@/features/terminal/api";
+import { clientError } from "@/lib/errors";
+import { BROWSER_TAB, findLeaf, isBrowserTabKey, leafSurfaceCount } from "@/features/workspace/layout";
 
 export type PaneMenuState = {
   paneId: string;
@@ -39,6 +42,24 @@ function IconSplitStack({ size = 14 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden focusable={false}>
       <rect x="2.5" y="2" width="11" height="5.25" rx="1.1" stroke="currentColor" strokeWidth="1.2" />
       <rect x="2.5" y="8.75" width="11" height="5.25" rx="1.1" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function IconFork({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden focusable={false}>
+      <path
+        d="M5 3.5v3.2c0 1 .8 1.8 1.8 1.8h4.4M11 12.5V8.5"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="5" cy="2.6" r="1.35" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="11" cy="13.4" r="1.35" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="5" cy="13.4" r="1.35" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M5 4v8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -183,13 +204,25 @@ export function PaneContextMenu({ menu, onClose }: PaneContextMenuProps) {
     closePaneSurface,
     dockPaneTab,
     restartSession,
+    forkFocused,
+    openWorkspaceInVsCodeInline,
+    setError,
     t,
     activeWorkspace,
+    sessions,
   } = useSpace();
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x: 0, y: 0 });
-  const [openSub, setOpenSub] = useState<"terminal" | "browser" | null>(null);
+  const [openSub, setOpenSub] = useState<"terminal" | "browser" | "fork" | null>(null);
   const menuRef = menu;
+
+  const forkSession =
+    menuRef?.sessionId && !menuRef.isBrowser ? sessions[menuRef.sessionId] : null;
+  const forkAgentId = forkSession?.agentId && forkSession.agentId !== "shell" ? forkSession.agentId : null;
+  const forkBot = forkAgentId ? agentBots.find((b) => b.id === forkAgentId) : null;
+  const forkMenuLabel = forkBot
+    ? t("fork.menuAgent").replace("{name}", forkBot.name)
+    : t("fork.menu");
 
   useLayoutEffect(() => {
     if (!menu) return;
@@ -268,7 +301,7 @@ export function PaneContextMenu({ menu, onClose }: PaneContextMenuProps) {
           label={t("space.menu.terminalIn")}
           onSelect={() => run(() => void focusTerminalInPane(menuRef.paneId))}
         />
-        <Item
+          <Item
           icon={<Plus size={14} />}
           label={t("space.menu.newTab")}
           onSelect={() =>
@@ -278,6 +311,7 @@ export function PaneContextMenu({ menu, onClose }: PaneContextMenuProps) {
                 paneId: menuRef.paneId,
                 mode: "tab",
                 accent: "green",
+                agentId: "shell",
               });
             })
           }
@@ -320,16 +354,23 @@ export function PaneContextMenu({ menu, onClose }: PaneContextMenuProps) {
       >
         <Item
           icon={<IconBrowser size={14} />}
-          label={
-            menuRef.isBrowser ? t("space.menu.browserFocus") : t("space.menu.addBrowserTab")
-          }
-          onSelect={() =>
-            run(() => {
-              if (menuRef.isBrowser) focusBrowserInPane(menuRef.paneId);
-              else void openBrowserInFocused(menuRef.paneId, "tab");
-            })
-          }
+          label={t("space.menu.addBrowserTab")}
+          onSelect={() => run(() => void openBrowserInFocused(menuRef.paneId, "tab"))}
         />
+        {menuRef.isBrowser ? (
+          <Item
+            icon={<IconBrowser size={14} />}
+            label={t("space.menu.browserFocus")}
+            onSelect={() =>
+              run(() =>
+                focusBrowserInPane(
+                  menuRef.paneId,
+                  menuRef.tabId && isBrowserTabKey(menuRef.tabId) ? menuRef.tabId : undefined,
+                ),
+              )
+            }
+          />
+        ) : null}
         <Item
           icon={<IconSplitSide />}
           label={t("space.menu.browserRight")}
@@ -366,6 +407,73 @@ export function PaneContextMenu({ menu, onClose }: PaneContextMenuProps) {
           />
         ) : null}
       </Submenu>
+
+      {menuRef.sessionId || menuRef.isBrowser ? (
+        <>
+          <div className="vs-paneMenuSep" />
+          <Submenu
+            icon={<IconFork />}
+            label={forkMenuLabel}
+            open={openSub === "fork"}
+            onOpen={() => setOpenSub("fork")}
+            onClose={() => setOpenSub((s) => (s === "fork" ? null : s))}
+          >
+            <div className="vs-paneMenuHint">{t("fork.hint")}</div>
+            <Item
+              icon={<Plus size={14} />}
+              label={t("fork.tab")}
+              onSelect={() =>
+                run(() => forkFocused("tab", menuRef.paneId, menuRef.tabId ?? undefined))
+              }
+            />
+            <Item
+              icon={<IconSplitSide />}
+              label={t("fork.right")}
+              onSelect={() =>
+                run(() => forkFocused("right", menuRef.paneId, menuRef.tabId ?? undefined))
+              }
+            />
+            <Item
+              icon={<IconSplitStack />}
+              label={t("fork.workspace")}
+              onSelect={() =>
+                run(() => forkFocused("workspace", menuRef.paneId, menuRef.tabId ?? undefined))
+              }
+            />
+          </Submenu>
+        </>
+      ) : null}
+
+      <div className="vs-paneMenuSep" />
+
+      <Item
+        icon={<IconCodeBrowser size={14} />}
+        label={t("space.menu.vscodeInline")}
+        onSelect={() =>
+          run(() => {
+            void openWorkspaceInVsCodeInline(activeWorkspace?.cwd);
+          })
+        }
+      />
+      <Item
+        icon={<IconCodeBrowser size={14} />}
+        label={t("space.menu.vscodeDesktop")}
+        onSelect={() =>
+          run(() => {
+            const cwd = activeWorkspace?.cwd?.trim();
+            if (!cwd) {
+              setError(t("vscode.needFolder"));
+              return;
+            }
+            void openInCode(cwd).catch((err) => {
+              const raw = err instanceof Error ? err.message : String(err);
+              setError(
+                raw.includes("VS Code") || raw.includes("code") ? raw : clientError(err),
+              );
+            });
+          })
+        }
+      />
 
       <div className="vs-paneMenuSep" />
 

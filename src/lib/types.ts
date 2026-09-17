@@ -1,6 +1,5 @@
 export type ViewId =
   | "space"
-  | "editor"
   | "projects"
   | "agents"
   | "board"
@@ -10,10 +9,37 @@ export type ViewId =
 
 export type Accent = "blue" | "gold" | "green" | "violet";
 
-/** Stable color identity for a space (sidebar dot). */
-export type SpaceColor = "green" | "red" | "amber" | "violet" | "cyan" | "rose";
+/** Workspace identity color — shown as cmux-style left rail (not a filled avatar). */
+export type SpaceColor = "default" | "green" | "red" | "amber" | "violet" | "cyan" | "rose";
 
-export const SPACE_COLORS: SpaceColor[] = ["green", "red", "amber", "violet", "cyan", "rose"];
+export const SPACE_COLORS: SpaceColor[] = [
+  "default",
+  "green",
+  "red",
+  "amber",
+  "violet",
+  "cyan",
+  "rose",
+];
+
+/** Colors you can assign (default = no custom rail). */
+export const SPACE_TAB_COLORS: Exclude<SpaceColor, "default">[] = [
+  "green",
+  "red",
+  "amber",
+  "violet",
+  "cyan",
+  "rose",
+];
+
+export const SPACE_COLOR_HEX: Record<Exclude<SpaceColor, "default">, string> = {
+  green: "#3dd68c",
+  red: "#ff6b6b",
+  amber: "#f0c14b",
+  violet: "#a78bfa",
+  cyan: "#22d3ee",
+  rose: "#fb7185",
+};
 
 export type TerminalStatus = "online" | "closed" | "starting" | "error";
 
@@ -27,6 +53,11 @@ export type TerminalSession = {
   needsAttention: boolean;
   /** Command used to open the terminal again after Voxiva Space restarts. */
   initialCommand?: string;
+  /**
+   * Native agent resume CLI (e.g. `claude --resume abc`, `opencode --session xyz`).
+   * Preferred over initialCommand when restoring across quits/reboots.
+   */
+  resumeCommand?: string;
   /** Stable agent bot id when this tab is an agent CLI (opencode, gemini, …). */
   agentId?: string;
 };
@@ -34,6 +65,12 @@ export type TerminalSession = {
 export type SplitDirection = "h" | "v";
 
 export type PaneKind = "terminal" | "browser" | "media";
+
+/** One in-pane browser surface (cmux allows many browsers in the same strip). */
+export type BrowserTabState = {
+  id: string;
+  url: string;
+};
 
 export type SplitNode =
   | {
@@ -46,10 +83,18 @@ export type SplitNode =
       sessionIds?: string[];
       /**
        * Visual order of surfaces in the tab strip.
-       * Session ids and the sentinel `"__browser__"`.
+       * Session ids, `"__media__"`, and `"__browser__:<id>"` (or legacy `"__browser__"`).
        */
       tabOrder?: string[];
+      /**
+       * Active / legacy single browser URL.
+       * Prefer `browserTabs` when present; kept for persistence back-compat.
+       */
       browserUrl: string | null;
+      /** Multiple browser tabs in this pane (cmux-style). */
+      browserTabs?: BrowserTabState[];
+      /** Which browser tab is focused when several exist. */
+      activeBrowserId?: string | null;
       /** In-pane image/media preview (absolute path). */
       mediaPath?: string | null;
     }
@@ -98,11 +143,9 @@ export type AgentBot = {
   shell?: string;
   /** Primary CLI name on PATH. */
   command?: string;
-  /** Alternate CLI names (any one counts as installed). */
+  /** Alternate CLI names (any one counts as ready). */
   commands?: string[];
   accent: Accent;
-  /** Official docs / installer page for this CLI. */
-  installUrl?: string;
 };
 
 export type AgentAvailability = Record<string, boolean>;

@@ -44,8 +44,18 @@ import {
   saveAttentionPrefs,
   type AttentionPrefs,
 } from "@/features/attention/prefs";
+import {
+  checkForUpdates,
+  getAppMetadata,
+  openUpdateUrl,
+  type UpdateCheckResult,
+} from "@/features/updates/api";
+import {
+  ensureAutoCookieImport,
+  loadAutoCookieStatus,
+} from "@/features/browser/autoCookies";
 
-type SectionId = "general" | "appearance" | "sounds" | "hotkeys" | "mobile" | "welcome";
+type SectionId = "general" | "appearance" | "sounds" | "hotkeys" | "browser" | "mobile" | "welcome" | "about";
 
 function Toggle({
   on,
@@ -81,6 +91,8 @@ export function SettingsPage() {
     t,
     workspaces,
     setError,
+    autoResumeAgents,
+    setAutoResumeAgents,
   } = useSpace();
   const [hotkeys, setHotkeys] = useState<HotkeyMap>(() => loadHotkeys());
   const [listening, setListening] = useState<HotkeyAction | null>(null);
@@ -88,11 +100,67 @@ export function SettingsPage() {
   const [sounds, setSounds] = useState<SoundPrefs>(() => loadSoundPrefs());
   const [attention, setAttention] = useState<AttentionPrefs>(() => loadAttentionPrefs());
   const fileRef = useRef<HTMLInputElement>(null);
+  const [appVersion, setAppVersion] = useState("…");
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateError, setUpdateError] = useState(false);
 
   useEffect(() => {
     setCapturingHotkey(Boolean(listening));
     return () => setCapturingHotkey(false);
   }, [listening]);
+
+  useEffect(() => {
+    void getAppMetadata()
+      .then((m) => setAppVersion(m.version))
+      .catch(() => setAppVersion("0.1.0"));
+  }, []);
+
+  const [cookieBusy, setCookieBusy] = useState(false);
+  const [cookieStatus, setCookieStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (section !== "browser") return;
+    const last = loadAutoCookieStatus();
+    if (!last) {
+      setCookieStatus(null);
+      return;
+    }
+    if (!last.ok) {
+      setCookieStatus(last.message || t("settings.browserImportFail"));
+      return;
+    }
+    setCookieStatus(
+      t("settings.browserImportOk")
+        .replace("{n}", String(last.imported))
+        .replace("{skip}", String(last.skipped))
+        .replace("{source}", last.source),
+    );
+  }, [section, t]);
+
+  async function runCookieImport(force = false) {
+    setCookieBusy(true);
+    setCookieStatus(null);
+    try {
+      const result = await ensureAutoCookieImport(force);
+      if (!result) return;
+      if (!result.ok) {
+        setCookieStatus(result.message || t("settings.browserImportFail"));
+        return;
+      }
+      setCookieStatus(
+        t("settings.browserImportOk")
+          .replace("{n}", String(result.imported))
+          .replace("{skip}", String(result.skipped))
+          .replace("{source}", result.source),
+      );
+    } catch (err) {
+      setError(clientError(err));
+      setCookieStatus(null);
+    } finally {
+      setCookieBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (!listening) return;
@@ -197,8 +265,10 @@ export function SettingsPage() {
     { id: "appearance", title: t("settings.theme") },
     { id: "sounds", title: t("settings.sounds") },
     { id: "hotkeys", title: t("settings.hotkeys") },
+    { id: "browser", title: t("settings.browser") },
     { id: "mobile", title: t("settings.mobile") },
     { id: "welcome", title: t("settings.welcome") },
+    { id: "about", title: t("settings.about") },
   ];
 
   const presets: Array<{ id: SoundPreset; label: string }> = [
@@ -251,6 +321,20 @@ export function SettingsPage() {
                   )}
                 </button>
               ))}
+            </div>
+
+            <div className="vs-settingsBlock" style={{ marginTop: "1.25rem" }}>
+              <div className="vs-settingsRow">
+                <div>
+                  <h3>{t("settings.autoResume")}</h3>
+                  <p className="vs-settingsHint">{t("settings.autoResumeHint")}</p>
+                </div>
+                <Toggle
+                  on={autoResumeAgents}
+                  onClick={() => setAutoResumeAgents(!autoResumeAgents)}
+                  label={t("settings.autoResume")}
+                />
+              </div>
             </div>
           </section>
         )}
@@ -522,6 +606,33 @@ export function SettingsPage() {
           </section>
         )}
 
+        {section === "browser" && (
+          <section className="vs-settingsPanelBody">
+            <h2>{t("settings.browser")}</h2>
+            <p className="vs-settingsHint">{t("settings.browserHint")}</p>
+
+            <div className="vs-settingsBlock">
+              <h3>{t("settings.browserPasskeys")}</h3>
+              <p className="vs-settingsHint">{t("settings.browserPasskeysBody")}</p>
+            </div>
+
+            <div className="vs-settingsBlock">
+              <h3>{t("settings.browserSessions")}</h3>
+              <p className="vs-settingsHint">{t("settings.browserSessionsBody")}</p>
+              {cookieStatus ? <p className="vs-settingsHint">{cookieStatus}</p> : null}
+              <button
+                type="button"
+                className="vs-btn vs-btnPrimary"
+                disabled={cookieBusy}
+                onClick={() => void runCookieImport(true)}
+              >
+                {cookieBusy ? t("settings.browserImportRunning") : t("settings.browserResync")}
+              </button>
+              <p className="vs-settingsHint">{t("settings.browserImportTip")}</p>
+            </div>
+          </section>
+        )}
+
         {section === "mobile" && (
           <section className="vs-settingsPanelBody">
             <h2>{t("settings.mobile")}</h2>
@@ -621,6 +732,75 @@ export function SettingsPage() {
               </button>
               <p className="vs-settingsHint">{t("settings.showWelcomeHint")}</p>
             </div>
+          </section>
+        )}
+
+        {section === "about" && (
+          <section className="vs-settingsPanelBody">
+            <h2>{t("settings.about")}</h2>
+            <p className="vs-settingsHint">{t("settings.aboutHint")}</p>
+            <div className="vs-soundCard">
+              <div className="vs-soundRow">
+                <div>
+                  <strong>Voxiva Space v{appVersion}</strong>
+                  <small>{t("settings.aboutBody")}</small>
+                </div>
+              </div>
+            </div>
+            <div className="vs-settingsActions" style={{ marginTop: "1rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+              <button
+                type="button"
+                className="vs-btn vs-btnPrimary"
+                disabled={updateBusy}
+                onClick={() =>
+                  void (async () => {
+                    setUpdateBusy(true);
+                    setUpdateError(false);
+                    setUpdateInfo(null);
+                    try {
+                      setUpdateInfo(await checkForUpdates());
+                    } catch {
+                      setUpdateError(true);
+                    } finally {
+                      setUpdateBusy(false);
+                    }
+                  })()
+                }
+              >
+                {updateBusy ? t("settings.updateChecking") : t("settings.updateCheck")}
+              </button>
+              {(updateInfo?.updateAvailable || updateError) && (
+                <button
+                  type="button"
+                  className="vs-btn"
+                  onClick={() =>
+                    void openUpdateUrl(
+                      updateInfo?.downloadUrl || updateInfo?.downloadsPage || "https://voxiva.ai/downloads",
+                    )
+                  }
+                >
+                  {updateInfo?.updateAvailable ? t("settings.updateDownload") : t("settings.updateOpenPage")}
+                </button>
+              )}
+            </div>
+            {updateInfo?.updateAvailable ? (
+              <p className="vs-settingsHint" style={{ marginTop: "0.75rem" }}>
+                {t("settings.updateAvailable")
+                  .replace("{latest}", updateInfo.latestVersion)
+                  .replace("{current}", updateInfo.currentVersion)}
+                {updateInfo.notes ? ` — ${updateInfo.notes}` : ""}
+              </p>
+            ) : null}
+            {updateInfo && !updateInfo.updateAvailable ? (
+              <p className="vs-settingsHint" style={{ marginTop: "0.75rem" }}>
+                {t("settings.updateUpToDate")}
+              </p>
+            ) : null}
+            {updateError ? (
+              <p className="vs-settingsHint" style={{ marginTop: "0.75rem", color: "var(--vs-danger, #ff7b7b)" }}>
+                {t("settings.updateFailed")}
+              </p>
+            ) : null}
           </section>
         )}
       </div>

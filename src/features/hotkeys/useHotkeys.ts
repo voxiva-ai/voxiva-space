@@ -31,7 +31,6 @@ function inPlainInput(target: EventTarget | null) {
 function match(event: KeyboardEvent, binding: HotkeyBinding, allowInTerminal: boolean) {
   if (!eventMatchesBinding(event, binding)) return false;
   if (inTerminalFocus(event.target) && !allowInTerminal) return false;
-  // Chorded shortcuts may run inside the terminal (cmux-style).
   if (inTerminalFocus(event.target) && !(binding.alt || binding.ctrl)) return false;
   return true;
 }
@@ -42,6 +41,7 @@ export function useHotkeys() {
     spawnInFocused,
     splitFocused,
     closeFocusedPane,
+    closeFocusedTab,
     openBrowserInFocused,
     workspaces,
     activeWorkspace,
@@ -49,6 +49,14 @@ export function useHotkeys() {
     focusPane,
     focusNextAttention,
     isBusy,
+    isVsCodeFocusActive,
+    toggleBrowserFocusMode,
+    reopenClosed,
+    goFocusBack,
+    goFocusForward,
+    equalizeSplits,
+    toggleMaximizeFocusedPane,
+    removeWorkspace,
   } = useSpace();
   const { setView } = useView();
   const [bindings, setBindings] = useState<HotkeyMap>(() => loadHotkeys());
@@ -67,24 +75,55 @@ export function useHotkeys() {
     const onKey = (event: KeyboardEvent) => {
       if (isCapturingHotkey()) return;
       if (isModalOpen()) return;
-      // Allow Alt/Ctrl app chords even in URL / search inputs (match Settings).
       if (inPlainInput(event.target) && !(event.altKey || event.ctrlKey || event.metaKey)) {
         return;
       }
 
       const go = (binding: HotkeyBinding) => match(event, binding, true);
 
-      if (go(bindings.newTerminal)) {
+      if (go(bindings.browserFocusMode)) {
+        event.preventDefault();
+        toggleBrowserFocusMode();
+        return;
+      }
+      if (isVsCodeFocusActive) return;
+
+      if (go(bindings.newTab) || go(bindings.newTerminal)) {
         event.preventDefault();
         if (!isBusy) {
           setView("space");
-          void spawnInFocused({ title: "Shell", accent: "green" });
+          void spawnInFocused({ title: "Shell", accent: "green", mode: "tab" });
         }
+        return;
+      }
+      if (go(bindings.closeTab)) {
+        event.preventDefault();
+        void closeFocusedTab();
         return;
       }
       if (go(bindings.closePane)) {
         event.preventDefault();
         void closeFocusedPane();
+        return;
+      }
+      if (go(bindings.closeWorkspace)) {
+        event.preventDefault();
+        if (activeWorkspace) void removeWorkspace(activeWorkspace.id);
+        return;
+      }
+      if (go(bindings.reopenClosed)) {
+        event.preventDefault();
+        void reopenClosed();
+        return;
+      }
+      if (go(bindings.focusBack)) {
+        event.preventDefault();
+        goFocusBack();
+        return;
+      }
+      if (go(bindings.focusForward)) {
+        event.preventDefault();
+        goFocusForward();
         return;
       }
       if (go(bindings.splitRight)) {
@@ -95,6 +134,52 @@ export function useHotkeys() {
       if (go(bindings.splitDown)) {
         event.preventDefault();
         void splitFocused("v");
+        return;
+      }
+      if (go(bindings.maximizePane)) {
+        event.preventDefault();
+        toggleMaximizeFocusedPane();
+        return;
+      }
+      if (go(bindings.equalizeSplits)) {
+        event.preventDefault();
+        equalizeSplits();
+        return;
+      }
+      if (go(bindings.newBrowserTab)) {
+        event.preventDefault();
+        setView("space");
+        void openBrowserInFocused(undefined, "tab");
+        return;
+      }
+      if (go(bindings.focusOmnibar)) {
+        event.preventDefault();
+        setView("space");
+        const leaf = activeWorkspace
+          ? collectLeaves(activeWorkspace.layout).find(
+              (l) => l.paneId === activeWorkspace.focusedPaneId,
+            )
+          : null;
+        const hasBrowser = Boolean(leaf && (leaf.kind === "browser" || leaf.browserTabs?.length));
+        if (hasBrowser) {
+          window.dispatchEvent(new CustomEvent("voxiva-focus-omnibar"));
+        } else {
+          void openBrowserInFocused(undefined, "tab").then(() => {
+            window.setTimeout(() => {
+              window.dispatchEvent(new CustomEvent("voxiva-focus-omnibar"));
+            }, 80);
+          });
+        }
+        return;
+      }
+      if (go(bindings.renameWorkspace)) {
+        event.preventDefault();
+        window.dispatchEvent(new Event("voxiva-rename-workspace"));
+        return;
+      }
+      if (go(bindings.renameTab)) {
+        event.preventDefault();
+        window.dispatchEvent(new Event("voxiva-rename-focused-tab"));
         return;
       }
       if (go(bindings.nextPane) || go(bindings.prevPane)) {
@@ -157,11 +242,6 @@ export function useHotkeys() {
         setView("board");
         return;
       }
-      if (go(bindings.viewEditor)) {
-        event.preventDefault();
-        setView("editor");
-        return;
-      }
       if (go(bindings.viewProjects)) {
         event.preventDefault();
         setView("projects");
@@ -169,7 +249,7 @@ export function useHotkeys() {
       }
       if (go(bindings.history)) {
         event.preventDefault();
-        setView("history");
+        window.dispatchEvent(new CustomEvent("voxiva-open-vault"));
         return;
       }
       if (go(bindings.browser)) {
@@ -183,10 +263,6 @@ export function useHotkeys() {
         setView("settings");
         return;
       }
-      if (go(bindings.sidebar)) {
-        // Handled in App (owns collapse state).
-        return;
-      }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -197,12 +273,21 @@ export function useHotkeys() {
     openBrowserInFocused,
     splitFocused,
     closeFocusedPane,
+    closeFocusedTab,
+    removeWorkspace,
+    reopenClosed,
+    goFocusBack,
+    goFocusForward,
+    equalizeSplits,
+    toggleMaximizeFocusedPane,
     workspaces,
     activeWorkspace,
     selectWorkspace,
     focusPane,
     focusNextAttention,
     isBusy,
+    isVsCodeFocusActive,
+    toggleBrowserFocusMode,
   ]);
 
   return { bindings, defaults: DEFAULT_HOTKEYS };

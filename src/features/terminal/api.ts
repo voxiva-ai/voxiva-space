@@ -91,6 +91,40 @@ export function openInCode(path: string) {
   });
 }
 
+export type VsCodeServeWebInfo = {
+  baseUrl: string;
+  connectionToken: string;
+  port: number;
+};
+
+/** Start or reuse the singleton `code serve-web` process. */
+export function ensureVsCodeServeWeb() {
+  return invoke<VsCodeServeWebInfo>("ensure_vscode_serve_web");
+}
+
+/** Absolute filesystem folder → serve-web URL with `folder` + `tkn` query. */
+export function vscodeServeWebFolderUrl(folder: string) {
+  return invoke<string>("vscode_serve_web_folder_url", { folder });
+}
+
+/** True for local VS Code serve-web URLs (`tkn=` / `folder=` on localhost). */
+export function isVsCodeServeWebUrl(url: string | null | undefined): boolean {
+  if (!url?.trim()) return false;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname;
+    if (host !== "127.0.0.1" && host !== "localhost" && host !== "[::1]") {
+      return false;
+    }
+    return parsed.searchParams.has("tkn") || parsed.searchParams.has("folder");
+  } catch {
+    const lower = url.toLowerCase();
+    const local =
+      lower.includes("127.0.0.1") || lower.includes("localhost") || lower.includes("[::1]");
+    return local && (lower.includes("tkn=") || lower.includes("folder="));
+  }
+}
+
 export function openUrl(url: string) {
   return invoke("open_url", { url });
 }

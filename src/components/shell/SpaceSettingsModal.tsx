@@ -6,7 +6,7 @@ import { useFolderBrowse } from "@/features/workspace/useFolderBrowse";
 import { collectLeaves, collectSessionIds, countLeaves, leafHasBrowser } from "@/features/workspace/layout";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import { clientError } from "@/lib/errors";
-import { SPACE_COLORS, type SpaceColor, type Workspace } from "@/lib/types";
+import { SPACE_COLOR_HEX, SPACE_TAB_COLORS, type SpaceColor, type Workspace } from "@/lib/types";
 
 type SpaceSettingsModalProps = {
   workspaceId: string | null;
@@ -26,7 +26,7 @@ export function SpaceSettingsModal({ workspaceId, onClose }: SpaceSettingsModalP
 
   const [name, setName] = useState("");
   const [cwd, setCwd] = useState("");
-  const [color, setColor] = useState<SpaceColor>("green");
+  const [color, setColor] = useState<SpaceColor>("default");
   const [busy, setBusy] = useState(false);
   const browseFolder = useFolderBrowse();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -70,10 +70,6 @@ export function SpaceSettingsModal({ workspaceId, onClose }: SpaceSettingsModalP
   }
 
   async function save() {
-    if (!cwd.trim()) {
-      setError(t("projects.needFolder"));
-      return;
-    }
     setBusy(true);
     try {
       await updateWorkspace(ws.id, {
@@ -121,7 +117,7 @@ export function SpaceSettingsModal({ workspaceId, onClose }: SpaceSettingsModalP
               <p>{t("space.settings.lead")}</p>
             </div>
             <button type="button" className="vs-iconBtn" aria-label={t("space.close")} onClick={onClose}>
-              <IconX size={16} />
+              <IconX size={14} />
             </button>
           </header>
 
@@ -137,7 +133,7 @@ export function SpaceSettingsModal({ workspaceId, onClose }: SpaceSettingsModalP
             </label>
 
             <label className="vs-ssField">
-              <span>{t("projects.folder")}</span>
+              <span>{t("projects.folderOptional")}</span>
               <div className="vs-modalPathRow">
                 <Folder size={15} aria-hidden />
                 <input value={cwd} onChange={(e) => setCwd(e.target.value)} spellCheck={false} />
@@ -153,14 +149,23 @@ export function SpaceSettingsModal({ workspaceId, onClose }: SpaceSettingsModalP
 
             <div className="vs-ssField">
               <span>{t("projects.color")}</span>
-              <div className="vs-ssColors" role="radiogroup" aria-label={t("projects.color")}>
-                {SPACE_COLORS.map((item) => (
+            <div className="vs-ssColors" role="radiogroup" aria-label={t("projects.color")}>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={color === "default"}
+                  className={`vs-ssColor is-default${color === "default" ? " is-active" : ""}`}
+                  aria-label={t("spaces.colorDefault")}
+                  onClick={() => setColor("default")}
+                />
+                {SPACE_TAB_COLORS.map((item) => (
                   <button
                     key={item}
                     type="button"
                     role="radio"
                     aria-checked={color === item}
                     className={`vs-ssColor is-${item}${color === item ? " is-active" : ""}`}
+                    style={{ background: SPACE_COLOR_HEX[item] }}
                     aria-label={item}
                     onClick={() => setColor(item)}
                   />

@@ -10,6 +10,20 @@ const OUTPUT_SCAN_DEBOUNCE_MS = 1200;
 const sessionNotifyAt = new Map<string, number>();
 const outputScanAt = new Map<string, number>();
 const sessionAttentionReason = new Map<string, string>();
+/** When attention was last raised — used by Cmd+Shift+U to jump to newest unread. */
+const attentionStampAt = new Map<string, number>();
+
+export function stampAttention(sessionId: string) {
+  attentionStampAt.set(sessionId, Date.now());
+}
+
+export function attentionStamp(sessionId: string) {
+  return attentionStampAt.get(sessionId) ?? 0;
+}
+
+export function attentionReason(sessionId: string) {
+  return sessionAttentionReason.get(sessionId) || "";
+}
 
 export type AttentionNotifyOpts = {
   sessionId: string;
@@ -79,4 +93,5 @@ export function clearAttentionNotifyState(sessionId: string) {
   sessionNotifyAt.delete(sessionId);
   outputScanAt.delete(sessionId);
   sessionAttentionReason.delete(sessionId);
+  attentionStampAt.delete(sessionId);
 }

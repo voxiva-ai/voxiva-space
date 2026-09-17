@@ -1,4 +1,4 @@
-import type { PaneKind, SplitDirection, SplitNode } from "@/lib/types";
+import type { BrowserTabState, PaneKind, SplitDirection, SplitNode } from "@/lib/types";
 import { uid } from "@/lib/constants";
 
 export type LeafNode = Extract<SplitNode, { type: "leaf" }>;
@@ -8,14 +8,19 @@ export function createLeaf(
   kind: PaneKind = "terminal",
   browserUrl: string | null = null,
 ): LeafNode {
+  const tabs =
+    kind === "browser"
+      ? [{ id: uid("b"), url: browserUrl ?? "" }]
+      : undefined;
   return {
     type: "leaf",
     paneId: uid("pane"),
     kind,
     sessionId: kind === "terminal" ? sessionId : null,
     sessionIds: kind === "terminal" && sessionId ? [sessionId] : [],
-    // null = no browser tab; "" / url = browser tab present (cmux-style).
     browserUrl: kind === "browser" ? (browserUrl ?? "") : null,
+    browserTabs: tabs,
+    activeBrowserId: tabs?.[0]?.id ?? null,
     mediaPath: null,
   };
 }
@@ -43,10 +48,44 @@ export function mapLeaves(node: SplitNode, fn: (leaf: LeafNode) => LeafNode): Sp
   };
 }
 
-/** Sentinel id for the browser surface inside `tabOrder`. */
+/** Sentinel id for the browser surface inside `tabOrder` (legacy single-tab). */
 export const BROWSER_TAB = "__browser__";
+/** Prefix for multi-browser tab keys: `__browser__:<id>`. */
+export const BROWSER_TAB_PREFIX = "__browser__:";
 /** Sentinel id for in-pane image / video / audio / PDF preview. */
 export const MEDIA_TAB = "__media__";
+
+export function makeBrowserTabKey(id: string) {
+  return id === "legacy" ? BROWSER_TAB : `${BROWSER_TAB_PREFIX}${id}`;
+}
+
+export function isBrowserTabKey(id: string) {
+  return id === BROWSER_TAB || id.startsWith(BROWSER_TAB_PREFIX);
+}
+
+export function browserIdFromTabKey(key: string): string | null {
+  if (key === BROWSER_TAB) return "legacy";
+  if (key.startsWith(BROWSER_TAB_PREFIX)) return key.slice(BROWSER_TAB_PREFIX.length);
+  return null;
+}
+
+/** Normalize legacy `browserUrl` into `browserTabs`. */
+export function normalizeBrowserTabs(leaf: LeafNode): BrowserTabState[] {
+  if (leaf.browserTabs && leaf.browserTabs.length > 0) return leaf.browserTabs;
+  if (leaf.browserUrl !== null) {
+    return [{ id: "legacy", url: leaf.browserUrl }];
+  }
+  return [];
+}
+
+export function activeBrowserTab(leaf: LeafNode): BrowserTabState | null {
+  const tabs = normalizeBrowserTabs(leaf);
+  if (!tabs.length) return null;
+  const active = leaf.activeBrowserId
+    ? tabs.find((t) => t.id === leaf.activeBrowserId)
+    : null;
+  return active ?? tabs[tabs.length - 1] ?? null;
+}
 
 /** Media-only leaf (image / video / audio / PDF) — never auto-spawns a shell. */
 export function createMediaLeaf(mediaPath: string): LeafNode {
@@ -58,12 +97,18 @@ export function createMediaLeaf(mediaPath: string): LeafNode {
     sessionId: null,
     sessionIds: [],
     browserUrl: null,
+    browserTabs: [],
+    activeBrowserId: null,
     mediaPath: path || null,
     tabOrder: path ? [MEDIA_TAB] : [],
   };
 }
 
 const SURFACE_SENTINELS = new Set([BROWSER_TAB, MEDIA_TAB]);
+
+function isSurfaceTabKey(id: string) {
+  return SURFACE_SENTINELS.has(id) || isBrowserTabKey(id);
+}
 
 /** Terminal tabs — kept even while the browser / media tab is active. */
 export function leafTabIds(leaf: LeafNode): string[] {
@@ -74,20 +119,22 @@ export function leafTabIds(leaf: LeafNode): string[] {
 
 /** Browser tab exists in this pane (alongside shells). */
 export function leafHasBrowser(leaf: LeafNode): boolean {
-  return leaf.browserUrl !== null;
+  return normalizeBrowserTabs(leaf).length > 0;
 }
 
 export function leafHasMedia(leaf: LeafNode): boolean {
   return Boolean(leaf.mediaPath);
 }
 
-/** Ordered tab keys: session ids + optional browser / media sentinels. */
+function leafBrowserKeys(leaf: LeafNode): string[] {
+  return normalizeBrowserTabs(leaf).map((t) => makeBrowserTabKey(t.id));
+}
+
+/** Ordered tab keys: session ids + browser tabs + optional media. */
 export function leafTabOrder(leaf: LeafNode): string[] {
   const sessions = leafTabIds(leaf);
-  const extras = [
-    ...(leafHasBrowser(leaf) ? [BROWSER_TAB] : []),
-    ...(leafHasMedia(leaf) ? [MEDIA_TAB] : []),
-  ];
+  const browsers = leafBrowserKeys(leaf);
+  const extras = [...browsers, ...(leafHasMedia(leaf) ? [MEDIA_TAB] : [])];
   const valid = new Set<string>([...sessions, ...extras]);
   const kept = (leaf.tabOrder ?? []).filter((id) => valid.has(id));
   const missing = [...sessions, ...extras].filter((id) => !kept.includes(id));
@@ -95,52 +142,120 @@ export function leafTabOrder(leaf: LeafNode): string[] {
 }
 
 function withTabOrder(leaf: LeafNode, order: string[]): LeafNode {
-  const sessions = order.filter((id) => !SURFACE_SENTINELS.has(id));
-  const hasBrowser = order.includes(BROWSER_TAB);
+  const sessions = order.filter((id) => !isSurfaceTabKey(id));
+  const browserKeys = order.filter((id) => isBrowserTabKey(id));
   const hasMedia = order.includes(MEDIA_TAB);
+  const prevTabs = normalizeBrowserTabs(leaf);
+  const byId = new Map(prevTabs.map((t) => [t.id, t]));
+  const nextTabs: BrowserTabState[] = [];
+  for (const key of browserKeys) {
+    const id = browserIdFromTabKey(key);
+    if (!id) continue;
+    nextTabs.push(byId.get(id) ?? { id, url: "" });
+  }
+  const activeId =
+    leaf.activeBrowserId && nextTabs.some((t) => t.id === leaf.activeBrowserId)
+      ? leaf.activeBrowserId
+      : nextTabs[nextTabs.length - 1]?.id ?? null;
+  const activeUrl = nextTabs.find((t) => t.id === activeId)?.url ?? null;
   return {
     ...leaf,
     sessionIds: sessions,
     sessionId:
       leaf.sessionId && sessions.includes(leaf.sessionId) ? leaf.sessionId : sessions[0] ?? null,
     tabOrder: order,
-    browserUrl: hasBrowser ? (leaf.browserUrl ?? "") : null,
+    browserTabs: nextTabs,
+    activeBrowserId: activeId,
+    browserUrl: nextTabs.length ? (activeUrl ?? "") : null,
     mediaPath: hasMedia ? leaf.mediaPath || null : null,
   };
 }
 
-/** Open / focus browser tab in-pane without destroying shells (cmux). */
+/**
+ * Always append a new browser tab in-pane (cmux: many browsers in one strip).
+ * Pass `reuseIfEmpty` only when focusing an existing empty slot.
+ */
 export function openBrowserTab(node: SplitNode, paneId: string): SplitNode {
   return mapLeaves(node, (leaf) => {
     if (leaf.paneId !== paneId) return leaf;
-    const order = leafTabOrder({ ...leaf, browserUrl: leaf.browserUrl ?? "" });
-    const nextOrder = order.includes(BROWSER_TAB) ? order : [...order, BROWSER_TAB];
+    const id = uid("b");
+    const tabs = [...normalizeBrowserTabs(leaf), { id, url: "" }];
+    const key = makeBrowserTabKey(id);
+    const order = leafTabOrder({
+      ...leaf,
+      browserTabs: tabs,
+      browserUrl: "",
+      activeBrowserId: id,
+    });
+    const nextOrder = order.includes(key) ? order : [...order, key];
+    // Activate the new browser tab at the end of the strip.
+    const activated = [...nextOrder.filter((k) => k !== key), key];
     return {
-      ...withTabOrder({ ...leaf, browserUrl: leaf.browserUrl ?? "" }, nextOrder),
+      ...withTabOrder(
+        { ...leaf, browserTabs: tabs, browserUrl: "", activeBrowserId: id },
+        activated,
+      ),
       kind: "browser",
-      browserUrl: leaf.browserUrl ?? "",
     };
   });
 }
 
-export function focusBrowserTab(node: SplitNode, paneId: string): SplitNode {
-  return openBrowserTab(node, paneId);
-}
-
-export function closeBrowserTab(node: SplitNode, paneId: string): SplitNode {
+export function focusBrowserTab(node: SplitNode, paneId: string, tabKey?: string): SplitNode {
+  const current = findLeaf(node, paneId);
+  if (!current) return node;
+  if (!normalizeBrowserTabs(current).length) return openBrowserTab(node, paneId);
   return mapLeaves(node, (leaf) => {
     if (leaf.paneId !== paneId) return leaf;
-    const order = leafTabOrder(leaf).filter((id) => id !== BROWSER_TAB);
-    const tabs = leafTabIds(leaf);
-    const nextKind: LeafNode["kind"] = order.includes(MEDIA_TAB)
-      ? "media"
-      : "terminal";
+    const tabs = normalizeBrowserTabs(leaf);
+    const key =
+      tabKey && isBrowserTabKey(tabKey)
+        ? tabKey
+        : makeBrowserTabKey(leaf.activeBrowserId || tabs[tabs.length - 1]!.id);
+    const id = browserIdFromTabKey(key) || tabs[tabs.length - 1]!.id;
+    const order = leafTabOrder(leaf);
+    const activated = [...order.filter((k) => k !== key), key];
+    const url = tabs.find((t) => t.id === id)?.url ?? "";
     return {
-      ...withTabOrder({ ...leaf, browserUrl: null }, order),
-      browserUrl: null,
+      ...withTabOrder({ ...leaf, activeBrowserId: id, browserUrl: url }, activated),
+      kind: "browser",
+    };
+  });
+}
+
+export function closeBrowserTab(node: SplitNode, paneId: string, tabKey?: string): SplitNode {
+  return mapLeaves(node, (leaf) => {
+    if (leaf.paneId !== paneId) return leaf;
+    const closing =
+      tabKey && isBrowserTabKey(tabKey)
+        ? browserIdFromTabKey(tabKey)
+        : leaf.activeBrowserId || normalizeBrowserTabs(leaf)[0]?.id || null;
+    const tabs = normalizeBrowserTabs(leaf).filter((t) => t.id !== closing);
+    const order = leafTabOrder(leaf).filter((id) => {
+      if (!isBrowserTabKey(id)) return true;
+      return browserIdFromTabKey(id) !== closing;
+    });
+    const nextKind: LeafNode["kind"] = order.some((id) => isBrowserTabKey(id))
+      ? "browser"
+      : order.includes(MEDIA_TAB)
+        ? "media"
+        : "terminal";
+    const activeId = tabs[tabs.length - 1]?.id ?? null;
+    return {
+      ...withTabOrder(
+        {
+          ...leaf,
+          browserTabs: tabs,
+          activeBrowserId: activeId,
+          browserUrl: tabs.length ? (tabs[tabs.length - 1]?.url ?? "") : null,
+        },
+        order,
+      ),
       kind: nextKind,
-      sessionId: leaf.sessionId && tabs.includes(leaf.sessionId) ? leaf.sessionId : tabs[0] ?? null,
-      sessionIds: tabs,
+      sessionId:
+        leaf.sessionId && leafTabIds(leaf).includes(leaf.sessionId)
+          ? leaf.sessionId
+          : leafTabIds(leaf)[0] ?? null,
+      sessionIds: leafTabIds(leaf),
     };
   });
 }
@@ -166,7 +281,9 @@ export function closeMediaTab(node: SplitNode, paneId: string): SplitNode {
     if (leaf.paneId !== paneId) return leaf;
     const order = leafTabOrder(leaf).filter((id) => id !== MEDIA_TAB);
     const tabs = leafTabIds(leaf);
-    const nextKind: LeafNode["kind"] = order.includes(BROWSER_TAB) ? "browser" : "terminal";
+    const nextKind: LeafNode["kind"] = order.some((id) => isBrowserTabKey(id))
+      ? "browser"
+      : "terminal";
     return {
       ...withTabOrder({ ...leaf, mediaPath: null }, order),
       mediaPath: null,
@@ -273,12 +390,12 @@ export function removeLeafSession(node: SplitNode, paneId: string, sessionId: st
   return mapLeaves(node, (leaf) => {
     if (leaf.paneId !== paneId) return leaf;
     const order = leafTabOrder(leaf).filter((id) => id !== sessionId);
-    const sessionIds = order.filter((id) => !SURFACE_SENTINELS.has(id));
+    const sessionIds = order.filter((id) => !isSurfaceTabKey(id));
     const nextActive =
       leaf.sessionId === sessionId ? sessionIds[sessionIds.length - 1] ?? null : leaf.sessionId;
     const nextKind: LeafNode["kind"] = order.includes(MEDIA_TAB)
       ? "media"
-      : order.includes(BROWSER_TAB)
+      : order.some((id) => isBrowserTabKey(id))
         ? "browser"
         : "terminal";
     return {
@@ -300,7 +417,7 @@ export function replaceLeafSessionId(
   return mapLeaves(node, (leaf) => {
     if (leaf.paneId !== paneId) return leaf;
     const order = leafTabOrder(leaf).map((id) => (id === fromId ? toId : id));
-    const sessionIds = order.filter((id) => !SURFACE_SENTINELS.has(id));
+    const sessionIds = order.filter((id) => !isSurfaceTabKey(id));
     const nextActive =
       leaf.sessionId === fromId
         ? toId
@@ -316,17 +433,48 @@ export function replaceLeafSessionId(
   });
 }
 
-export function setLeafBrowser(node: SplitNode, paneId: string, browserUrl: string | null): SplitNode {
-  return mapLeaves(node, (leaf) =>
-    leaf.paneId === paneId
-      ? {
-          ...leaf,
-          kind: "browser",
-          // Keep terminal tabs — browser is a sibling tab, not a replacement.
-          browserUrl: browserUrl ?? "",
-        }
-      : leaf,
-  );
+export function setLeafBrowser(
+  node: SplitNode,
+  paneId: string,
+  browserUrl: string | null,
+  tabKey?: string,
+): SplitNode {
+  return mapLeaves(node, (leaf) => {
+    if (leaf.paneId !== paneId) return leaf;
+    const tabs = normalizeBrowserTabs(leaf);
+    if (!tabs.length) {
+      const id = uid("b");
+      const nextTabs = [{ id, url: browserUrl ?? "" }];
+      const key = makeBrowserTabKey(id);
+      const order = [...leafTabOrder(leaf).filter((k) => !isBrowserTabKey(k)), key];
+      return {
+        ...withTabOrder(
+          { ...leaf, browserTabs: nextTabs, activeBrowserId: id, browserUrl: browserUrl ?? "" },
+          order,
+        ),
+        kind: "browser",
+      };
+    }
+    const targetId =
+      (tabKey && browserIdFromTabKey(tabKey)) ||
+      leaf.activeBrowserId ||
+      tabs[tabs.length - 1]!.id;
+    const nextTabs = tabs.map((t) =>
+      t.id === targetId ? { ...t, url: browserUrl ?? "" } : t,
+    );
+    const activeId =
+      leaf.activeBrowserId && nextTabs.some((t) => t.id === leaf.activeBrowserId)
+        ? leaf.activeBrowserId
+        : targetId;
+    const activeUrl = nextTabs.find((t) => t.id === activeId)?.url ?? browserUrl ?? "";
+    return {
+      ...leaf,
+      kind: "browser",
+      browserTabs: nextTabs,
+      activeBrowserId: activeId,
+      browserUrl: activeUrl ?? "",
+    };
+  });
 }
 
 /** Move a shell tab or the browser tab from one pane to another (keeps session id / URL). */
@@ -341,20 +489,17 @@ export function moveTabToPane(
   const to = findLeaf(layout, toPaneId);
   if (!from || !to) return layout;
 
-  if (tabId === BROWSER_TAB) {
+  if (isBrowserTabKey(tabId)) {
     if (!leafHasBrowser(from)) return layout;
-    const fromUrl = from.browserUrl ?? "";
-    if (leafHasBrowser(to)) {
-      const toUrl = to.browserUrl ?? "";
-      let next = setLeafBrowser(layout, fromPaneId, toUrl);
-      next = setLeafBrowser(next, toPaneId, fromUrl);
-      next = openBrowserTab(next, fromPaneId);
-      next = openBrowserTab(next, toPaneId);
-      return next;
-    }
-    let next = closeBrowserTab(layout, fromPaneId);
+    const fromId = browserIdFromTabKey(tabId);
+    const fromTab =
+      normalizeBrowserTabs(from).find((t) => t.id === fromId) ||
+      activeBrowserTab(from);
+    if (!fromTab) return layout;
+    let next = closeBrowserTab(layout, fromPaneId, tabId);
     next = openBrowserTab(next, toPaneId);
-    next = setLeafBrowser(next, toPaneId, fromUrl);
+    // New tab is active — set its URL to the moved one.
+    next = setLeafBrowser(next, toPaneId, fromTab.url);
     return next;
   }
 
@@ -544,7 +689,11 @@ export function movePane(
 }
 
 export function leafSurfaceCount(leaf: LeafNode) {
-  return leafTabIds(leaf).length + (leafHasBrowser(leaf) ? 1 : 0) + (leafHasMedia(leaf) ? 1 : 0);
+  return (
+    leafTabIds(leaf).length +
+    normalizeBrowserTabs(leaf).length +
+    (leafHasMedia(leaf) ? 1 : 0)
+  );
 }
 
 /** Copy tabs + browser onto another leaf without dropping the other kind. */
@@ -613,10 +762,13 @@ export function dockTab(
 
   let extracted: LeafNode;
   let next = layout;
-  if (tabId === BROWSER_TAB) {
+  if (isBrowserTabKey(tabId)) {
     if (!leafHasBrowser(from)) return { layout, focusPaneId: fromPaneId };
-    extracted = createBrowserLeaf(from.browserUrl ?? "");
-    next = closeBrowserTab(next, fromPaneId);
+    const bid = browserIdFromTabKey(tabId);
+    const tab =
+      normalizeBrowserTabs(from).find((t) => t.id === bid) || activeBrowserTab(from);
+    extracted = createBrowserLeaf(tab?.url ?? "");
+    next = closeBrowserTab(next, fromPaneId, tabId);
   } else if (tabId === MEDIA_TAB) {
     if (!leafHasMedia(from) || !from.mediaPath) return { layout, focusPaneId: fromPaneId };
     extracted = { ...createLeaf(null), kind: "media", mediaPath: from.mediaPath };
@@ -978,6 +1130,26 @@ export function buildGridLayout(count: GridPreset): SplitNode {
     second: buildQuad(),
   };
 }
+
+/** Welcome / onboarding layouts — browser rules are fixed per grid preset. */
+export function buildWelcomeLayout(grid: GridPreset): SplitNode {
+  if (grid === 4) return buildCreateLayout(4, true);
+  if (grid === 8) {
+    const layout = buildGridLayout(8);
+    const ids = collectPaneIds(layout);
+    const browserPane = ids[WELCOME_BROWSER_CELL_INDEX];
+    if (!browserPane) return layout;
+    return mapLeaves(layout, (leaf) =>
+      leaf.paneId === browserPane
+        ? { ...createBrowserLeaf(), paneId: leaf.paneId }
+        : leaf,
+    );
+  }
+  return buildGridLayout(grid);
+}
+
+/** Index of the embedded browser cell in the 8-pane grid. */
+export const WELCOME_BROWSER_CELL_INDEX = 3;
 
 /** New space: 1/2/4/8 terminals, optional full-height browser column on the right. */
 export function buildCreateLayout(grid: GridPreset, withBrowser: boolean): SplitNode {
