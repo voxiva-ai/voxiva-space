@@ -46,7 +46,7 @@ import {
 } from "@/features/editor/types";
 import { saveBlobToTemp } from "@/features/terminal/paste";
 import { TerminalPane } from "@/features/terminal";
-import { enqueueTerminalSpawn, yieldToUi } from "@/features/terminal/spawnQueue";
+import { yieldToUi } from "@/features/terminal/spawnQueue";
 import { NativeBrowser, type BrowserTabMeta } from "@/features/browser/NativeBrowser";
 import { browserFaviconUrl, prettyBrowserLabel } from "@/features/browser/tabMeta";
 import { readAgentDrag, isAgentDrag, endAgentDragSession, type AgentDragPayload } from "@/features/agents/drag";
@@ -537,12 +537,12 @@ function PaneLeaf({
       return;
     }
     spawning.current = true;
-    void enqueueTerminalSpawn(async () => {
+    void (async () => {
       await yieldToUi(0);
       // Re-check after yield — resume/hold may have claimed this pane.
       if (!shouldAutoSpawnShell(paneId)) {
         spawning.current = false;
-        return null;
+        return;
       }
       const queue = takePendingPaneSpawnQueue(paneId);
       let lastId: string | null = null;
@@ -550,29 +550,33 @@ function PaneLeaf({
         queue.length > 0
           ? queue
           : [{ title: "Shell", accent: "green" as const, paneId, mode: "replace" as const }];
-      for (let i = 0; i < items.length; i++) {
-        if (i > 0) await yieldToUi(40);
-        if (!shouldAutoSpawnShell(paneId) && i === 0 && queue.length === 0) {
-          spawning.current = false;
-          return null;
+      try {
+        // First shell replaces; further saved tabs append. createTerminalSession
+        // is already concurrency-limited inside spawnInPane.
+        for (let i = 0; i < items.length; i++) {
+          if (i > 0) await yieldToUi(20);
+          if (!shouldAutoSpawnShell(paneId) && i === 0 && queue.length === 0) {
+            spawning.current = false;
+            return;
+          }
+          lastId = await spawnInPane({
+            title: items[i]!.title ?? "Shell",
+            command: items[i]!.command,
+            accent: items[i]!.accent ?? "green",
+            agentId: items[i]!.agentId,
+            paneId,
+            mode: i === 0 ? "replace" : "tab",
+            paste: items[i]!.paste,
+            shell: items[i]!.shell,
+            workspaceId: items[i]!.workspaceId,
+          });
         }
-        lastId = await spawnInPane({
-          title: items[i]!.title ?? "Shell",
-          command: items[i]!.command,
-          accent: items[i]!.accent ?? "green",
-          agentId: items[i]!.agentId,
-          paneId,
-          mode: i === 0 ? "replace" : "tab",
-          paste: items[i]!.paste,
-          shell: items[i]!.shell,
-          workspaceId: items[i]!.workspaceId,
-        });
+        if (lastId) clearPendingPaneSpawn(paneId);
+        else spawning.current = false;
+      } catch {
+        spawning.current = false;
       }
-      return lastId;
-    }).then((id) => {
-      if (id) clearPendingPaneSpawn(paneId);
-      else spawning.current = false;
-    });
+    })();
   }, [
     hasBrowser,
     hasMedia,

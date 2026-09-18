@@ -1212,14 +1212,16 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       setError("");
       try {
         const shell = opts.shell ?? (preferredShell.trim() || null);
-        const created = await createTerminalSession({
-          cwd: workspace.cwd || null,
-          shell,
-          title: opts.title,
-          cols: PTY_COLS,
-          rows: PTY_ROWS,
-          initialCommand: opts.command?.trim() || null,
-        });
+        const created = await enqueueTerminalSpawn(() =>
+          createTerminalSession({
+            cwd: workspace.cwd || null,
+            shell,
+            title: opts.title,
+            cols: PTY_COLS,
+            rows: PTY_ROWS,
+            initialCommand: opts.command?.trim() || null,
+          }),
+        );
         const agentId = opts.agentId ?? agentIdFromCommand(opts.command) ?? "shell";
         const bot = agentBots.find((b) => b.id === agentId);
         const resumeCommand =
@@ -1314,17 +1316,17 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   const spawnAllEmpty = useCallback(async () => {
     if (!activeWorkspace) return;
     const panes = collectPaneIds(activeWorkspace.layout);
-    for (const paneId of panes) {
-      const leaf = findLeaf(activeWorkspace.layout, paneId);
-      if (!leaf) continue;
-      if (leaf.kind === "browser" || leaf.kind === "media") continue;
-      if (leaf.mediaPath || leafHasBrowser(leaf)) continue;
-      if (leafTabIds(leaf).length > 0) continue;
-      await enqueueTerminalSpawn(async () => {
-        await yieldToUi(40);
-        return spawnInPane({ title: "Shell", paneId, accent: "green", mode: "replace" });
-      });
-    }
+    await Promise.all(
+      panes.map(async (paneId) => {
+        const leaf = findLeaf(activeWorkspace.layout, paneId);
+        if (!leaf) return;
+        if (leaf.kind === "browser" || leaf.kind === "media") return;
+        if (leaf.mediaPath || leafHasBrowser(leaf)) return;
+        if (leafTabIds(leaf).length > 0) return;
+        await yieldToUi(0);
+        await spawnInPane({ title: "Shell", paneId, accent: "green", mode: "replace" });
+      }),
+    );
   }, [activeWorkspace, spawnInPane]);
 
   const setPaneBrowserUrl = useCallback(
@@ -3026,14 +3028,16 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         const command = autoResumeAgents
           ? resolveRestoreCommand(session, agentAvailability)
           : undefined;
-        const created = await createTerminalSession({
-          cwd: session.cwd || activeWorkspace.cwd || null,
-          shell: session.shell || preferredShell.trim() || null,
-          title: session.title,
-          cols: PTY_COLS,
-          rows: PTY_ROWS,
-          initialCommand: command?.trim() || null,
-        });
+        const created = await enqueueTerminalSpawn(() =>
+          createTerminalSession({
+            cwd: session.cwd || activeWorkspace.cwd || null,
+            shell: session.shell || preferredShell.trim() || null,
+            title: session.title,
+            cols: PTY_COLS,
+            rows: PTY_ROWS,
+            initialCommand: command?.trim() || null,
+          }),
+        );
         const nextSession: TerminalSession = {
           id: created.id,
           title: created.title,
@@ -3105,7 +3109,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     ];
 
     for (const id of ordered) {
-      void enqueueTerminalSpawn(() => restoreSession(id));
+      void restoreSession(id);
     }
   }, [activeWorkspace, restoreSession, welcomeVisible]);
 
