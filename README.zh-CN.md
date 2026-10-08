@@ -32,7 +32,7 @@ Voxiva Space 可运行 Claude Code、Codex、OpenCode、Gemini CLI、Aider、Amp
 
 ## 安装
 
-从 [GitHub Releases](https://github.com/voxiva-ai/voxiva-space/releases/latest) 下载并运行 `*-setup.exe`，或在 PowerShell 中执行：
+从 [GitHub Releases](https://github.com/voxiva-ai/voxiva-space/releases) 下载并运行最新的 `*-setup.exe`，或在 PowerShell 中执行：
 
 ```powershell
 irm https://raw.githubusercontent.com/voxiva-ai/voxiva-space/main/scripts/tester-install.ps1 | iex

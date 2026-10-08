@@ -6,11 +6,14 @@ $Repo = if ($env:VOXIVA_REPO) { $env:VOXIVA_REPO } else { "voxiva-ai/voxiva-spac
 $AssetPattern = if ($env:VOXIVA_ASSET_PATTERN) { $env:VOXIVA_ASSET_PATTERN } else { "*.exe" }
 
 function Get-LatestRelease {
-  $url = "https://api.github.com/repos/$Repo/releases/latest"
-  Invoke-RestMethod -Uri $url -Headers @{
+  $url = "https://api.github.com/repos/$Repo/releases?per_page=20"
+  $releases = @(Invoke-RestMethod -Uri $url -Headers @{
     "User-Agent" = "VoxivaSpaceInstaller"
     "Accept"     = "application/vnd.github+json"
-  }
+  })
+  $release = $releases | Where-Object { -not $_.draft } | Select-Object -First 1
+  if (-not $release) { throw "No published release found." }
+  return $release
 }
 
 function Find-SpaceExe {
@@ -44,7 +47,7 @@ $asset = $rel.assets | Where-Object { $_.name -like $AssetPattern } | Select-Obj
 if (-not $asset -and $AssetPattern -ne "*.msi") {
   $asset = $rel.assets | Where-Object { $_.name -like "*.msi" } | Select-Object -First 1
 }
-if (-not $asset) { throw "No installer in latest release." }
+if (-not $asset) { throw "No installer in the newest published release." }
 
 $tmp = Join-Path $env:TEMP $asset.name
 Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tmp

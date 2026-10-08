@@ -32,7 +32,7 @@
 
 ## Установка
 
-Скачай `*-setup.exe` из [последнего релиза](https://github.com/voxiva-ai/voxiva-space/releases/latest) или выполни:
+Скачай свежий `*-setup.exe` из [GitHub Releases](https://github.com/voxiva-ai/voxiva-space/releases) или выполни:
 
 ```powershell
 irm https://raw.githubusercontent.com/voxiva-ai/voxiva-space/main/scripts/tester-install.ps1 | iex

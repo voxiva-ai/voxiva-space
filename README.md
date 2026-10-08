@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="https://github.com/voxiva-ai/voxiva-space/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/voxiva-ai/voxiva-space/ci.yml?branch=main&style=flat-square&label=build&color=2aa8ff" /></a>
-  <a href="https://github.com/voxiva-ai/voxiva-space/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/voxiva-ai/voxiva-space?style=flat-square&color=ff9c1a" /></a>
+  <a href="https://github.com/voxiva-ai/voxiva-space/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/voxiva-ai/voxiva-space?include_prereleases&sort=semver&style=flat-square&color=ff9c1a" /></a>
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-2446e8?style=flat-square" />
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-39d9ff?style=flat-square" /></a>
 </p>
@@ -43,7 +43,7 @@ Run Claude Code, Codex, OpenCode, Gemini CLI, Aider, Amp, Goose, Cursor Agent, o
 
 ### Latest Windows build
 
-Download and run the `*-setup.exe` from [GitHub Releases](https://github.com/voxiva-ai/voxiva-space/releases/latest).
+Download and run the newest `*-setup.exe` from [GitHub Releases](https://github.com/voxiva-ai/voxiva-space/releases).
 
 Or install/update from PowerShell:
 
