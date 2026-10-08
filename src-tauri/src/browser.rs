@@ -29,8 +29,8 @@ pub struct BrowserPageMeta {
 
 const INSPECTOR_SCRIPT: &str = include_str!("inspector/inject.js");
 /// Bump when inject.js ships a behavior change so cargo always relinks.
-const INSPECTOR_VERSION: u32 = 34;
-const _INSPECTOR_FORCE_RELINK: &str = "brush-v34-exclusive-modes";
+const INSPECTOR_VERSION: u32 = 38;
+const _INSPECTOR_FORCE_RELINK: &str = "brush-v37-even-pill";
 
 /// WebView2 is Chromium (Edge). Args keep panes snappy like cmux/Simux browser hosts.
 #[cfg(windows)]

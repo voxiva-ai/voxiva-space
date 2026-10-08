@@ -2,22 +2,26 @@
 [data-theme="voxiva"],
 [data-theme="default"] {
   color-scheme: dark;
-  --vs-bg: #07090e;
-  --vs-bg-raised: #0c1119;
+  --vs-bg: #06080d;
+  --vs-bg-raised: #0b1018;
   --vs-bg-hover: #151c28;
-  --vs-surface: #101722;
-  --vs-border: rgba(255, 255, 255, 0.055);
-  --vs-border-strong: rgba(255, 255, 255, 0.11);
-  --vs-text: #eef2f8;
-  --vs-muted: #8a93a8;
-  --vs-accent: #5aa6ff;
-  --vs-on-accent: #031018;
-  --vs-accent-2: #7ad7ff;
-  --vs-accent-soft: rgba(90, 166, 255, 0.14);
-  --vs-attention: #efc35a;
-  --vs-attention-ring: rgba(239, 195, 90, 0.35);
-  --vs-ok: #3fd49a;
-  --vs-danger: #ff7b7b;
+  --vs-surface: #101823;
+  --vs-border: rgba(214, 226, 246, 0.12);
+  --vs-border-strong: rgba(214, 226, 246, 0.24);
+  --vs-text: #eef4ff;
+  --vs-muted: #8f9bb0;
+  --vs-accent: #2aa8ff;
+  --vs-on-accent: #04111f;
+  --vs-accent-2: #ffae20;
+  --vs-accent-soft: rgba(42, 168, 255, 0.16);
+  --vs-attention: #ffb52e;
+  --vs-attention-ring: rgba(255, 181, 46, 0.34);
+  --vs-brand-warm: #ff9c1a;
+  --vs-brand-cyan: #39d9ff;
+  --vs-brand-blue: #2446e8;
+  --vs-brand-gradient: linear-gradient(135deg, var(--vs-brand-cyan), var(--vs-brand-blue));
+  --vs-ok: #48d597;
+  --vs-danger: #ff747f;
   --vs-radius: 10px;
   --vs-radius-sm: 7px;
   --vs-sidebar-w: 272px;
@@ -27,13 +31,13 @@
   --vs-font: "DM Sans", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --vs-mono: "JetBrains Mono", "Cascadia Code", ui-monospace, Menlo, monospace;
   --vs-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
-  --vs-term-bg: #0c1119;
-  --vs-term-fg: #e8ecf4;
-  --vs-term-cursor: #5aa6ff;
-  --vs-term-selection: #5aa6ff44;
-  --vs-term-chrome: #0c1119;
-  --vs-term-chrome-text: #eef2f8;
-  --vs-term-chrome-muted: #8a93a8;
+  --vs-term-bg: #090d13;
+  --vs-term-fg: #e9eef8;
+  --vs-term-cursor: #39d9ff;
+  --vs-term-selection: #2aa8ff42;
+  --vs-term-chrome: #0b1018;
+  --vs-term-chrome-text: #eef4ff;
+  --vs-term-chrome-muted: #8f9bb0;
 }
 
 /* Appearance-driven chrome (works for every catalog theme). */

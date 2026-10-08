@@ -1,32 +1,3 @@
-/** Bottom band of the xterm host — OpenCode / Gemini prompt + hints area. */
-const CHAT_ENTER_RATIO = 0.58;
-const CHAT_LEAVE_RATIO = 0.5;
-const CHAT_ENTER_MIN_PX = 152;
-const CHAT_LEAVE_MIN_PX = 128;
-
-/** Resolve the live xterm host inside a terminal shell. */
-function xtermHost(shell: HTMLElement): HTMLElement | null {
-  return shell.querySelector(".vs-xtermHost");
-}
-
-function hostRect(shell: HTMLElement): DOMRect | null {
-  const host = xtermHost(shell);
-  const rect = (host ?? shell).getBoundingClientRect();
-  return rect.height > 0 ? rect : null;
-}
-
-const chatSticky = new WeakMap<HTMLElement, boolean>();
-
-function chatBandPx(shell: HTMLElement, mode: "enter" | "leave") {
-  const rect = hostRect(shell);
-  if (!rect) {
-    return mode === "enter" ? CHAT_ENTER_MIN_PX : CHAT_LEAVE_MIN_PX;
-  }
-  const ratio = mode === "enter" ? CHAT_ENTER_RATIO : CHAT_LEAVE_RATIO;
-  const min = mode === "enter" ? CHAT_ENTER_MIN_PX : CHAT_LEAVE_MIN_PX;
-  return Math.max(min, rect.height * ratio);
-}
-
 /** Find agent terminal shell under pointer (xterm canvas-safe). */
 export function agentShellFromPoint(clientX: number, clientY: number): HTMLElement | null {
   const stack =
@@ -40,66 +11,37 @@ export function agentShellFromPoint(clientX: number, clientY: number): HTMLEleme
   return null;
 }
 
-/** True when the pointer is over the agent chat-input band (bottom of the terminal). */
-export function isAgentChatDropPoint(
-  shell: HTMLElement | null | undefined,
-  clientY: number,
-): boolean {
-  if (!shell?.classList.contains("is-agentChat")) return false;
-  const rect = hostRect(shell);
-  if (!rect) return false;
-  const fromBottom = rect.bottom - clientY;
-  const sticky = chatSticky.get(shell) ?? false;
-  if (sticky) {
-    if (fromBottom > chatBandPx(shell, "leave")) {
-      chatSticky.set(shell, false);
-      return false;
-    }
-    return true;
-  }
-  if (fromBottom <= chatBandPx(shell, "enter")) {
-    chatSticky.set(shell, true);
-    return true;
-  }
-  return false;
+/** Whole agent pane accepts file drops into the prompt (cmux-style). */
+export function isAgentChatDropPoint(shell: HTMLElement | null | undefined): boolean {
+  return !!shell?.classList.contains("is-agentChat");
 }
 
-/** Drop landed in chat if pointer is in band OR chat chrome was visible on release. */
-export function isAgentChatDropRelease(
-  shell: HTMLElement | null | undefined,
-  clientY: number,
-): boolean {
+/** Drop landed on an agent chat pane (or chat chrome was visible on release). */
+export function isAgentChatDropRelease(shell: HTMLElement | null | undefined): boolean {
   if (!shell) return false;
-  if (isAgentChatDropPoint(shell, clientY)) return true;
+  if (isAgentChatDropPoint(shell)) return true;
   return shell.classList.contains("is-dropChat");
 }
 
-export function resetAgentChatDropSticky(shell?: HTMLElement | null) {
-  if (shell) {
-    chatSticky.delete(shell);
-    return;
-  }
-  // WeakMap has no clear — sticky resets per shell on leave/drop via delete above.
+/** No-op kept for callers that previously cleared band sticky state. */
+export function resetAgentChatDropSticky(_shell?: HTMLElement | null) {
+  // Chat band sticky was removed — whole pane is the drop target.
 }
 
-/** Agent terminal shell under the pointer, only when in the chat band. */
+/** Agent terminal under the pointer (attach zone = entire shell). */
 export function agentChatShellAtPoint(clientX: number, clientY: number): HTMLElement | null {
-  const shell = agentShellFromPoint(clientX, clientY);
-  if (!shell || !isAgentChatDropPoint(shell, clientY)) return null;
-  return shell;
+  return agentShellFromPoint(clientX, clientY);
 }
 
-/** Agent terminal shell under the pointer, outside the chat band. */
+/** @deprecated Body vs chat band no longer split — always null. */
 export function agentPaneBodyShellAtPoint(
-  clientX: number,
-  clientY: number,
+  _clientX: number,
+  _clientY: number,
 ): HTMLElement | null {
-  const shell = agentShellFromPoint(clientX, clientY);
-  if (!shell || isAgentChatDropPoint(shell, clientY)) return null;
-  return shell;
+  return null;
 }
 
-/** Find the agent chat shell inside a pane (for drop paint when pointer is in chat band). */
+/** Find the agent chat shell inside a pane. */
 export function agentChatShellInPane(paneEl: HTMLElement): HTMLElement | null {
   return paneEl.querySelector("[data-term-drop].is-agentChat") as HTMLElement | null;
 }

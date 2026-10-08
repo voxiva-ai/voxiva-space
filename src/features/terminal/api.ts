@@ -57,12 +57,19 @@ export function checkCommands(names: string[]) {
   return invoke<Record<string, boolean>>("check_commands", { names });
 }
 
-export function resizeTerminalSession(id: string, cols: number, rows: number) {
+export function resizeTerminalSession(
+  id: string,
+  cols: number,
+  rows: number,
+  pixels?: { width: number; height: number },
+) {
   return invoke("resize_terminal_session", {
     request: {
       id,
       cols,
       rows,
+      pixel_width: pixels?.width,
+      pixel_height: pixels?.height,
     },
   });
 }

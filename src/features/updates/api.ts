@@ -16,7 +16,8 @@ export type UpdateCheckResult = {
   downloadsPage: string;
 };
 
-const RELEASE_URL = "https://voxiva.ai/api/releases/voxiva-space";
+const GH_RELEASES = "https://api.github.com/repos/voxiva-ai/voxiva-space/releases/latest";
+const SITE_RELEASE = "https://voxiva.ai/api/releases/voxiva-space";
 
 function parseSemver(v: string): [number, number, number] | null {
   const clean = v.trim().replace(/^v/i, "");
@@ -37,13 +38,47 @@ function isNewer(remote: string, local: string): boolean {
   return r[2] > l[2];
 }
 
-export async function getAppMetadata(): Promise<AppMetadata> {
-  return invoke<AppMetadata>("get_app_metadata");
+function pickExeAsset(assets: { name: string; browser_download_url: string }[] | undefined): string | null {
+  if (!assets?.length) return null;
+  const exe = assets.find((a) => /\.exe$/i.test(a.name) && /setup|nsis|x64/i.test(a.name))
+    ?? assets.find((a) => /\.exe$/i.test(a.name));
+  return exe?.browser_download_url ?? null;
 }
 
-export async function checkForUpdates(): Promise<UpdateCheckResult> {
-  const meta = await getAppMetadata();
-  const res = await fetch(RELEASE_URL, { method: "GET" });
+async function checkGitHub(meta: AppMetadata): Promise<UpdateCheckResult> {
+  const res = await fetch(GH_RELEASES, {
+    method: "GET",
+    headers: {
+      Accept: "application/vnd.github+json",
+      "User-Agent": "VoxivaSpace",
+    },
+  });
+  if (!res.ok) throw new Error(`GitHub ${res.status}`);
+  const remote = (await res.json()) as {
+    tag_name?: string;
+    name?: string;
+    body?: string;
+    html_url?: string;
+    assets?: { name: string; browser_download_url: string }[];
+  };
+  const latestVersion = (remote.tag_name || remote.name || "").replace(/^v/i, "");
+  if (!latestVersion) throw new Error("GitHub release has no version");
+  const downloadUrl =
+    pickExeAsset(remote.assets) ||
+    remote.html_url ||
+    "https://github.com/voxiva-ai/voxiva-space/releases/latest";
+  return {
+    currentVersion: meta.version,
+    latestVersion,
+    updateAvailable: isNewer(latestVersion, meta.version),
+    notes: (remote.body ?? "").trim().slice(0, 280),
+    downloadUrl,
+    downloadsPage: remote.html_url || "https://github.com/voxiva-ai/voxiva-space/releases/latest",
+  };
+}
+
+async function checkSite(meta: AppMetadata): Promise<UpdateCheckResult> {
+  const res = await fetch(SITE_RELEASE, { method: "GET" });
   if (!res.ok) throw new Error(`Update server ${res.status}`);
   const remote = (await res.json()) as {
     version: string;
@@ -59,6 +94,19 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
     downloadUrl: remote.downloadUrl,
     downloadsPage: remote.downloadsPage || "https://voxiva.ai/downloads",
   };
+}
+
+export async function getAppMetadata(): Promise<AppMetadata> {
+  return invoke<AppMetadata>("get_app_metadata");
+}
+
+export async function checkForUpdates(): Promise<UpdateCheckResult> {
+  const meta = await getAppMetadata();
+  try {
+    return await checkGitHub(meta);
+  } catch {
+    return await checkSite(meta);
+  }
 }
 
 export async function openUpdateUrl(url: string): Promise<void> {

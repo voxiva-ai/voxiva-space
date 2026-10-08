@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import markUrl from "@/assets/brand/voxiva-space-mark.svg";
+import markUrl from "@/assets/brand/voxiva-space-mark.png";
 import { AgentBrandIcon } from "@/components/agents/AgentBrandIcon";
 import { WelcomeTypedLines } from "@/components/shell/WelcomeTypedLines";
 import {

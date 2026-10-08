@@ -793,9 +793,25 @@ function PaneLeaf({
             event.clientX,
             event.clientY,
           );
-          if (zone === "chat") return;
           void (async () => {
             const files = event.dataTransfer.files;
+            if (zone === "chat") {
+              const diskPaths: string[] = [];
+              if (files?.length) {
+                for (const file of Array.from(files)) {
+                  const anyFile = file as File & { path?: string };
+                  if (anyFile.path?.trim()) diskPaths.push(anyFile.path.trim());
+                }
+              }
+              const payload = await payloadFromHtml5FileDrop(event.dataTransfer, {
+                cwd: activeWorkspace?.cwd || null,
+              });
+              void handleFileDropAt(paneId, "chat", payload ?? "", {
+                shiftKey: event.shiftKey,
+                rawPaths: diskPaths.length ? diskPaths : undefined,
+              });
+              return;
+            }
             if (files?.length) {
               for (const file of Array.from(files)) {
                 const anyFile = file as File & { path?: string };

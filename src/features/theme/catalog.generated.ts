@@ -61,6 +61,8 @@ export type ThemeDefinition = {
 };
 
 export const THEME_CATALOG: ThemeDefinition[] = [
+
+  /* ── Voxiva ── */
   {
     "id": "voxiva",
     "familyId": "voxiva",
@@ -69,55 +71,59 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "appearance": "dark",
     "tokens": {
       "appearance": "dark",
-      "bg": "#07090e",
-      "bgRaised": "#0c1119",
+      "bg": "#06080d",
+      "bgRaised": "#0b1018",
       "bgHover": "#151c28",
-      "surface": "#101722",
-      "border": "rgba(255,255,255,0.12)",
-      "borderStrong": "rgba(255,255,255,0.22)",
-      "text": "#eef2f8",
-      "muted": "#8a93a8",
-      "accent": "#5aa6ff",
-      "onAccent": "#031018",
-      "accent2": "#7ad7ff",
-      "accentSoft": "rgba(90,166,255,0.14)",
-      "attention": "#efc35a",
-      "attentionRing": "rgba(239,195,90,0.35)",
-      "ok": "#3fd49a",
-      "danger": "#ff7b7b",
-      "termBg": "#0c1119",
-      "termFg": "#e8ecf4",
-      "termCursor": "#5aa6ff",
-      "termSelection": "#5aa6ff44",
-      "termChrome": "#0c1119",
-      "termChromeText": "#eef2f8",
-      "termChromeMuted": "#8a93a8",
+      "surface": "#101823",
+      "border": "rgba(214,226,246,0.12)",
+      "borderStrong": "rgba(214,226,246,0.24)",
+      "text": "#eef4ff",
+      "muted": "#8f9bb0",
+      "accent": "#62b0ff",
+      "onAccent": "#04111f",
+      "accent2": "#6ee7d8",
+      "accentSoft": "rgba(98,176,255,0.16)",
+      "attention": "#f0c66f",
+      "attentionRing": "rgba(240,198,111,0.34)",
+      "ok": "#48d597",
+      "danger": "#ff747f",
+      "termBg": "#090d13",
+      "termFg": "#e9eef8",
+      "termCursor": "#62b0ff",
+      "termSelection": "#62b0ff42",
+      "termChrome": "#0b1018",
+      "termChromeText": "#eef4ff",
+      "termChromeMuted": "#8f9bb0",
       "preview": [
-        "#080a0f",
-        "#10151e",
-        "#4d9dff",
-        "#e9edf5"
+        "#06080d",
+        "#101823",
+        "#62b0ff",
+        "#eef4ff"
       ]
     },
     "ansi": {
-      "black": "#0c1119",
-      "red": "#ff7b7b",
-      "green": "#3fd49a",
-      "yellow": "#efc35a",
-      "blue": "#5aa6ff",
-      "magenta": "#c792ea",
-      "cyan": "#7ad7ff",
-      "white": "#e8ecf4",
-      "brightBlack": "#6b7385",
-      "brightRed": "#ff9b9b",
-      "brightGreen": "#6ee7b7",
-      "brightYellow": "#f5d78e",
-      "brightBlue": "#8bbcff",
-      "brightMagenta": "#d7a8ff",
-      "brightCyan": "#a6e8ff",
+      "black": "#090d13",
+      "red": "#ff747f",
+      "green": "#48d597",
+      "yellow": "#f0c66f",
+      "blue": "#62b0ff",
+      "magenta": "#b69cff",
+      "cyan": "#6ee7d8",
+      "white": "#e9eef8",
+      "brightBlack": "#748094",
+      "brightRed": "#ff9aa2",
+      "brightGreen": "#75e6b5",
+      "brightYellow": "#f7d995",
+      "brightBlue": "#93caff",
+      "brightMagenta": "#ccbaff",
+      "brightCyan": "#9df3e9",
       "brightWhite": "#ffffff"
     }
   },
+
+  /* ═══════════════════════════════════════════
+   * Apple Frost  ·  2 variants
+   * ═══════════════════════════════════════════ */
   {
     "id": "apple-frost",
     "familyId": "apple-frost",
@@ -140,7 +146,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "accentSoft": "#0071e329",
       "attention": "#b25000",
       "attentionRing": "#b250004d",
-      "ok": "#0066cc",
+      "ok": "#15803d",
       "danger": "#d70015",
       "termBg": "#1d1d1f",
       "termFg": "#f4f8fb",
@@ -159,7 +165,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "ansi": {
       "black": "#1d1d1f",
       "red": "#d70015",
-      "green": "#0066cc",
+      "green": "#15803d",
       "yellow": "#b25000",
       "blue": "#0071e3",
       "magenta": "#0066cc",
@@ -167,7 +173,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "white": "#f4f8fb",
       "brightBlack": "#6e6e73",
       "brightRed": "#d70015",
-      "brightGreen": "#0066cc",
+      "brightGreen": "#15803d",
       "brightYellow": "#b25000",
       "brightBlue": "#0071e3",
       "brightMagenta": "#0066cc",
@@ -188,7 +194,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "bgHover": "#1d1d1f",
       "surface": "#1d1d1f",
       "border": "#3333332e",
-      "borderStrong": "#33333347",
+      "borderStrong": "#3333334d",
       "text": "#f5f5f7",
       "muted": "#8e8e93",
       "accent": "#0a84ff",
@@ -197,7 +203,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "accentSoft": "#0a84ff29",
       "attention": "#ff9f0a",
       "attentionRing": "#ff9f0a4d",
-      "ok": "#2997ff",
+      "ok": "#3fd49a",
       "danger": "#ff453a",
       "termBg": "#000000",
       "termFg": "#f4f8fb",
@@ -216,7 +222,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "ansi": {
       "black": "#000000",
       "red": "#ff453a",
-      "green": "#2997ff",
+      "green": "#3fd49a",
       "yellow": "#ff9f0a",
       "blue": "#0a84ff",
       "magenta": "#2997ff",
@@ -224,7 +230,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "white": "#f4f8fb",
       "brightBlack": "#8e8e93",
       "brightRed": "#ff453a",
-      "brightGreen": "#2997ff",
+      "brightGreen": "#3fd49a",
       "brightYellow": "#ff9f0a",
       "brightBlue": "#0a84ff",
       "brightMagenta": "#2997ff",
@@ -232,6 +238,10 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "brightWhite": "#ffffff"
     }
   },
+
+  /* ═══════════════════════════════════════════
+   * Espresso  ·  2 variants
+   * ═══════════════════════════════════════════ */
   {
     "id": "espresso",
     "familyId": "espresso",
@@ -245,7 +255,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "bgHover": "#3c3129",
       "surface": "#2c231d",
       "border": "#3c31292e",
-      "borderStrong": "#3c312947",
+      "borderStrong": "#3c31294d",
       "text": "#e8dcd0",
       "muted": "#b3a191",
       "accent": "#c58d5f",
@@ -254,7 +264,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "accentSoft": "#c58d5f29",
       "attention": "#efc35a",
       "attentionRing": "#efc35a4d",
-      "ok": "#07090e",
+      "ok": "#3fd49a",
       "danger": "#ff7b7b",
       "termBg": "#201913",
       "termFg": "#e8dcd0",
@@ -273,7 +283,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "ansi": {
       "black": "#201913",
       "red": "#ff7b7b",
-      "green": "#07090e",
+      "green": "#3fd49a",
       "yellow": "#efc35a",
       "blue": "#c58d5f",
       "magenta": "#c58d5f",
@@ -281,7 +291,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "white": "#e8dcd0",
       "brightBlack": "#b3a191",
       "brightRed": "#ff7b7b",
-      "brightGreen": "#07090e",
+      "brightGreen": "#3fd49a",
       "brightYellow": "#efc35a",
       "brightBlue": "#c58d5f",
       "brightMagenta": "#c58d5f",
@@ -307,11 +317,11 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "muted": "#7c6a5d",
       "accent": "#8c5a3c",
       "onAccent": "#ffffff",
-      "accent2": "#07090e",
+      "accent2": "#8c5a3c",
       "accentSoft": "#8c5a3c29",
       "attention": "#efc35a",
       "attentionRing": "#efc35a4d",
-      "ok": "#07090e",
+      "ok": "#15803d",
       "danger": "#ff7b7b",
       "termBg": "#f3ede4",
       "termFg": "#3b2f2a",
@@ -330,22 +340,26 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "ansi": {
       "black": "#f3ede4",
       "red": "#ff7b7b",
-      "green": "#07090e",
+      "green": "#15803d",
       "yellow": "#efc35a",
       "blue": "#8c5a3c",
-      "magenta": "#07090e",
-      "cyan": "#07090e",
+      "magenta": "#8c5a3c",
+      "cyan": "#8c5a3c",
       "white": "#3b2f2a",
       "brightBlack": "#7c6a5d",
       "brightRed": "#ff7b7b",
-      "brightGreen": "#07090e",
+      "brightGreen": "#15803d",
       "brightYellow": "#efc35a",
       "brightBlue": "#8c5a3c",
-      "brightMagenta": "#07090e",
-      "brightCyan": "#07090e",
+      "brightMagenta": "#8c5a3c",
+      "brightCyan": "#8c5a3c",
       "brightWhite": "#020617"
     }
   },
+
+  /* ═══════════════════════════════════════════
+   * Fjord  ·  2 variants
+   * ═══════════════════════════════════════════ */
   {
     "id": "fjord",
     "familyId": "fjord",
@@ -364,11 +378,11 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "muted": "#5e6a7e",
       "accent": "#5e81ac",
       "onAccent": "#ffffff",
-      "accent2": "#07090e",
+      "accent2": "#5e81ac",
       "accentSoft": "#5e81ac29",
       "attention": "#efc35a",
       "attentionRing": "#efc35a4d",
-      "ok": "#07090e",
+      "ok": "#15803d",
       "danger": "#ff7b7b",
       "termBg": "#eceff4",
       "termFg": "#2e3440",
@@ -387,19 +401,19 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "ansi": {
       "black": "#eceff4",
       "red": "#ff7b7b",
-      "green": "#07090e",
+      "green": "#15803d",
       "yellow": "#efc35a",
       "blue": "#5e81ac",
-      "magenta": "#07090e",
-      "cyan": "#07090e",
+      "magenta": "#5e81ac",
+      "cyan": "#5e81ac",
       "white": "#2e3440",
       "brightBlack": "#5e6a7e",
       "brightRed": "#ff7b7b",
-      "brightGreen": "#07090e",
+      "brightGreen": "#15803d",
       "brightYellow": "#efc35a",
       "brightBlue": "#5e81ac",
-      "brightMagenta": "#07090e",
-      "brightCyan": "#07090e",
+      "brightMagenta": "#5e81ac",
+      "brightCyan": "#5e81ac",
       "brightWhite": "#020617"
     }
   },
@@ -416,7 +430,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "bgHover": "#434c5e",
       "surface": "#353c4a",
       "border": "#434c5e2e",
-      "borderStrong": "#434c5e47",
+      "borderStrong": "#434c5e4d",
       "text": "#eceff4",
       "muted": "#a3aec2",
       "accent": "#88c0d0",
@@ -425,7 +439,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "accentSoft": "#88c0d029",
       "attention": "#efc35a",
       "attentionRing": "#efc35a4d",
-      "ok": "#07090e",
+      "ok": "#3fd49a",
       "danger": "#ff7b7b",
       "termBg": "#2b303b",
       "termFg": "#eceff4",
@@ -444,7 +458,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "ansi": {
       "black": "#2b303b",
       "red": "#ff7b7b",
-      "green": "#07090e",
+      "green": "#3fd49a",
       "yellow": "#efc35a",
       "blue": "#88c0d0",
       "magenta": "#88c0d0",
@@ -452,7 +466,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "white": "#eceff4",
       "brightBlack": "#a3aec2",
       "brightRed": "#ff7b7b",
-      "brightGreen": "#07090e",
+      "brightGreen": "#3fd49a",
       "brightYellow": "#efc35a",
       "brightBlue": "#88c0d0",
       "brightMagenta": "#88c0d0",
@@ -460,6 +474,8 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "brightWhite": "#ffffff"
     }
   },
+
+  /* ── Miami Nights ── */
   {
     "id": "miami-nights",
     "familyId": "miami-nights",
@@ -473,7 +489,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "bgHover": "#2c2050",
       "surface": "#1e1538",
       "border": "#2c20502e",
-      "borderStrong": "#2c205047",
+      "borderStrong": "#2c20504d",
       "text": "#f3e9ff",
       "muted": "#a78fc9",
       "accent": "#ff5fa2",
@@ -482,7 +498,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "accentSoft": "#ff5fa229",
       "attention": "#ffb454",
       "attentionRing": "#ffb4544d",
-      "ok": "#07090e",
+      "ok": "#3fd49a",
       "danger": "#ff4d6d",
       "termBg": "#120c22",
       "termFg": "#e8dcff",
@@ -501,7 +517,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "ansi": {
       "black": "#120c22",
       "red": "#ff4d6d",
-      "green": "#07090e",
+      "green": "#3fd49a",
       "yellow": "#ffb454",
       "blue": "#ff5fa2",
       "magenta": "#3be8f0",
@@ -509,7 +525,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "white": "#e8dcff",
       "brightBlack": "#a78fc9",
       "brightRed": "#ff4d6d",
-      "brightGreen": "#07090e",
+      "brightGreen": "#3fd49a",
       "brightYellow": "#ffb454",
       "brightBlue": "#ff5fa2",
       "brightMagenta": "#3be8f0",
@@ -517,6 +533,8 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "brightWhite": "#ffffff"
     }
   },
+
+  /* ── Midnight Harbor ── */
   {
     "id": "midnight-harbor",
     "familyId": "midnight-harbor",
@@ -530,7 +548,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "bgHover": "#1a2029",
       "surface": "#151a23",
       "border": "#232a362e",
-      "borderStrong": "#232a3647",
+      "borderStrong": "#232a364d",
       "text": "#d6dce6",
       "muted": "#8a94a6",
       "accent": "#7aa2f7",
@@ -539,7 +557,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "accentSoft": "#7aa2f729",
       "attention": "#efc35a",
       "attentionRing": "#efc35a4d",
-      "ok": "#07090e",
+      "ok": "#3fd49a",
       "danger": "#ff7b7b",
       "termBg": "#0b0e14",
       "termFg": "#d6dce6",
@@ -558,7 +576,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "ansi": {
       "black": "#0b0e14",
       "red": "#ff7b7b",
-      "green": "#07090e",
+      "green": "#3fd49a",
       "yellow": "#efc35a",
       "blue": "#7aa2f7",
       "magenta": "#7aa2f7",
@@ -566,7 +584,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "white": "#d6dce6",
       "brightBlack": "#8a94a6",
       "brightRed": "#ff7b7b",
-      "brightGreen": "#07090e",
+      "brightGreen": "#3fd49a",
       "brightYellow": "#efc35a",
       "brightBlue": "#7aa2f7",
       "brightMagenta": "#7aa2f7",
@@ -574,6 +592,10 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "brightWhite": "#ffffff"
     }
   },
+
+  /* ═══════════════════════════════════════════
+   * NieR: Automata  ·  2 variants
+   * ═══════════════════════════════════════════ */
   {
     "id": "nier-automata",
     "familyId": "nier-automata",
@@ -596,7 +618,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "accentSoft": "#211f1b29",
       "attention": "#a08e42",
       "attentionRing": "#a08e424d",
-      "ok": "#211f1b",
+      "ok": "#15803d",
       "danger": "#a94a38",
       "termBg": "#ccc8b1",
       "termFg": "#211f1b",
@@ -615,7 +637,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "ansi": {
       "black": "#ccc8b1",
       "red": "#a94a38",
-      "green": "#211f1b",
+      "green": "#15803d",
       "yellow": "#a08e42",
       "blue": "#211f1b",
       "magenta": "#211f1b",
@@ -623,7 +645,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "white": "#211f1b",
       "brightBlack": "#4d4b3f",
       "brightRed": "#a94a38",
-      "brightGreen": "#211f1b",
+      "brightGreen": "#15803d",
       "brightYellow": "#a08e42",
       "brightBlue": "#211f1b",
       "brightMagenta": "#211f1b",
@@ -644,7 +666,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "bgHover": "#33312a",
       "surface": "#36342c",
       "border": "#4f4d452e",
-      "borderStrong": "#4f4d4547",
+      "borderStrong": "#4f4d454d",
       "text": "#d1cdb7",
       "muted": "#a8a593",
       "accent": "#d1cdb7",
@@ -653,7 +675,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "accentSoft": "#d1cdb729",
       "attention": "#c2b169",
       "attentionRing": "#c2b1694d",
-      "ok": "#b5b096",
+      "ok": "#3fd49a",
       "danger": "#c96b57",
       "termBg": "#2b2923",
       "termFg": "#d1cdb7",
@@ -672,7 +694,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "ansi": {
       "black": "#2b2923",
       "red": "#c96b57",
-      "green": "#b5b096",
+      "green": "#3fd49a",
       "yellow": "#c2b169",
       "blue": "#d1cdb7",
       "magenta": "#b5b096",
@@ -680,7 +702,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "white": "#d1cdb7",
       "brightBlack": "#a8a593",
       "brightRed": "#c96b57",
-      "brightGreen": "#b5b096",
+      "brightGreen": "#3fd49a",
       "brightYellow": "#c2b169",
       "brightBlue": "#d1cdb7",
       "brightMagenta": "#b5b096",
@@ -688,6 +710,10 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "brightWhite": "#ffffff"
     }
   },
+
+  /* ═══════════════════════════════════════════
+   * One Dark Pro  ·  2 variants
+   * ═══════════════════════════════════════════ */
   {
     "id": "one-dark-pro-night-flat",
     "familyId": "one-dark-pro-night-flat",
@@ -701,7 +727,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "bgHover": "#2c313a",
       "surface": "#1e2227",
       "border": "#3e44522e",
-      "borderStrong": "#3e445247",
+      "borderStrong": "#3e44524d",
       "text": "#abb2bf",
       "muted": "#6c7482",
       "accent": "#4d78cc",
@@ -802,6 +828,10 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "brightWhite": "#020617"
     }
   },
+
+  /* ═══════════════════════════════════════════
+   * Paper Ember  ·  2 variants
+   * ═══════════════════════════════════════════ */
   {
     "id": "paper-ember",
     "familyId": "paper-ember",
@@ -820,11 +850,11 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "muted": "#8a817a",
       "accent": "#c2571f",
       "onAccent": "#ffffff",
-      "accent2": "#07090e",
+      "accent2": "#c2571f",
       "accentSoft": "#c2571f29",
       "attention": "#efc35a",
       "attentionRing": "#efc35a4d",
-      "ok": "#07090e",
+      "ok": "#15803d",
       "danger": "#ff7b7b",
       "termBg": "#faf6f0",
       "termFg": "#44403c",
@@ -843,19 +873,19 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "ansi": {
       "black": "#faf6f0",
       "red": "#ff7b7b",
-      "green": "#07090e",
+      "green": "#15803d",
       "yellow": "#efc35a",
       "blue": "#c2571f",
-      "magenta": "#07090e",
-      "cyan": "#07090e",
+      "magenta": "#c2571f",
+      "cyan": "#c2571f",
       "white": "#44403c",
       "brightBlack": "#8a817a",
       "brightRed": "#ff7b7b",
-      "brightGreen": "#07090e",
+      "brightGreen": "#15803d",
       "brightYellow": "#efc35a",
       "brightBlue": "#c2571f",
-      "brightMagenta": "#07090e",
-      "brightCyan": "#07090e",
+      "brightMagenta": "#c2571f",
+      "brightCyan": "#c2571f",
       "brightWhite": "#020617"
     }
   },
@@ -872,7 +902,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "bgHover": "#2a2725",
       "surface": "#242120",
       "border": "#33302c2e",
-      "borderStrong": "#33302c47",
+      "borderStrong": "#33302c4d",
       "text": "#e7e5e4",
       "muted": "#a8a29e",
       "accent": "#ea884b",
@@ -881,7 +911,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "accentSoft": "#ea884b29",
       "attention": "#efc35a",
       "attentionRing": "#efc35a4d",
-      "ok": "#07090e",
+      "ok": "#3fd49a",
       "danger": "#ff7b7b",
       "termBg": "#1c1917",
       "termFg": "#e7e5e4",
@@ -900,7 +930,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "ansi": {
       "black": "#1c1917",
       "red": "#ff7b7b",
-      "green": "#07090e",
+      "green": "#3fd49a",
       "yellow": "#efc35a",
       "blue": "#ea884b",
       "magenta": "#ea884b",
@@ -908,7 +938,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "white": "#e7e5e4",
       "brightBlack": "#a8a29e",
       "brightRed": "#ff7b7b",
-      "brightGreen": "#07090e",
+      "brightGreen": "#3fd49a",
       "brightYellow": "#efc35a",
       "brightBlue": "#ea884b",
       "brightMagenta": "#ea884b",
@@ -916,6 +946,8 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "brightWhite": "#ffffff"
     }
   },
+
+  /* ── Phosphor ── */
   {
     "id": "phosphor",
     "familyId": "phosphor",
@@ -929,7 +961,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "bgHover": "#1c3322",
       "surface": "#0b140c",
       "border": "#1c33222e",
-      "borderStrong": "#1c332247",
+      "borderStrong": "#1c33224d",
       "text": "#a5efb7",
       "muted": "#549a67",
       "accent": "#3dff7c",
@@ -938,7 +970,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "accentSoft": "#3dff7c29",
       "attention": "#efc35a",
       "attentionRing": "#efc35a4d",
-      "ok": "#07090e",
+      "ok": "#3fd49a",
       "danger": "#ff7b7b",
       "termBg": "#050a05",
       "termFg": "#a5efb7",
@@ -957,7 +989,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "ansi": {
       "black": "#050a05",
       "red": "#ff7b7b",
-      "green": "#07090e",
+      "green": "#3fd49a",
       "yellow": "#efc35a",
       "blue": "#3dff7c",
       "magenta": "#3dff7c",
@@ -965,7 +997,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "white": "#a5efb7",
       "brightBlack": "#549a67",
       "brightRed": "#ff7b7b",
-      "brightGreen": "#07090e",
+      "brightGreen": "#3fd49a",
       "brightYellow": "#efc35a",
       "brightBlue": "#3dff7c",
       "brightMagenta": "#3dff7c",
@@ -973,6 +1005,8 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "brightWhite": "#ffffff"
     }
   },
+
+  /* ── Poimandres ── */
   {
     "id": "poimandres-dark-theme",
     "familyId": "poimandres-dark-theme",
@@ -986,7 +1020,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "bgHover": "#262934",
       "surface": "#1b1e28",
       "border": "#3a3e4d2e",
-      "borderStrong": "#3a3e4d47",
+      "borderStrong": "#3a3e4d4d",
       "text": "#bfc3db",
       "muted": "#8c8e94",
       "accent": "#89ddff",
@@ -1030,6 +1064,8 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "brightWhite": "#ffffff"
     }
   },
+
+  /* ── Rosé Pine Dawn ── */
   {
     "id": "rose-pine-dawn",
     "familyId": "rose-pine-dawn",
@@ -1087,6 +1123,10 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "brightWhite": "#020617"
     }
   },
+
+  /* ═══════════════════════════════════════════
+   * Sakura  ·  2 variants
+   * ═══════════════════════════════════════════ */
   {
     "id": "sakura",
     "familyId": "sakura",
@@ -1105,11 +1145,11 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "muted": "#8a6675",
       "accent": "#b83d72",
       "onAccent": "#ffffff",
-      "accent2": "#07090e",
+      "accent2": "#b83d72",
       "accentSoft": "#b83d7229",
       "attention": "#efc35a",
       "attentionRing": "#efc35a4d",
-      "ok": "#07090e",
+      "ok": "#15803d",
       "danger": "#ff7b7b",
       "termBg": "#fbf3f5",
       "termFg": "#432b36",
@@ -1128,19 +1168,19 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "ansi": {
       "black": "#fbf3f5",
       "red": "#ff7b7b",
-      "green": "#07090e",
+      "green": "#15803d",
       "yellow": "#efc35a",
       "blue": "#b83d72",
-      "magenta": "#07090e",
-      "cyan": "#07090e",
+      "magenta": "#b83d72",
+      "cyan": "#b83d72",
       "white": "#432b36",
       "brightBlack": "#8a6675",
       "brightRed": "#ff7b7b",
-      "brightGreen": "#07090e",
+      "brightGreen": "#15803d",
       "brightYellow": "#efc35a",
       "brightBlue": "#b83d72",
-      "brightMagenta": "#07090e",
-      "brightCyan": "#07090e",
+      "brightMagenta": "#b83d72",
+      "brightCyan": "#b83d72",
       "brightWhite": "#020617"
     }
   },
@@ -1157,7 +1197,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "bgHover": "#3c2a36",
       "surface": "#2c1e28",
       "border": "#3c2a362e",
-      "borderStrong": "#3c2a3647",
+      "borderStrong": "#3c2a364d",
       "text": "#eedbe4",
       "muted": "#b18ea0",
       "accent": "#e88fb4",
@@ -1166,7 +1206,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "accentSoft": "#e88fb429",
       "attention": "#efc35a",
       "attentionRing": "#efc35a4d",
-      "ok": "#07090e",
+      "ok": "#3fd49a",
       "danger": "#ff7b7b",
       "termBg": "#20151d",
       "termFg": "#eedbe4",
@@ -1185,7 +1225,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "ansi": {
       "black": "#20151d",
       "red": "#ff7b7b",
-      "green": "#07090e",
+      "green": "#3fd49a",
       "yellow": "#efc35a",
       "blue": "#e88fb4",
       "magenta": "#e88fb4",
@@ -1193,7 +1233,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "white": "#eedbe4",
       "brightBlack": "#b18ea0",
       "brightRed": "#ff7b7b",
-      "brightGreen": "#07090e",
+      "brightGreen": "#3fd49a",
       "brightYellow": "#efc35a",
       "brightBlue": "#e88fb4",
       "brightMagenta": "#e88fb4",
@@ -1201,6 +1241,10 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "brightWhite": "#ffffff"
     }
   },
+
+  /* ═══════════════════════════════════════════
+   * Whirl  ·  2 variants
+   * ═══════════════════════════════════════════ */
   {
     "id": "whirl",
     "familyId": "whirl",
@@ -1214,7 +1258,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "bgHover": "#1e1e1f",
       "surface": "#1c1c1c",
       "border": "#2a2a2b2e",
-      "borderStrong": "#2a2a2b47",
+      "borderStrong": "#2a2a2b4d",
       "text": "#f0f0f0",
       "muted": "#888888",
       "accent": "#dedede",
@@ -1280,7 +1324,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "accentSoft": "#0f0f0f29",
       "attention": "#b45309",
       "attentionRing": "#b453094d",
-      "ok": "#1c6fca",
+      "ok": "#15803d",
       "danger": "#e7000b",
       "termBg": "#fbfbfc",
       "termFg": "#1f1f1f",
@@ -1299,7 +1343,7 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     "ansi": {
       "black": "#fbfbfc",
       "red": "#e7000b",
-      "green": "#1c6fca",
+      "green": "#15803d",
       "yellow": "#b45309",
       "blue": "#0f0f0f",
       "magenta": "#1c6fca",
@@ -1307,14 +1351,14 @@ export const THEME_CATALOG: ThemeDefinition[] = [
       "white": "#1f1f1f",
       "brightBlack": "#696969",
       "brightRed": "#e7000b",
-      "brightGreen": "#1c6fca",
+      "brightGreen": "#15803d",
       "brightYellow": "#b45309",
       "brightBlue": "#0f0f0f",
       "brightMagenta": "#1c6fca",
       "brightCyan": "#1c6fca",
       "brightWhite": "#020617"
     }
-  }
+  },
 ];
 
 export const THEME_IDS = THEME_CATALOG.map((t) => t.id);

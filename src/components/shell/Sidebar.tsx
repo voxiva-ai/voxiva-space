@@ -14,7 +14,7 @@ import { PromptDialog } from "@/components/PromptDialog";
 import { clientError } from "@/lib/errors";
 import { savedLayoutPaneCount } from "@/features/workspace/savedLayouts";
 import { Pin01, Pin02 } from "@untitledui/icons";
-import logoUrl from "@/assets/brand/voxiva-space-mark.svg";
+import logoUrl from "@/assets/brand/voxiva-space-mark.png";
 import { formatHotkey, loadHotkeys } from "@/features/hotkeys/bindings";
 
 function orderWorkspaces<T extends { pinned?: boolean }>(list: T[]) {

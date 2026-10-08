@@ -3,7 +3,7 @@ import { formatPathsForPty, quoteForShell } from "./drop";
 
 /** Bracketed paste so OpenCode/TUIs treat the payload as one paste, not keystrokes. */
 export function bracketedPaste(text: string) {
-  return `\x1b[200~${text}\x1b[201~`;
+  return `\x1b[200~${text.replace(/\r\n?/g, "\n")}\x1b[201~`;
 }
 
 /** Forward slashes + quoting — what OpenCode / Gemini expect for `@` file refs on Windows. */
@@ -14,13 +14,18 @@ export function formatAtMentionPath(path: string) {
   return `@${norm}`;
 }
 
-/** Codex likes bracketed paste; OpenCode/Gemini TUIs need raw `@path` keystrokes. */
+/** Codex likes bracketed paste; many Ink TUIs (Gemini) need plain text in the prompt. */
 export function wrapAgentPaste(agentId: string, payload: string) {
   const trimmed = payload.trimEnd();
   if (!trimmed) return payload;
   const isAtAttach = trimmed.split(/\s+/).some((part) => part.startsWith("@"));
   if (isAtAttach && agentId !== "codex") {
+    // Path mentions must land as keystrokes, not a bracketed blob.
     return `${trimmed} `;
+  }
+  // Gemini / Amp prompt boxes ignore or garble bracketed paste.
+  if (agentId === "gemini" || agentId === "amp" || agentId === "goose") {
+    return trimmed.replace(/\r\n?/g, "\n");
   }
   return bracketedPaste(payload);
 }
@@ -208,6 +213,9 @@ export async function payloadFromClipboardSnapshot(
 
   // Fallback when paste event had no items (some WebView2 builds).
   try {
+    const text = await navigator.clipboard?.readText?.();
+    if (text) return text;
+
     if (!navigator.clipboard?.read) return null;
     const items = await navigator.clipboard.read();
     const paths: string[] = [];

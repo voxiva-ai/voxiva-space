@@ -1,5 +1,3 @@
-import { isAgentChatDropPoint } from "@/features/agents/agentChatDrop";
-
 /** MIME for workspace / absolute file paths dropped into a terminal. */
 export const VOXIVA_PATH_MIME = "application/x-voxiva-path";
 /** MIME for editor selection / multiline text (not a path). */
@@ -128,9 +126,7 @@ function targetAtPoint(clientX: number, clientY: number): OsDropTarget | null {
   if (!hit) return null;
   const shell = hit.closest("[data-term-drop]") as HTMLElement | null;
   if (!shell) return null;
-  if (shell.classList.contains("is-agentChat") && !isAgentChatDropPoint(shell, clientY)) {
-    return null;
-  }
+  // Agent panes accept file drops anywhere (paste as @path). Plain shells too.
   const id = shell.getAttribute("data-term-drop");
   if (!id) return null;
   return osTargets.get(id) ?? null;

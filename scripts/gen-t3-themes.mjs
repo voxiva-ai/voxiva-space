@@ -73,16 +73,25 @@ function fetchText(url) {
 }
 
 async function ensureThemes() {
-  fs.rmSync(dir, { recursive: true, force: true });
-  fs.mkdirSync(dir, { recursive: true });
-  const listing = await fetchJson(api);
+  let listing;
+  try {
+    listing = await fetchJson(api);
+  } catch (err) {
+    if (fs.existsSync(dir) && fs.readdirSync(dir).some((f) => f.endsWith(".json"))) return;
+    throw err;
+  }
+  const tmp = `${dir}.tmp`;
+  fs.rmSync(tmp, { recursive: true, force: true });
+  fs.mkdirSync(tmp, { recursive: true });
   for (const file of listing) {
     if (!file.name?.endsWith(".json") || !file.download_url) continue;
     const id = file.name.replace(/\.json$/, "");
     if (!ALLOWED.has(id)) continue;
     const body = await fetchText(file.download_url);
-    fs.writeFileSync(path.join(dir, file.name), body);
+    fs.writeFileSync(path.join(tmp, file.name), body);
   }
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.renameSync(tmp, dir);
 }
 
 function hexAlpha(hex, a) {
@@ -157,20 +166,11 @@ function mapColors(c, appearance) {
     contrastRatio("#ffffff", accent) >= 2.2
       ? "#ffffff"
       : solid(c.accentForeground || canvas);
-  const accent2 = solid(
-    contrastRatio(solid(c.update || ""), canvas) >= 2.2
-      ? c.update
-      : c.messageAction || accent,
-  );
+  const update = c.update ? solid(c.update) : "";
+  const messageAction = c.messageAction ? solid(c.messageAction) : "";
+  const accent2 = update && contrastRatio(update, canvas) >= 2.2 ? update : messageAction || accent;
   const danger = solid(c.error || "#ff7b7b");
-  const okCandidate = solid(c.update || "");
-  const okFinal = /^#(1b4ed8|3987e5|4d78cc|7aa2f7|286983|5e81ac|0071e3|89ddff)/i.test(
-    okCandidate,
-  )
-    ? appearance === "light"
-      ? "#15803d"
-      : "#3fd49a"
-    : okCandidate || (appearance === "light" ? "#15803d" : "#3fd49a");
+  const okFinal = semanticGreen(c.success || c.gitModified || c.update, appearance !== "light");
   const attention = solid(c.warning || "#efc35a");
   const termBg = solid(c.terminalBackground || c.codeBackground || raised);
   const termFg = solid(c.terminalForeground || text);
@@ -223,6 +223,11 @@ function forceGreen(hex, dark) {
   return dark ? "#3fd49a" : "#15803d";
 }
 
+function semanticGreen(hex, dark) {
+  const value = hex ? solid(hex) : "";
+  return /^#[0-9a-f]{6}$/i.test(value) ? forceGreen(value, dark) : dark ? "#3fd49a" : "#15803d";
+}
+
 function ansiFrom(tokens) {
   const dark = tokens.appearance !== "light";
   return {
@@ -262,30 +267,30 @@ function buildCatalog(files) {
   const entries = [];
   const voxivaTokens = {
     appearance: "dark",
-    bg: "#07090e",
-    bgRaised: "#0c1119",
+    bg: "#06080d",
+    bgRaised: "#0b1018",
     bgHover: "#151c28",
-    surface: "#101722",
-    border: "rgba(255,255,255,0.12)",
-    borderStrong: "rgba(255,255,255,0.22)",
-    text: "#eef2f8",
-    muted: "#8a93a8",
-    accent: "#5aa6ff",
-    onAccent: "#031018",
-    accent2: "#7ad7ff",
-    accentSoft: "rgba(90,166,255,0.14)",
-    attention: "#efc35a",
-    attentionRing: "rgba(239,195,90,0.35)",
-    ok: "#3fd49a",
-    danger: "#ff7b7b",
-    termBg: "#0c1119",
-    termFg: "#e8ecf4",
-    termCursor: "#5aa6ff",
-    termSelection: "#5aa6ff44",
-    termChrome: "#0c1119",
-    termChromeText: "#eef2f8",
-    termChromeMuted: "#8a93a8",
-    preview: ["#080a0f", "#10151e", "#4d9dff", "#e9edf5"],
+    surface: "#101823",
+    border: "rgba(214,226,246,0.12)",
+    borderStrong: "rgba(214,226,246,0.24)",
+    text: "#eef4ff",
+    muted: "#8f9bb0",
+    accent: "#62b0ff",
+    onAccent: "#04111f",
+    accent2: "#6ee7d8",
+    accentSoft: "rgba(98,176,255,0.16)",
+    attention: "#f0c66f",
+    attentionRing: "rgba(240,198,111,0.34)",
+    ok: "#48d597",
+    danger: "#ff747f",
+    termBg: "#090d13",
+    termFg: "#e9eef8",
+    termCursor: "#62b0ff",
+    termSelection: "#62b0ff42",
+    termChrome: "#0b1018",
+    termChromeText: "#eef4ff",
+    termChromeMuted: "#8f9bb0",
+    preview: ["#06080d", "#101823", "#62b0ff", "#eef4ff"],
   };
   entries.push({
     id: "voxiva",
@@ -295,21 +300,21 @@ function buildCatalog(files) {
     appearance: "dark",
     tokens: voxivaTokens,
     ansi: {
-      black: "#0c1119",
-      red: "#ff7b7b",
-      green: "#3fd49a",
-      yellow: "#efc35a",
-      blue: "#5aa6ff",
-      magenta: "#c792ea",
-      cyan: "#7ad7ff",
-      white: "#e8ecf4",
-      brightBlack: "#6b7385",
-      brightRed: "#ff9b9b",
-      brightGreen: "#6ee7b7",
-      brightYellow: "#f5d78e",
-      brightBlue: "#8bbcff",
-      brightMagenta: "#d7a8ff",
-      brightCyan: "#a6e8ff",
+      black: "#090d13",
+      red: "#ff747f",
+      green: "#48d597",
+      yellow: "#f0c66f",
+      blue: "#62b0ff",
+      magenta: "#b69cff",
+      cyan: "#6ee7d8",
+      white: "#e9eef8",
+      brightBlack: "#748094",
+      brightRed: "#ff9aa2",
+      brightGreen: "#75e6b5",
+      brightYellow: "#f7d995",
+      brightBlue: "#93caff",
+      brightMagenta: "#ccbaff",
+      brightCyan: "#9df3e9",
       brightWhite: "#ffffff",
     },
   });

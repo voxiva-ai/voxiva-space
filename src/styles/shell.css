@@ -25,7 +25,8 @@
   min-width: 0;
   border-right: 1px solid var(--vs-border);
   background:
-    radial-gradient(ellipse 80% 40% at 0% 0%, color-mix(in srgb, var(--vs-accent) 10%, transparent), transparent 55%),
+    radial-gradient(ellipse 85% 42% at 0% 0%, color-mix(in srgb, var(--vs-brand-cyan) 10%, transparent), transparent 58%),
+    radial-gradient(ellipse 70% 34% at 0% 100%, color-mix(in srgb, var(--vs-brand-warm) 6%, transparent), transparent 62%),
     var(--vs-bg-raised);
 }
 
@@ -298,9 +299,10 @@
 .vs-sidebarLogo {
   width: 20px;
   height: 20px;
-  border-radius: 5px;
   display: block;
   flex-shrink: 0;
+  object-fit: contain;
+  filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.28));
 }
 
 .vs-brandName {
@@ -333,8 +335,8 @@
 .vs-railLogo {
   width: 22px;
   height: 22px;
-  border-radius: 6px;
   display: block;
+  object-fit: contain;
 }
 
 .vs-railWorkspaces {

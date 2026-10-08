@@ -642,6 +642,11 @@ struct ResizeTerminalSessionRequest {
     id: String,
     cols: u16,
     rows: u16,
+    /// Physical cell grid in CSS pixels — ConPTY / Ink TUIs need this to avoid clipping.
+    #[serde(default)]
+    pixel_width: Option<u16>,
+    #[serde(default)]
+    pixel_height: Option<u16>,
 }
 
 #[derive(Clone, Serialize)]
@@ -1042,13 +1047,21 @@ fn friendly_spawn_error(raw: &str) -> String {
     "Couldn't open the terminal. Try again or choose another project folder.".into()
 }
 
-fn normalize_size(cols: Option<u16>, rows: Option<u16>) -> PtySize {
+fn normalize_size(
+    cols: Option<u16>,
+    rows: Option<u16>,
+    pixel_width: Option<u16>,
+    pixel_height: Option<u16>,
+) -> PtySize {
+    let cols = cols.unwrap_or(80).clamp(2, 500);
+    let rows = rows.unwrap_or(24).clamp(2, 200);
     PtySize {
         // Match FitAddon output closely — asymmetric clamps desync TUI apps like OpenCode.
-        cols: cols.unwrap_or(80).clamp(2, 500),
-        rows: rows.unwrap_or(24).clamp(2, 200),
-        pixel_width: 0,
-        pixel_height: 0,
+        cols,
+        rows,
+        // Real pixel size lets ConPTY / Gemini / Ink size alt-screens correctly.
+        pixel_width: pixel_width.unwrap_or(0),
+        pixel_height: pixel_height.unwrap_or(0),
     }
 }
 
@@ -1090,7 +1103,7 @@ fn create_terminal_session(
     };
 
     let pty_system = native_pty_system();
-    let size = normalize_size(request.cols, request.rows);
+    let size = normalize_size(request.cols, request.rows, None, None);
 
     let mut last_error = String::from("No shell available");
     let mut started = None;
@@ -1311,7 +1324,12 @@ fn resize_terminal_session(
         .ok_or_else(|| "Terminal session not found".to_string())?;
     session
         .master
-        .resize(normalize_size(Some(request.cols), Some(request.rows)))
+        .resize(normalize_size(
+            Some(request.cols),
+            Some(request.rows),
+            request.pixel_width,
+            request.pixel_height,
+        ))
         .map_err(|error| format!("Failed to resize terminal: {error}"))
 }
 

@@ -22,7 +22,7 @@ type FileDropDeps = {
   t: (key: MsgKey) => string;
   handleFileDropAt: (
     paneId: string,
-    zone: DropZone,
+    zone: DropZone | "chat",
     pastePayload: string,
     opts?: { shiftKey?: boolean; rawPaths?: string[] },
   ) => Promise<void>;
@@ -68,8 +68,14 @@ export function useWorkspaceFileDrop({ cwd, t, handleFileDropAt }: FileDropDeps)
         const target = resolveDropTargetAt(clientX, clientY);
         if (!target?.paneId) return;
         const zone = resolveFileDropZone(target.paneEl, clientX, clientY);
-        if (zone === "chat") return;
         const payload = payloadFromOsPaths(paths);
+        if (zone === "chat") {
+          void handleFileDropAt(target.paneId, "chat", payload ?? "", {
+            shiftKey: shiftRef.current,
+            rawPaths: paths,
+          });
+          return;
+        }
         if (!payload) return;
         void handleFileDropAt(target.paneId, zone, bracketedFilePayload(payload), {
           shiftKey: shiftRef.current,

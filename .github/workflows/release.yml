@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - run: npm ci
+
+      - name: Build + publish Tauri release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: --bundles nsis
+          tagName: ${{ github.ref_name }}
+          releaseName: "Voxiva Space ${{ github.ref_name }}"
+          releaseBody: |
+            Windows beta for terminals, coding agents, files, and browser previews.
+
+            Highlights:
+            - Resizable split panes and terminal tabs
+            - Claude Code, Codex, OpenCode, Gemini CLI, Aider, Amp, and Goose support
+            - Full-screen TUI resizing without clipped chrome
+            - Workspace file tree, browser panes, attention tracking, and session restore
+
+            Install (PowerShell):
+            ```powershell
+            irm https://raw.githubusercontent.com/voxiva-ai/voxiva-space/main/scripts/tester-install.ps1 | iex
+            ```
+          includeUpdaterJson: false
+          prerelease: true
+          releaseDraft: false

@@ -2,11 +2,8 @@ import type { DropZone } from "@/features/workspace/layout";
 import type { MsgKey } from "@/i18n";
 import { endAgentDragSession, isAgentDragActive } from "@/features/agents/drag";
 import {
-  agentChatShellAtPoint,
   agentChatShellInPane,
-  agentPaneBodyShellAtPoint,
   agentShellFromPoint,
-  isAgentChatDropPoint,
   resetAgentChatDropSticky,
 } from "@/features/agents/agentChatDrop";
 
@@ -40,8 +37,8 @@ export function dropZoneAtHistory(
 
 /**
  * File-drop zones inside a pane.
- * - Agent chat band (bottom) → handled by the terminal, not the pane overlay.
- * - Agent scrollback / body → center tab (preview beside chat), not edge splits.
+ * - Agent terminal (anywhere on the shell) → attach into chat (@path), like cmux.
+ * - Elsewhere → center tab / edge split.
  */
 export function resolveFileDropZone(
   paneEl: HTMLElement,
@@ -50,10 +47,8 @@ export function resolveFileDropZone(
 ): DropZone | "chat" {
   const shell = agentShellFromPoint(clientX, clientY);
   if (shell && shell.closest("[data-pane-id]") === paneEl) {
-    if (isAgentChatDropPoint(shell, clientY)) return "chat";
-    return "center";
+    return "chat";
   }
-  if (agentPaneBodyShellAtPoint(clientX, clientY)) return "center";
   return dropZoneAt(paneEl.getBoundingClientRect(), clientX, clientY);
 }
 
@@ -158,7 +153,7 @@ export function syncFileDropPaint(
 
   if (zone === "chat") {
     const shell =
-      agentChatShellAtPoint(clientX, clientY) ?? agentChatShellInPane(target.paneEl);
+      agentShellFromPoint(clientX, clientY) ?? agentChatShellInPane(target.paneEl);
     shell?.classList.add("is-dropChat");
     return;
   }

@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = 34;
+  const VERSION = 38;
   if (!window.__voxivaInspector) {
     window.__voxivaInspector = {
       v: 0,
@@ -121,27 +121,53 @@
       backdrop-filter: blur(10px); white-space: nowrap;
     }
     .vx-root.is-on .vx-banner { display: block; }
+    /* Always-visible mode chip strip while brush is on (before first pick). */
+    .vx-modebar {
+      display: none; position: fixed; top: 44px; left: 50%; transform: translateX(-50%);
+      z-index: 19; pointer-events: auto; gap: 4px; padding: 4px;
+      border-radius: 999px; border: 1px solid rgba(255,255,255,.14);
+      background: rgba(12,14,18,.94); box-shadow: 0 10px 28px rgba(0,0,0,.45);
+      backdrop-filter: blur(14px);
+      align-items: center;
+    }
+    .vx-root.is-on .vx-modebar { display: flex; }
+    .vx-root.is-on.is-composer-open .vx-modebar { display: none; }
+    .vx-modebar .vx-mode {
+      width: 34px; height: 34px; border-radius: 999px; border: 0;
+      background: transparent; color: rgba(255,255,255,.72); cursor: pointer;
+      display: grid; place-items: center;
+    }
+    .vx-modebar .vx-mode svg { width: 16px; height: 16px; }
+    .vx-modebar .vx-mode:hover { background: rgba(255,255,255,.08); color: #fff; }
+    .vx-modebar .vx-mode.is-on {
+      background: color-mix(in srgb, #5aa6ff 28%, transparent);
+      color: #fff; box-shadow: inset 0 0 0 1px color-mix(in srgb, #5aa6ff 55%, transparent);
+    }
     .vx-composer {
       display: none; position: fixed; z-index: 2147483646;
       pointer-events: none;
-      width: min(480px, calc(100vw - 24px));
-      min-height: 48px;
+      /* Compact cmux-style pill — hug content, no empty black stretch. */
+      width: max-content !important;
+      max-width: min(520px, calc(100vw - 24px));
+      min-width: 0;
+      min-height: 42px;
       max-height: min(42vh, 280px);
-      padding: 6px 10px 6px 6px;
-      border-radius: 22px;
-      border: 1px solid rgba(255,255,255,.14);
-      background: rgba(12,14,18,.98);
+      padding: 4px 5px 4px 4px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(10,12,16,.97);
       color: #f3f5f9;
-      box-shadow: 0 18px 48px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.08);
-      backdrop-filter: blur(18px) saturate(1.2);
-      align-items: flex-start; gap: 6px;
-      flex-wrap: wrap;
+      box-shadow: 0 14px 40px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+      backdrop-filter: blur(18px) saturate(1.15);
+      align-items: center;
+      gap: 5px;
+      flex-wrap: nowrap;
       transition: left .22s cubic-bezier(.2,.85,.25,1), top .22s cubic-bezier(.2,.85,.25,1),
         opacity .16s ease, transform .22s cubic-bezier(.2,.85,.25,1);
       will-change: left, top, transform, opacity;
     }
     .vx-root.is-on .vx-composer.is-open {
-      display: flex !important; visibility: visible !important; opacity: 1 !important;
+      display: inline-flex !important; visibility: visible !important; opacity: 1 !important;
       pointer-events: none;
     }
     .vx-composer.is-appear {
@@ -159,11 +185,11 @@
     .vx-composer.is-floating {
       bottom: auto; transform: none;
     }
-    .vx-modes, .vx-mode, .vx-editor, .vx-icon-btn, .vx-agent, .vx-pill {
+    .vx-modes, .vx-mode, .vx-editor, .vx-icon-btn, .vx-agent, .vx-pill, .vx-chiprail {
       pointer-events: auto;
     }
     .vx-modes {
-      display: inline-flex; align-items: center; gap: 2px; flex: none;
+      display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto;
       padding: 2px; border-radius: 999px;
       background: rgba(255,255,255,.07);
     }
@@ -171,57 +197,88 @@
       appearance: none; border: 0; cursor: pointer;
       width: 30px; height: 30px; border-radius: 999px;
       display: grid; place-items: center;
-      background: transparent; color: rgba(255,255,255,.42);
+      background: transparent; color: rgba(255,255,255,.45);
     }
-    .vx-mode:hover { color: rgba(255,255,255,.88); background: rgba(255,255,255,.08); }
+    .vx-mode:hover { color: rgba(255,255,255,.9); background: rgba(255,255,255,.08); }
     .vx-mode.is-on {
       background: #3b82f6; color: #fff;
+      box-shadow: 0 0 0 1px color-mix(in srgb, #3b82f6 40%, transparent);
     }
     .vx-mode svg { display: block; width: 14px; height: 14px; }
+    .vx-sep {
+      flex: 0 0 auto; width: 1px; height: 16px; margin: 0 1px;
+      background: rgba(255,255,255,.14); border-radius: 1px;
+    }
+    .vx-chiprail {
+      display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto;
+      max-width: min(240px, 42vw); overflow-x: auto; scrollbar-width: none;
+    }
+    .vx-chiprail::-webkit-scrollbar { display: none; }
     .vx-editor {
-      flex: 1 1 180px; min-width: 120px; min-height: 28px; max-height: 120px; overflow: auto;
-      padding: 6px 8px; border: 0; border-radius: 14px;
-      background: transparent; color: #f5f7fb;
-      font: 400 13.5px/1.45 ui-sans-serif, system-ui, sans-serif; outline: none;
-      white-space: pre-wrap; word-break: break-word;
+      flex: 0 1 auto;
+      width: auto;
+      min-width: 72px;
+      max-width: 180px;
+      min-height: 30px;
+      max-height: 72px;
+      overflow: auto;
+      padding: 5px 10px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(255,255,255,.05);
+      color: #f5f7fb;
+      font: 400 13px/1.35 ui-sans-serif, system-ui, sans-serif;
+      outline: none;
+      white-space: nowrap;
+      overflow-x: auto;
+      word-break: normal;
       caret-color: #7db0ff;
+    }
+    .vx-editor.is-expanded {
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-width: min(220px, 40vw);
+    }
+    .vx-composer.is-typing .vx-editor {
+      min-width: 120px;
+      max-width: min(220px, 42vw);
     }
     .vx-editor:empty::before,
     .vx-editor.is-blank::before {
-      content: attr(data-placeholder); color: rgba(255,255,255,.48); pointer-events: none;
+      content: attr(data-placeholder); color: rgba(255,255,255,.38); pointer-events: none;
     }
     .vx-pill {
       display: inline-flex; align-items: center; gap: 0; vertical-align: middle;
-      margin: 0 4px 0 0; padding: 3px; border-radius: 999px;
+      margin: 0; padding: 0; border-radius: 999px;
       border: 0;
-      background: color-mix(in srgb, var(--vx-c, #3b82f6) 22%, rgba(255,255,255,.06));
-      color: color-mix(in srgb, var(--vx-c, #60a5fa) 80%, #fff);
-      font: 650 12px/1.35 ui-sans-serif, system-ui, sans-serif;
+      background: transparent;
+      color: #fff;
+      font: 650 11.5px/1.2 ui-sans-serif, system-ui, sans-serif;
       user-select: none; cursor: pointer; white-space: nowrap;
-      transition: background .12s ease, transform .12s ease;
     }
-    .vx-pill:hover { transform: translateY(-0.5px); background: color-mix(in srgb, var(--vx-c, #3b82f6) 32%, rgba(255,255,255,.08)); }
     .vx-pill-mark {
-      display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 999px;
+      display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 999px;
       background: var(--vx-c, #3b82f6); color: #fff;
-      font: 800 10px/1 ui-sans-serif, system-ui, sans-serif;
+      font: 800 11px/1 ui-sans-serif, system-ui, sans-serif;
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--vx-c, #3b82f6) 35%, transparent);
     }
     .vx-pill-label { display: none; }
     .vx-pill-x {
-      display: none; place-items: center; width: 14px; height: 14px; margin: 0 2px 0 1px;
-      border-radius: 999px; background: rgba(0,0,0,.35); color: #fff;
+      display: none; place-items: center; width: 14px; height: 14px; margin-left: -6px;
+      border-radius: 999px; background: rgba(0,0,0,.45); color: #fff;
       font: 700 9px/1 ui-sans-serif, system-ui, sans-serif;
+      position: relative; z-index: 1;
     }
     .vx-pill:hover .vx-pill-x { display: inline-grid; }
     .vx-icon-btn {
-      appearance: none; flex: none; width: 32px; height: 32px; border: 0; border-radius: 999px;
+      appearance: none; flex: 0 0 auto; width: 30px; height: 30px; border: 0; border-radius: 999px;
       display: grid; place-items: center; cursor: pointer; pointer-events: auto;
-      background: transparent; color: rgba(255,255,255,.55);
+      background: rgba(255,255,255,.06); color: rgba(255,255,255,.7);
       transition: color .15s ease, background .15s ease, transform .12s ease;
     }
-    .vx-icon-btn:hover { color: #fff; background: rgba(255,255,255,.08); }
+    .vx-icon-btn:hover { color: #fff; background: rgba(255,255,255,.12); }
     .vx-icon-btn:active { transform: scale(.94); }
-    .vx-icon-btn.is-ok { color: #3ecf8e; }
+    .vx-icon-btn.is-ok { color: #3ecf8e; background: color-mix(in srgb, #3ecf8e 18%, transparent); }
     .vx-icon-btn svg { width: 15px; height: 15px; display: block; }
     .vx-agent {
       appearance: none; flex: none; max-width: 92px; height: 28px; padding: 0 8px;
@@ -270,7 +327,12 @@
   banner.className = "vx-banner";
   banner.textContent = "Select · click elements to add pills";
 
-  root.append(hitLayer, marker, marks, hoverBox, hoverTag, banner, panel);
+  const modeBar = document.createElement("div");
+  modeBar.className = "vx-modebar";
+  modeBar.setAttribute("role", "toolbar");
+  modeBar.setAttribute("aria-label", "Brush tools");
+
+  root.append(hitLayer, marker, marks, hoverBox, hoverTag, banner, modeBar, panel);
   shadow.append(styleEl, root);
 
   function shieldUi(el) {
@@ -282,11 +344,12 @@
     }
   }
   shieldUi(panel);
+  shieldUi(modeBar);
 
   // Drag the floating chat (cmux: card follows until user drags, then sticks).
   panel.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
-    if (event.target.closest?.(".vx-editor, .vx-mode, .vx-icon-btn, .vx-pill, .vx-agent, select, button")) {
+    if (event.target.closest?.(".vx-editor, .vx-mode, .vx-modes, .vx-chiprail, .vx-icon-btn, .vx-pill, .vx-agent, select, button")) {
       return;
     }
     event.preventDefault();
@@ -320,7 +383,7 @@
     if (!el) return false;
     if (el === panel || el === root || el === host || el === banner) return false;
     return Boolean(
-      el.closest?.(".vx-editor, .vx-mode, .vx-modes, .vx-icon-btn, .vx-agent, .vx-pill"),
+      el.closest?.(".vx-editor, .vx-mode, .vx-modes, .vx-chiprail, .vx-icon-btn, .vx-agent, .vx-pill"),
     );
   }
 
@@ -624,6 +687,7 @@
 
   function hideComposer() {
     panel.classList.remove("is-open", "is-appear", "is-floating");
+    root.classList.remove("is-composer-open");
     panel.style.display = "none";
     panel.style.opacity = "";
     panel.style.visibility = "";
@@ -675,8 +739,11 @@
       ? anchorEl
       : state.selections[state.selections.length - 1]?.el;
     const pt = point || state.pickPoint;
-    const cardW = Math.min(480, window.innerWidth - 16);
-    const cardH = Math.max(panel.offsetHeight || 56, 56);
+    const cardW = Math.min(
+      Math.max(panel.scrollWidth || panel.offsetWidth || 200, 160),
+      Math.min(520, window.innerWidth - 16),
+    );
+    const cardH = Math.max(panel.offsetHeight || 48, 48);
     // Sit clearly below the pick so the bar doesn't cover the headline.
     const gap = 28;
     const m = safeMargins();
@@ -706,7 +773,8 @@
 
     panel.classList.remove("is-docked");
     panel.classList.add("is-floating");
-    panel.style.width = `${cardW}px`;
+    panel.style.width = "max-content";
+    panel.style.minWidth = "0";
     panel.style.left = `${left}px`;
     panel.style.top = `${top}px`;
     panel.style.bottom = "auto";
@@ -731,6 +799,7 @@
     panel.style.visibility = "visible";
     panel.style.opacity = "1";
     panel.style.zIndex = "2147483646";
+    root.classList.add("is-composer-open");
 
     const anchor = opts.anchorEl || state.selections[state.selections.length - 1]?.el;
     const point = opts.point || state.pickPoint;
@@ -786,7 +855,9 @@
     const mark = document.createElement("span");
     mark.className = "vx-pill-mark";
     mark.textContent = letter;
-    // Letter-only chip — full name stays in the tooltip.
+    const name = document.createElement("span");
+    name.className = "vx-pill-label";
+    name.textContent = label;
     const remove = document.createElement("span");
     remove.className = "vx-pill-x";
     remove.textContent = "×";
@@ -796,7 +867,7 @@
       event.stopPropagation();
       removeSelection(item.id);
     });
-    pill.append(mark, remove);
+    pill.append(mark, name, remove);
     pill.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -815,31 +886,14 @@
     return panel.querySelector(".vx-editor");
   }
 
+  function getChipRail() {
+    return panel.querySelector(".vx-chiprail");
+  }
+
   function readEditorPrompt(editor) {
     if (!editor) return { text: "", ids: [] };
-    let text = "";
-    const ids = [];
-    const walk = (node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        text += node.textContent || "";
-        return;
-      }
-      if (!(node instanceof Element)) return;
-      if (node.classList.contains("vx-pill")) {
-        const letter = node.dataset.letter || "?";
-        const id = node.dataset.id;
-        text += `@${letter}`;
-        if (id) ids.push(id);
-        return;
-      }
-      if (node.tagName === "BR") {
-        text += "\n";
-        return;
-      }
-      for (const child of node.childNodes) walk(child);
-    };
-    for (const child of editor.childNodes) walk(child);
-    return { text: text.replace(/\u00a0/g, " ").trim(), ids };
+    const text = (editor.innerText || editor.textContent || "").replace(/\u00a0/g, " ").trim();
+    return { text, ids: state.selections.map((s) => s.id) };
   }
 
   function syncNoteFromEditor() {
@@ -847,8 +901,9 @@
     if (!editor) return;
     const { text } = readEditorPrompt(editor);
     state.note = text;
-    const blank = !editor.querySelector(".vx-pill") && !text.trim();
+    const blank = !text.trim();
     editor.classList.toggle("is-blank", blank);
+    panel.classList.toggle("is-typing", !blank);
   }
 
   function placeCaretAtEnd(el) {
@@ -860,65 +915,75 @@
     sel?.addRange(range);
   }
 
-  function insertPillInEditor(item) {
+  function ensureChipRail() {
+    let chips = getChipRail();
+    if (chips) return chips;
+    const modes = panel.querySelector(".vx-modes");
     const editor = getEditor();
-    if (!editor) return;
-    if (editor.querySelector(`.vx-pill[data-id="${CSS.escape(item.id)}"]`)) {
+    if (!modes || !editor) return null;
+    let sep = panel.querySelector(".vx-sep");
+    if (!sep) {
+      sep = document.createElement("span");
+      sep.className = "vx-sep";
+      sep.setAttribute("aria-hidden", "true");
+      modes.after(sep);
+    }
+    chips = document.createElement("div");
+    chips.className = "vx-chiprail";
+    sep.after(chips);
+    return chips;
+  }
+
+  function insertPillInEditor(item) {
+    const chips = ensureChipRail();
+    if (!chips) return;
+    if (chips.querySelector(`.vx-pill[data-id="${CSS.escape(item.id)}"]`)) {
       syncNoteFromEditor();
       return;
     }
-    const pill = makePill(item);
-    if (editor.childNodes.length) editor.append(document.createTextNode(" "));
-    editor.append(pill, document.createTextNode("\u00a0"));
+    chips.append(makePill(item));
     syncNoteFromEditor();
   }
 
   function syncEditorPillsFromState() {
-    const editor = getEditor();
-    if (!editor) return;
-    const existing = new Map();
-    for (const node of editor.querySelectorAll(".vx-pill")) {
-      existing.set(node.dataset.id, node);
-    }
+    const chips = ensureChipRail();
+    if (!chips) return;
+    chips.innerHTML = "";
     for (const item of state.selections) {
-      const prev = existing.get(item.id);
-      if (prev) {
-        prev.replaceWith(makePill(item));
-        existing.delete(item.id);
-      } else {
-        const pill = makePill(item);
-        if (editor.childNodes.length) editor.append(document.createTextNode(" "));
-        editor.append(pill, document.createTextNode("\u00a0"));
-      }
+      chips.append(makePill(item));
     }
-    for (const node of existing.values()) node.remove();
+    if (!state.selections.length) {
+      chips.remove();
+      panel.querySelector(".vx-sep")?.remove();
+    }
     refreshPillLetters();
     syncNoteFromEditor();
   }
 
   function removePillFromEditor(id) {
-    const editor = getEditor();
-    if (!editor) return;
-    const pill = editor.querySelector(`.vx-pill[data-id="${CSS.escape(id)}"]`);
+    const chips = getChipRail();
+    if (!chips) return;
+    const pill = chips.querySelector(`.vx-pill[data-id="${CSS.escape(id)}"]`);
     if (pill) pill.remove();
-    if (!editor.textContent?.trim() && !editor.querySelector(".vx-pill")) editor.innerHTML = "";
+    if (!chips.querySelector(".vx-pill")) {
+      chips.remove();
+      panel.querySelector(".vx-sep")?.remove();
+    }
     syncNoteFromEditor();
   }
 
   function refreshPillLetters() {
-    const editor = getEditor();
-    if (!editor) return;
+    const chips = getChipRail();
+    if (!chips) return;
     for (const item of state.selections) {
-      const pill = editor.querySelector(`.vx-pill[data-id="${CSS.escape(item.id)}"]`);
+      const pill = chips.querySelector(`.vx-pill[data-id="${CSS.escape(item.id)}"]`);
       if (!pill) continue;
-      const letter = letterFor(item.index);
-      const label = shortLabel(item.selection);
-      const xpath = item.selection?.xpath || item.selection?.selector || "";
-      pill.dataset.letter = letter;
-      pill.style.setProperty("--vx-c", COLORS[item.colorIndex % COLORS.length]);
-      pill.title = `${letter} · ${label}\n${xpath}\nHover × or Backspace to remove`;
+      pill.dataset.letter = letterFor(item.index);
       const mark = pill.querySelector(".vx-pill-mark");
-      if (mark) mark.textContent = letter;
+      if (mark) mark.textContent = letterFor(item.index);
+      const name = pill.querySelector(".vx-pill-label");
+      if (name) name.textContent = shortLabel(item.selection);
+      pill.style.setProperty("--vx-c", COLORS[item.colorIndex % COLORS.length]);
     }
   }
 
@@ -967,7 +1032,11 @@
     const focusEditor = Boolean(opts.focus);
     const savedNote = state.note;
     const existingEditor = getEditor();
-    const savedHtml = existingEditor ? existingEditor.innerHTML : "";
+    const savedText = (() => {
+      if (!existingEditor) return "";
+      const { text } = readEditorPrompt(existingEditor);
+      return text || savedNote || "";
+    })();
     const keepFocus = Boolean(existingEditor && document.activeElement === existingEditor);
     panel.innerHTML = "";
 
@@ -975,24 +1044,18 @@
     modes.className = "vx-modes";
     for (const id of ["select", "draw"]) {
       const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "vx-mode" + (state.mode === id ? " is-on" : "");
-      btn.dataset.mode = id;
-      btn.title =
-        id === "draw"
-          ? "Draw — lasso an element (select turns off)"
-          : "Select — hover + click (draw turns off)";
-      btn.setAttribute("aria-pressed", state.mode === id ? "true" : "false");
-      btn.innerHTML = modeIcon(id);
-      btn.addEventListener("pointerdown", (event) => {
-        state.modeClicks = (state.modeClicks || 0) + 1;
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
-        // Switch tools only — brush off is the toolbar Brush button / Esc.
-        setMode(id);
-      });
+      bindModeButton(btn, id);
       modes.append(btn);
+    }
+
+    const sep = document.createElement("span");
+    sep.className = "vx-sep";
+    sep.setAttribute("aria-hidden", "true");
+
+    const chips = document.createElement("div");
+    chips.className = "vx-chiprail";
+    for (const item of state.selections) {
+      chips.append(makePill(item));
     }
 
     const editor = document.createElement("div");
@@ -1002,25 +1065,9 @@
     editor.setAttribute("role", "textbox");
     editor.setAttribute("aria-multiline", "true");
     editor.tabIndex = 0;
-    editor.dataset.placeholder = state.selections.length
-      ? "Describe the change…"
-      : (state.mode === "draw" ? "Draw an element, then type…" : "Click an element, then type…");
-    if (savedHtml) {
-      editor.innerHTML = savedHtml;
-      for (const item of state.selections) {
-        const old = editor.querySelector(`.vx-pill[data-id="${CSS.escape(item.id)}"]`);
-        if (!old) continue;
-        old.replaceWith(makePill(item));
-      }
-    } else if (savedNote && !state.selections.length) {
-      editor.textContent = savedNote;
-    } else if (state.selections.length) {
-      for (const item of state.selections) {
-        editor.append(makePill(item), document.createTextNode("\u00a0"));
-      }
-      if (savedNote && !savedNote.includes("@")) {
-        editor.append(document.createTextNode(savedNote));
-      }
+    editor.dataset.placeholder = state.selections.length ? "Describe…" : "Type…";
+    if (savedText.trim()) {
+      editor.textContent = savedText.trim();
     }
     editor.addEventListener("input", () => syncNoteFromEditor());
     editor.addEventListener("keydown", (event) => handleEditorKeydown(event, editor), true);
@@ -1030,6 +1077,7 @@
     copyBtn.type = "button";
     copyBtn.className = "vx-icon-btn vx-btn-copy";
     copyBtn.title = "Copy JSON for agents (Enter)";
+    copyBtn.setAttribute("aria-label", "Copy JSON");
     copyBtn.innerHTML = COPY_ICON;
     copyBtn.addEventListener("click", (event) => {
       event.preventDefault();
@@ -1037,7 +1085,11 @@
       copyPrompt(copyBtn);
     });
 
-    panel.append(modes, editor, copyBtn);
+    panel.append(modes);
+    if (state.selections.length) {
+      panel.append(sep, chips);
+    }
+    panel.append(editor, copyBtn);
     syncNoteFromEditor();
     if (focusEditor || keepFocus) {
       window.setTimeout(() => {
@@ -1047,9 +1099,40 @@
     }
   }
 
+  function bindModeButton(btn, id) {
+    btn.type = "button";
+    btn.className = "vx-mode" + (state.mode === id ? " is-on" : "");
+    btn.dataset.mode = id;
+    btn.title =
+      id === "draw"
+        ? "Draw — lasso an element (press again to turn brush off)"
+        : "Select — hover + click (press again to turn brush off)";
+    btn.setAttribute("aria-pressed", state.mode === id ? "true" : "false");
+    btn.innerHTML = modeIcon(id);
+    btn.addEventListener("pointerdown", (event) => {
+      state.modeClicks = (state.modeClicks || 0) + 1;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      setMode(id);
+    });
+  }
+
+  function rebuildModeBar() {
+    modeBar.innerHTML = "";
+    for (const id of ["select", "draw"]) {
+      const btn = document.createElement("button");
+      bindModeButton(btn, id);
+      modeBar.append(btn);
+    }
+  }
+
   function syncModeButtons() {
-    const modes = panel.querySelectorAll(".vx-mode");
-    for (const btn of modes) {
+    const buttons = [
+      ...modeBar.querySelectorAll(".vx-mode"),
+      ...panel.querySelectorAll(".vx-mode"),
+    ];
+    for (const btn of buttons) {
       const on = btn.dataset.mode === state.mode;
       btn.classList.toggle("is-on", on);
       btn.setAttribute("aria-pressed", on ? "true" : "false");
@@ -1067,9 +1150,9 @@
 
   function setMode(mode) {
     const next = mode === "draw" ? "draw" : "select";
-    if (state.mode === next) {
-      syncRootClasses();
-      syncModeButtons();
+    // Second press on the active tool turns the whole brush off (host mirrors via disabledSignal).
+    if (state.enabled && state.mode === next) {
+      api.setEnabled(false);
       return;
     }
     state.mode = next;
@@ -1079,9 +1162,9 @@
     placeHover(null);
     if (next === "draw") resizeMarker();
     syncRootClasses();
+    syncModeButtons();
     if (!state.enabled) return;
     if (panel.classList.contains("is-open") && getEditor()) {
-      syncModeButtons();
       const editor = getEditor();
       if (editor && !state.selections.length) {
         editor.dataset.placeholder =
@@ -1190,9 +1273,12 @@
         const rich = slim(contextFor(el, true));
         item.selection = rich;
         state.pending = rich;
-        const pill = getEditor()?.querySelector(`.vx-pill[data-id="${CSS.escape(item.id)}"]`);
+        const pill = getChipRail()?.querySelector(`.vx-pill[data-id="${CSS.escape(item.id)}"]`);
         if (pill) {
-          pill.title = `${letterFor(item.index)} · ${shortLabel(rich)}\n${rich.xpath || rich.selector || ""}\nHover × or Backspace to remove`;
+          const label = shortLabel(rich);
+          pill.title = `${letterFor(item.index)} · ${label}\n${rich.xpath || rich.selector || ""}\nHover × or Backspace to remove`;
+          const name = pill.querySelector(".vx-pill-label");
+          if (name) name.textContent = label;
         }
       } catch (_) {}
     });
@@ -1255,27 +1341,34 @@
     syncNoteFromEditor();
     const { text: promptLine } = readEditorPrompt(getEditor());
     const note = (promptLine || state.note || "").trim();
-    return JSON.stringify({
-      type: "voxiva.design-annotation",
-      note: note || "Update the selected UI elements.",
-      page: state.selections[0]?.selection?.pageUrl || location.href,
-      selections: state.selections.map((item) => {
-        const s = item.selection || {};
-        return {
-          id: letterFor(item.index),
-          label: shortLabel(s),
-          tag: s.tag || "",
-          component: s.component || "",
-          selector: s.selector || "",
-          xpath: s.xpath || "",
-          text: String(s.text || "").replace(/\s+/g, " ").trim().slice(0, 240),
-          box: s.boundingBox || null,
-          files: item.files || [],
-          styles: s.computedStyles || {},
-          html: String(s.html || "").slice(0, 1200),
-        };
-      }),
-    }, null, 2);
+    // cmux-style paste payload — compact, agent-ready JSON.
+    return JSON.stringify(
+      {
+        type: "design-annotation",
+        source: "voxiva-space",
+        prompt: note || "Update the selected UI elements.",
+        url: state.selections[0]?.selection?.pageUrl || location.href,
+        elements: state.selections.map((item) => {
+          const s = item.selection || {};
+          return {
+            ref: letterFor(item.index),
+            tag: s.tag || "",
+            name: shortLabel(s),
+            component: s.component || undefined,
+            selector: s.selector || undefined,
+            xpath: s.xpath || undefined,
+            text: String(s.text || "")
+              .replace(/\s+/g, " ")
+              .trim()
+              .slice(0, 200) || undefined,
+            box: s.boundingBox || undefined,
+            files: (item.files || []).length ? item.files : undefined,
+          };
+        }),
+      },
+      null,
+      2,
+    );
   }
 
   function queueHandoff(agentId) {
@@ -1332,37 +1425,193 @@
     });
   }
 
-  function targetAt(x, y) {
-    const stack = document.elementsFromPoint(x, y);
-    for (const el of stack) {
-      if (!(el instanceof Element)) continue;
-      if (el === host || el.id === "__voxiva-inspector-host") continue;
-      if (host.contains(el)) continue;
-      if (el === document.documentElement || el === document.body) continue;
-      if (el.closest?.("#__voxiva-inspector-host")) continue;
-      return el;
-    }
-    return null;
+  const CONTAINER_TAGS = new Set([
+    "DIV", "SPAN", "SECTION", "ARTICLE", "MAIN", "ASIDE", "HEADER", "FOOTER", "NAV", "FORM",
+  ]);
+
+  function isInspectorHost(el) {
+    if (!el || !(el instanceof Element)) return true;
+    if (el === host || el.id === "__voxiva-inspector-host") return true;
+    if (host.contains(el)) return true;
+    if (el.closest?.("#__voxiva-inspector-host")) return true;
+    return false;
   }
 
+  function isVisuallyHidden(el) {
+    if (!(el instanceof Element)) return true;
+    if (typeof el.checkVisibility === "function") {
+      try {
+        return !el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+      } catch (_) {}
+    }
+    const style = getComputedStyle(el);
+    if (style.visibility === "hidden" || style.visibility === "collapse" || style.display === "none") return true;
+    if (style.opacity === "0" || style.contentVisibility === "hidden") return true;
+    const rect = el.getBoundingClientRect();
+    return rect.width < 1 || rect.height < 1;
+  }
+
+  /** Walk open shadow roots / same-origin frames to the deepest element. */
+  function deepElementFromPoint(x, y) {
+    let element = document.elementFromPoint(x, y);
+    const visited = new Set();
+    while (element && !visited.has(element)) {
+      visited.add(element);
+      let deeper = null;
+      if (element.shadowRoot) {
+        deeper = element.shadowRoot.elementFromPoint?.(x, y) || null;
+      } else if (element.tagName === "IFRAME") {
+        try {
+          const frame = /** @type {HTMLIFrameElement} */ (element);
+          const doc = frame.contentDocument;
+          if (doc) {
+            const box = frame.getBoundingClientRect();
+            const sx = frame.clientWidth / Math.max(1, box.width);
+            const sy = frame.clientHeight / Math.max(1, box.height);
+            deeper = doc.elementFromPoint((x - box.left) * sx, (y - box.top) * sy);
+          }
+        } catch (_) {
+          deeper = null;
+        }
+      }
+      if (!deeper || deeper === element) break;
+      element = deeper;
+    }
+    return element instanceof Element ? element : null;
+  }
+
+  /** Full stack at a point, including open shadow / same-origin iframe contents. */
+  function elementsAtPoint(x, y) {
+    const candidates = [];
+    const seen = new Set();
+    const visit = (elements, localX, localY) => {
+      for (const element of elements) {
+        if (!(element instanceof Element) || seen.has(element)) continue;
+        seen.add(element);
+        if (element.shadowRoot) {
+          const inner = element.shadowRoot.elementsFromPoint?.(localX, localY) || [];
+          if (inner.length) visit(inner, localX, localY);
+          else {
+            const one = element.shadowRoot.elementFromPoint?.(localX, localY);
+            if (one) visit([one], localX, localY);
+          }
+        }
+        if (element.tagName === "IFRAME") {
+          try {
+            const frame = /** @type {HTMLIFrameElement} */ (element);
+            const doc = frame.contentDocument;
+            if (doc) {
+              const box = frame.getBoundingClientRect();
+              const sx = frame.clientWidth / Math.max(1, box.width);
+              const sy = frame.clientHeight / Math.max(1, box.height);
+              const childX = (localX - box.left) * sx;
+              const childY = (localY - box.top) * sy;
+              const stack = doc.elementsFromPoint?.(childX, childY) || [];
+              if (stack.length) visit(stack, childX, childY);
+            }
+          } catch (_) {}
+        }
+        if (
+          element !== document.body &&
+          element !== document.documentElement &&
+          !isInspectorHost(element) &&
+          !isVisuallyHidden(element)
+        ) {
+          candidates.push(element);
+        }
+      }
+    };
+    const topStack = document.elementsFromPoint?.(x, y) || [];
+    if (topStack.length) visit(topStack, x, y);
+    else {
+      const one = document.elementFromPoint(x, y);
+      if (one) visit([one], x, y);
+    }
+    return candidates;
+  }
+
+  /**
+   * Prefer direct content (text / non-wrapper), else the smallest sensible visual target.
+   * Avoids landing on huge layout wrappers when you click a button or label.
+   */
+  function pierceElementFromPoint(x, y) {
+    const top = deepElementFromPoint(x, y);
+    if (!top || isInspectorHost(top)) return null;
+    const candidates = elementsAtPoint(x, y);
+    if (!candidates.length) {
+      if (top === document.body || top === document.documentElement) return null;
+      return top;
+    }
+
+    for (const element of candidates) {
+      const hasText = Array.from(element.childNodes).some(
+        (node) => node.nodeType === Node.TEXT_NODE && String(node.textContent || "").trim(),
+      );
+      if ((!CONTAINER_TAGS.has(element.tagName) && !element.shadowRoot) || hasText) {
+        return element;
+      }
+    }
+
+    let smallest = null;
+    let smallestArea = Infinity;
+    for (const element of candidates) {
+      const rect = element.getBoundingClientRect();
+      const area = Math.max(0, rect.width * rect.height);
+      if (area > 0 && area < smallestArea && area < window.innerWidth * window.innerHeight * 0.7) {
+        smallest = element;
+        smallestArea = area;
+      }
+    }
+    return smallest || candidates[0] || top;
+  }
+
+  function targetAt(x, y) {
+    return pierceElementFromPoint(x, y);
+  }
+
+  /** Soft tighten: only climb when the leaf is tiny padding inside a slightly larger interactive parent. */
   function tighten(el) {
     if (!el) return null;
     let best = el;
     let node = el;
-    for (let depth = 0; depth < 5 && node; depth += 1) {
+    for (let depth = 0; depth < 3 && node; depth += 1) {
       const rect = node.getBoundingClientRect();
       const area = Math.max(1, rect.width * rect.height);
       const parent = node.parentElement;
       if (!parent || parent === document.body || parent === document.documentElement) break;
-      if (area < window.innerWidth * window.innerHeight * 0.55) best = node;
+      if (isInspectorHost(parent)) break;
       const parentArea = Math.max(1, parent.getBoundingClientRect().width * parent.getBoundingClientRect().height);
-      if (area / parentArea > 0.88) break;
-      node = parent;
+      // Climb only when almost filling the parent (padding wrapper), not when a small button sits in a card.
+      if (area / parentArea > 0.92 && parentArea < window.innerWidth * window.innerHeight * 0.45) {
+        best = parent;
+        node = parent;
+        continue;
+      }
+      break;
     }
     return best;
   }
 
-  const DRAW_RADIUS = 14;
+  const DRAW_RADIUS = 12;
+
+  function pointInPoly(x, y, pts) {
+    if (pts.length < 3) return false;
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const xi = pts[i].x, yi = pts[i].y;
+      const xj = pts[j].x, yj = pts[j].y;
+      const intersect = ((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi + 1e-9) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  function strokeClosed(pts) {
+    if (pts.length < 8) return false;
+    const a = pts[0], b = pts[pts.length - 1];
+    const dx = a.x - b.x, dy = a.y - b.y;
+    return Math.hypot(dx, dy) < 36;
+  }
 
   function pickFromStroke() {
     const pts = state.stroke;
@@ -1374,35 +1623,74 @@
     }
     minX -= DRAW_RADIUS; minY -= DRAW_RADIUS;
     maxX += DRAW_RADIUS; maxY += DRAW_RADIUS;
+    const closed = strokeClosed(pts);
+    const strokeW = Math.max(1, maxX - minX);
+    const strokeH = Math.max(1, maxY - minY);
+    const strokeArea = strokeW * strokeH;
 
     const counts = new Map();
-    const bump = (el, weight) => { if (el) counts.set(el, (counts.get(el) || 0) + weight); };
+    const bump = (el, weight) => {
+      if (!el || isInspectorHost(el)) return;
+      counts.set(el, (counts.get(el) || 0) + weight);
+    };
 
-    const step = Math.max(1, Math.floor(pts.length / 48));
+    // Dense sampling along the stroke — pierce each point.
+    const step = Math.max(1, Math.floor(pts.length / 72));
     for (let i = 0; i < pts.length; i += step) {
       const p = pts[i];
-      bump(tighten(targetAt(p.x, p.y)), 3);
-      for (const [dx, dy] of [[DRAW_RADIUS, 0], [-DRAW_RADIUS, 0], [0, DRAW_RADIUS], [0, -DRAW_RADIUS], [DRAW_RADIUS, DRAW_RADIUS], [-DRAW_RADIUS, -DRAW_RADIUS]]) {
-        bump(tighten(targetAt(p.x + dx, p.y + dy)), 1);
-      }
-    }
-    for (let gy = 0; gy <= 5; gy += 1) {
-      for (let gx = 0; gx <= 5; gx += 1) {
-        bump(tighten(targetAt(minX + ((maxX - minX) * gx) / 5, minY + ((maxY - minY) * gy) / 5)), 2);
+      bump(tighten(pierceElementFromPoint(p.x, p.y)), 4);
+      for (const [dx, dy] of [
+        [DRAW_RADIUS, 0], [-DRAW_RADIUS, 0], [0, DRAW_RADIUS], [0, -DRAW_RADIUS],
+        [DRAW_RADIUS * 0.7, DRAW_RADIUS * 0.7], [-DRAW_RADIUS * 0.7, -DRAW_RADIUS * 0.7],
+      ]) {
+        bump(tighten(pierceElementFromPoint(p.x + dx, p.y + dy)), 1);
       }
     }
 
-    let best = null, bestScore = -1;
-    const strokeArea = Math.max(1, (maxX - minX) * (maxY - minY));
+    // Interior samples for closed loops (actual circled target).
+    if (closed) {
+      for (let gy = 1; gy <= 4; gy += 1) {
+        for (let gx = 1; gx <= 4; gx += 1) {
+          const x = minX + (strokeW * gx) / 5;
+          const y = minY + (strokeH * gy) / 5;
+          if (pointInPoly(x, y, pts)) bump(tighten(pierceElementFromPoint(x, y)), 5);
+        }
+      }
+    } else {
+      for (let gy = 0; gy <= 4; gy += 1) {
+        for (let gx = 0; gx <= 4; gx += 1) {
+          bump(tighten(pierceElementFromPoint(
+            minX + (strokeW * gx) / 4,
+            minY + (strokeH * gy) / 4,
+          )), 1);
+        }
+      }
+    }
+
+    let best = null, bestScore = -Infinity;
     for (const [el, hits] of counts) {
       const rect = el.getBoundingClientRect();
       const area = Math.max(1, rect.width * rect.height);
+      if (area > window.innerWidth * window.innerHeight * 0.85) continue;
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
-      const inside = cx >= minX && cx <= maxX && cy >= minY && cy <= maxY ? 30 : 0;
-      const sizeRatio = Math.min(area, strokeArea) / Math.max(area, strokeArea);
-      const score = hits * 10 + sizeRatio * 35 + inside - Math.log2(area);
-      if (score > bestScore) { best = el; bestScore = score; }
+      const centerInPoly = closed && pointInPoly(cx, cy, pts);
+      const centerInBox = cx >= minX && cx <= maxX && cy >= minY && cy <= maxY;
+      const overlapX = Math.min(rect.right, maxX) - Math.max(rect.left, minX);
+      const overlapY = Math.min(rect.bottom, maxY) - Math.max(rect.top, minY);
+      const overlap = overlapX > 0 && overlapY > 0 ? overlapX * overlapY : 0;
+      const cover = overlap / area;
+      const sizeFit = Math.min(area, strokeArea) / Math.max(area, strokeArea);
+      const score =
+        hits * 12 +
+        (centerInPoly ? 55 : centerInBox ? 22 : 0) +
+        cover * 40 +
+        sizeFit * 28 -
+        Math.log2(area + 1) * 1.4;
+      if (score > bestScore) {
+        best = el;
+        bestScore = score;
+      }
     }
     return best;
   }
@@ -1410,17 +1698,29 @@
   function drawSegment(from, to) {
     if (!mctx) return;
     mctx.strokeStyle = "rgba(255,72,72,.96)";
-    mctx.lineWidth = 3.4;
+    mctx.lineWidth = 3.2;
     mctx.lineCap = "round";
     mctx.lineJoin = "round";
+    mctx.shadowColor = "rgba(255,72,72,.35)";
+    mctx.shadowBlur = 4;
     mctx.beginPath();
     mctx.moveTo(from.x, from.y);
     mctx.lineTo(to.x, to.y);
     mctx.stroke();
+    mctx.shadowBlur = 0;
   }
 
   function pickAtPoint(clientX, clientY) {
-    return tighten(targetAt(clientX, clientY));
+    return tighten(pierceElementFromPoint(clientX, clientY));
+  }
+
+  function previewStrokeTarget() {
+    if (state.stroke.length < 4) return;
+    const el = pickFromStroke();
+    if (el) {
+      placeHover(el, COLORS[2], el !== state.lastHoverEl);
+      banner.textContent = `Draw · ${quickLabel(el)} — release to capture`;
+    }
   }
 
   function updateHoverFromPoint(clientX, clientY, color) {
@@ -1459,11 +1759,13 @@
         state.stroke.push(point);
         if (state.lastPoint) drawSegment(state.lastPoint, point);
         state.lastPoint = point;
+        // Live preview of the element the lasso is capturing.
+        if (state.stroke.length % 4 === 0) previewStrokeTarget();
+      } else {
+        updateHoverFromPoint(event.clientX, event.clientY, COLORS[2]);
       }
-      updateHoverFromPoint(event.clientX, event.clientY, COLORS[2]);
       return;
     }
-    // Select only — never draw while selecting.
     updateHoverFromPoint(event.clientX, event.clientY);
   }
 
@@ -1491,7 +1793,6 @@
   function onHitPointerDown(event) {
     if (!state.enabled) return;
     if (event.button !== 0) return;
-    // Hit layer is select-only; canvas owns draw.
     if (state.mode !== "select") return;
     handleSelectPick(event);
   }
@@ -1512,9 +1813,9 @@
       ? state.stroke[Math.floor(state.stroke.length / 2)]
       : { x: event.clientX, y: event.clientY };
     const el = pickFromStroke();
-    window.setTimeout(clearMarkerCanvas, 320);
+    window.setTimeout(clearMarkerCanvas, 280);
     if (el) addSelection(el, state.pickPoint);
-    else banner.textContent = "Draw · nothing found — try a tighter loop around the element";
+    else banner.textContent = "Draw · nothing found — circle the element more tightly";
   }
 
   function onDocClick(event) {
@@ -1624,6 +1925,8 @@
         clearMarkerCanvas();
         hideComposer();
         panel.innerHTML = "";
+        rebuildModeBar();
+        syncModeButtons();
         if (state.mode === "draw") resizeMarker();
         banner.textContent =
           state.mode === "draw"

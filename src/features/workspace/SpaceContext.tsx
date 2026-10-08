@@ -69,6 +69,10 @@ import {
 import { isCompanionLive, setCompanionLive } from "@/features/companion/live";
 import { writeTerminalSession } from "@/features/terminal/api";
 import {
+  formatAgentAttachment,
+  wrapAgentPaste,
+} from "@/features/terminal/paste";
+import {
   agentBots,
   commandKeysForBots,
   isBotReady,
@@ -416,7 +420,7 @@ type SpaceContextValue = {
   /** Route Finder / clipboard file drop onto a pane zone (cmux-style). */
   handleFileDropAt: (
     paneId: string,
-    zone: DropZone,
+    zone: DropZone | "chat",
     pastePayload: string,
     opts?: { shiftKey?: boolean; rawPaths?: string[] },
   ) => Promise<void>;
@@ -2533,7 +2537,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   const handleFileDropAt = useCallback(
     async (
       paneId: string,
-      zone: DropZone,
+      zone: DropZone | "chat",
       pastePayload: string,
       opts?: { shiftKey?: boolean; rawPaths?: string[] },
     ) => {
@@ -2544,20 +2548,47 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
           isPreviewDropPath(p) &&
           (/[\\/]/.test(p) || /^[a-zA-Z]:/.test(p) || p.startsWith("/")),
       );
-      if (previewPath) {
+      // Shift or explicit preview path — open media; otherwise agent chat attaches @path.
+      if (previewPath && (opts?.shiftKey || zone !== "chat")) {
         focusPane(paneId);
         setView("space");
-        openMediaPreviewAt(paneId, zone, previewPath);
+        openMediaPreviewAt(paneId, zone === "chat" ? "center" : zone, previewPath);
         return;
       }
 
-      if (!pastePayload.trim()) return;
       const leaf = findLeaf(activeWorkspace.layout, paneId);
       if (!leaf) return;
       focusPane(paneId);
       setView("space");
 
-      if (zone !== "center") {
+      const tabs = leafTabIds(leaf);
+      const sessionId =
+        leaf.sessionId && tabs.includes(leaf.sessionId) ? leaf.sessionId : (tabs[0] ?? null);
+      const session = sessionId ? sessions[sessionId] : null;
+
+      // cmux: drop onto agent pane → @path into the prompt (whole pane).
+      if (zone === "chat" && sessionId && session) {
+        const agentId = agentIdForSession(session, agentRuns);
+        const paths = (opts?.rawPaths ?? []).map((p) => p.trim()).filter(Boolean);
+        let payload = pastePayload;
+        if (paths.length && agentId !== "shell") {
+          payload = formatAgentAttachment(agentId, paths, pastePayload) ?? pastePayload;
+        }
+        if (!payload.trim()) return;
+        const toWrite =
+          agentId !== "shell" ? wrapAgentPaste(agentId, payload) : payload;
+        activatePaneSession(paneId, sessionId);
+        if (session.status === "online") {
+          void writeTerminalSession(sessionId, toWrite).catch(() => undefined);
+        } else {
+          pendingSessionPasteRef.current.set(sessionId, toWrite);
+        }
+        return;
+      }
+
+      if (!pastePayload.trim()) return;
+
+      if (zone !== "center" && zone !== "chat") {
         if (countLeaves(activeWorkspace.layout) >= MAX_PANES) {
           setError(`You can open up to ${MAX_PANES} panes in one workspace.`);
           return;
@@ -2578,19 +2609,20 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const tabs = leafTabIds(leaf);
-      const sessionId =
-        leaf.sessionId && tabs.includes(leaf.sessionId) ? leaf.sessionId : (tabs[0] ?? null);
-      const session = sessionId ? sessions[sessionId] : null;
-
       if (session?.status === "online" && sessionId) {
+        const agentId = agentIdForSession(session, agentRuns);
+        const toWrite =
+          agentId !== "shell" ? wrapAgentPaste(agentId, pastePayload) : pastePayload;
         activatePaneSession(paneId, sessionId);
-        void writeTerminalSession(sessionId, pastePayload).catch(() => undefined);
+        void writeTerminalSession(sessionId, toWrite).catch(() => undefined);
         return;
       }
 
       if (sessionId && session) {
-        pendingSessionPasteRef.current.set(sessionId, pastePayload);
+        const agentId = agentIdForSession(session, agentRuns);
+        const toWrite =
+          agentId !== "shell" ? wrapAgentPaste(agentId, pastePayload) : pastePayload;
+        pendingSessionPasteRef.current.set(sessionId, toWrite);
         activatePaneSession(paneId, sessionId);
         return;
       }
@@ -2602,7 +2634,16 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         paste: pastePayload,
       });
     },
-    [activeWorkspace, activatePaneSession, focusPane, openMediaPreviewAt, patchWorkspace, sessions, setView],
+    [
+      activeWorkspace,
+      activatePaneSession,
+      agentRuns,
+      focusPane,
+      openMediaPreviewAt,
+      patchWorkspace,
+      sessions,
+      setView,
+    ],
   );
 
   const queueSavedSpawns = useCallback((spawnQueues: Map<string, SavedShellSpec[]>) => {

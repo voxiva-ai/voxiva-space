@@ -25,10 +25,9 @@ import { nextXtermMountDelay } from "../spawnQueue";
 import type { TerminalExitEvent, TerminalOutputEvent } from "../types";
 import { subscribeTheme } from "@/features/theme";
 import { xtermThemeForId } from "../xtermTheme";
-import { subscribeZoom } from "@/features/ui/zoom";
+import { loadZoom, subscribeZoom } from "@/features/ui/zoom";
 import { isAgentDrag } from "@/features/agents/drag";
 import { agentIdForSession } from "@/features/agents/sessionAgent";
-import { isAgentChatDropRelease } from "@/features/agents/agentChatDrop";
 import {
   clearFileDropPaint,
   emitPaneDrag,
@@ -45,8 +44,9 @@ function keyEventToPty(event: KeyboardEvent): string | null {
   if (event.altKey || event.metaKey) return null;
 
   if (event.ctrlKey) {
-    // Let the paste handler own Ctrl/Cmd+V (text + images for OpenCode).
+    // Paste owned by clipboard handlers; Ctrl+C copy-vs-SIGINT handled separately.
     if (event.key === "v" || event.key === "V") return null;
+    if (event.key === "c" || event.key === "C") return null;
     if (event.key.length === 1) {
       const code = event.key.toUpperCase().charCodeAt(0) - 64;
       if (code >= 1 && code <= 26) return String.fromCharCode(code);
@@ -89,6 +89,11 @@ function keyEventToPty(event: KeyboardEvent): string | null {
 
 type CellMetrics = { width: number; height: number };
 
+/** Stable terminal font — adaptive sizing tears Ink/Gemini chrome. */
+function termFontSize(zoom = loadZoom()): number {
+  return Math.max(11, Math.min(16, Math.round(13 * zoom)));
+}
+
 function readCellMetrics(terminal: XTerm): CellMetrics | null {
   const core = (
     terminal as unknown as {
@@ -97,40 +102,71 @@ function readCellMetrics(terminal: XTerm): CellMetrics | null {
   )._core;
   const cell = core?._renderService?.dimensions?.css?.cell;
   if (!cell?.width || !cell?.height) return null;
-  return cell;
+  // Fractional CSS cells are the WebView2 clip source — ceil so we under-claim cols/rows.
+  return {
+    width: Math.max(1, Math.ceil(cell.width * 1000) / 1000),
+    height: Math.max(1, Math.ceil(cell.height * 1000) / 1000),
+  };
 }
 
-/** Fit cols/rows to the host without FitAddon’s scrollbar gutter (breaks OpenCode). */
+/**
+ * Hard fit like Ghostty/cmux: never paint more cells than the host can show.
+ * Do NOT call FitAddon.fit() — it oversizes the canvas and crops Gemini/Codex chrome.
+ */
 function fitHostToPty(
   host: HTMLElement,
   terminal: XTerm,
   fitAddon: FitAddon,
-): { cols: number; rows: number } | null {
-  if (host.clientWidth < 8 || host.clientHeight < 8) return null;
+): { cols: number; rows: number; pixelWidth: number; pixelHeight: number; fontChanged: boolean } | null {
+  const rect = host.getBoundingClientRect();
+  // Floor avail — subpixel host sizes still clip the last row/col on WebView2.
+  const availW = Math.max(0, Math.floor(rect.width));
+  const availH = Math.max(0, Math.floor(rect.height));
+  if (availW < 8 || availH < 8) return null;
 
+  const nextFont = termFontSize();
+  const fontChanged = terminal.options.fontSize !== nextFont;
+  if (fontChanged) {
+    terminal.options.fontSize = nextFont;
+  }
+
+  // Remeasure without applying FitAddon.fit() (that call is what oversizes Ink TUIs).
   let cell = readCellMetrics(terminal);
-  if (!cell) {
-    // Measure cell size with scrollback briefly disabled so FitAddon doesn’t reserve 14px.
-    const prevScrollback = terminal.options.scrollback;
-    terminal.options.scrollback = 0;
+  if (!cell || fontChanged) {
     try {
-      fitAddon.fit();
+      const proposed = fitAddon.proposeDimensions();
+      if (proposed?.cols && proposed?.rows) {
+        // Probe resize to force renderer metrics, then read cells.
+        const probeCols = Math.max(2, Math.min(proposed.cols, 120));
+        const probeRows = Math.max(2, Math.min(proposed.rows, 40));
+        if (probeCols !== terminal.cols || probeRows !== terminal.rows) {
+          terminal.resize(probeCols, probeRows);
+        }
+      }
     } catch {
       // ignore
     }
-    terminal.options.scrollback = prevScrollback;
     cell = readCellMetrics(terminal);
   }
-  if (!cell) {
-    return { cols: terminal.cols, rows: terminal.rows };
+
+  if (!cell?.width || !cell?.height) {
+    const fs = nextFont;
+    cell = { width: fs * 0.62, height: fs * 1.2 };
   }
 
-  const cols = Math.max(2, Math.floor(host.clientWidth / cell.width));
-  const rows = Math.max(2, Math.floor(host.clientHeight / cell.height));
+  // Margin of 1 cell — Gemini status / Codex wrap need this headroom on HiDPI.
+  let cols = Math.max(2, Math.floor(availW / cell.width) - 1);
+  let rows = Math.max(2, Math.floor(availH / cell.height) - 1);
+  while (cols > 2 && cols * cell.width > availW - 1) cols -= 1;
+  while (rows > 2 && rows * cell.height > availH - 1) rows -= 1;
+
   if (cols !== terminal.cols || rows !== terminal.rows) {
     terminal.resize(cols, rows);
   }
-  return { cols, rows };
+
+  const pixelWidth = Math.max(1, Math.min(availW, Math.floor(cols * cell.width)));
+  const pixelHeight = Math.max(1, Math.min(availH, Math.floor(rows * cell.height)));
+  return { cols, rows, pixelWidth, pixelHeight, fontChanged };
 }
 
 export function TerminalPane({
@@ -165,6 +201,8 @@ export function TerminalPane({
   const writeBufRef = useRef("");
   const writeFlushTimerRef = useRef(0);
   const pendingOutputRef = useRef("");
+  const outputBufRef = useRef("");
+  const outputRafRef = useRef(0);
   sessionIdRef.current = session.id;
 
   const flushPtyWrites = () => {
@@ -208,6 +246,25 @@ export function TerminalPane({
 
   const pasteInto = (payload: string) => {
     insertIntoPty(isAgentSession ? wrapAgentPaste(agentId, payload) : bracketedPaste(payload));
+  };
+
+  const writeOutput = (data: string) => {
+    const term = terminalRef.current;
+    if (!term) {
+      pendingOutputRef.current += data;
+      if (pendingOutputRef.current.length > 180_000) {
+        pendingOutputRef.current = pendingOutputRef.current.slice(-90_000);
+      }
+      return;
+    }
+    outputBufRef.current += data;
+    if (outputRafRef.current) return;
+    outputRafRef.current = window.requestAnimationFrame(() => {
+      outputRafRef.current = 0;
+      const chunk = outputBufRef.current;
+      outputBufRef.current = "";
+      if (chunk) term.write(chunk);
+    });
   };
 
   useEffect(() => {
@@ -279,10 +336,14 @@ export function TerminalPane({
       convertEol: false,
       disableStdin: false,
       allowTransparency,
+      customGlyphs: true,
+      drawBoldTextInBrightColors: true,
       fontFamily: mono,
-      fontSize: 13,
-      lineHeight: 1.18,
+      fontSize: termFontSize(),
+      // Fractional lineHeight makes full-screen TUIs (Gemini, OpenCode) crop top/bottom chrome.
+      lineHeight: 1,
       letterSpacing: 0,
+      minimumContrastRatio: 1.2,
       scrollback: 8000,
       scrollOnUserInput: true,
       scrollSensitivity: 1,
@@ -300,6 +361,25 @@ export function TerminalPane({
     }
 
     const dataDisposable = terminal.onData((data) => sendToPty(data));
+
+    // VS Code-style clipboard: Ctrl+C copies selection; otherwise SIGINT.
+    // Ctrl+V is owned by our paste handler (text + images → @path for agents).
+    terminal.attachCustomKeyEventHandler((ev) => {
+      if (ev.type !== "keydown") return true;
+      if (!(ev.ctrlKey || ev.metaKey) || ev.altKey) return true;
+      if (ev.key === "c" || ev.key === "C") {
+        if (terminal.hasSelection()) {
+          const text = terminal.getSelection();
+          void navigator.clipboard.writeText(text).catch(() => undefined);
+          return false;
+        }
+        return true;
+      }
+      if (ev.key === "v" || ev.key === "V") {
+        return false;
+      }
+      return true;
+    });
 
     // Scroll scrollback without stealing focus from another pane; click to type.
     const onWheel = (event: WheelEvent) => {
@@ -325,14 +405,31 @@ export function TerminalPane({
 
     let lastCols = 0;
     let lastRows = 0;
+    let lastPxW = 0;
+    let lastPxH = 0;
     const resize = () => {
       try {
         const size = fitHostToPty(host, terminal, fitAddon);
         if (!size) return;
-        if (size.cols === lastCols && size.rows === lastRows) return;
+        const gridChanged =
+          size.cols !== lastCols ||
+          size.rows !== lastRows ||
+          size.pixelWidth !== lastPxW ||
+          size.pixelHeight !== lastPxH;
+        if (!gridChanged && !size.fontChanged) return;
         lastCols = size.cols;
         lastRows = size.rows;
-        void resizeTerminalSession(sessionIdRef.current, size.cols, size.rows);
+        lastPxW = size.pixelWidth;
+        lastPxH = size.pixelHeight;
+        void resizeTerminalSession(sessionIdRef.current, size.cols, size.rows, {
+          width: size.pixelWidth,
+          height: size.pixelHeight,
+        });
+        try {
+          terminal.refresh(0, Math.max(0, terminal.rows - 1));
+        } catch {
+          // ignore
+        }
       } catch {
         // ignore
       }
@@ -354,6 +451,9 @@ export function TerminalPane({
       resize();
       if (isActive) terminal.focus();
     }, 60);
+    // Second pass after flex layout settles — avoids Gemini/OpenCode cropping chrome.
+    const t2 = window.setTimeout(() => resize(), 220);
+    const t3 = window.setTimeout(() => resize(), 500);
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
@@ -373,7 +473,14 @@ export function TerminalPane({
     return () => {
       unsubTheme();
       window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
       if (resizeRaf) window.cancelAnimationFrame(resizeRaf);
+      if (outputRafRef.current) {
+        window.cancelAnimationFrame(outputRafRef.current);
+        outputRafRef.current = 0;
+      }
+      outputBufRef.current = "";
       observer.disconnect();
       host.removeEventListener("wheel", onWheel);
       host.removeEventListener("pointerdown", onHostPointerDown);
@@ -393,14 +500,6 @@ export function TerminalPane({
       const fitAddon = fitAddonRef.current;
       const host = containerRef.current;
       if (!terminal || !fitAddon || !host) return;
-      const prev = terminal.options.scrollback;
-      terminal.options.scrollback = 0;
-      try {
-        fitAddon.fit();
-      } catch {
-        // ignore
-      }
-      terminal.options.scrollback = prev;
       resizeFnRef.current?.();
       try {
         terminal.refresh(0, Math.max(0, terminal.rows - 1));
@@ -443,6 +542,23 @@ export function TerminalPane({
           return;
         }
       }
+
+      // Ctrl/Cmd+C: copy selection, else interrupt (SIGINT) when not on xterm textarea.
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && (event.key === "c" || event.key === "C")) {
+        const term = terminalRef.current;
+        if (term?.hasSelection()) {
+          event.preventDefault();
+          event.stopPropagation();
+          void navigator.clipboard.writeText(term.getSelection()).catch(() => undefined);
+          return;
+        }
+        if (document.activeElement === term?.textarea) return;
+        event.preventDefault();
+        event.stopPropagation();
+        sendToPty("\x03");
+        return;
+      }
+
       const ta = terminalRef.current?.textarea;
       if (ta && document.activeElement === ta) return;
 
@@ -504,27 +620,17 @@ export function TerminalPane({
       window.removeEventListener("paste", onPaste, true);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, session.status]);
+  }, [isActive, session.status, agentId, isAgentSession]);
 
   useEffect(() => {
     const unlistenOutput = listen<TerminalOutputEvent>("terminal://output", (event) => {
       if (event.payload.id !== session.id) return;
-      const term = terminalRef.current;
-      if (term) {
-        term.write(event.payload.data);
-        return;
-      }
-      pendingOutputRef.current += event.payload.data;
-      if (pendingOutputRef.current.length > 180_000) {
-        pendingOutputRef.current = pendingOutputRef.current.slice(-90_000);
-      }
+      writeOutput(event.payload.data);
     });
     const unlistenExit = listen<TerminalExitEvent>("terminal://exit", (event) => {
       if (event.payload.id !== session.id) return;
       const message = `\r\n[${event.payload.message}]`;
-      const term = terminalRef.current;
-      if (term) term.writeln(message);
-      else pendingOutputRef.current += message;
+      writeOutput(`${message}\r\n`);
     });
     return () => {
       void unlistenOutput.then((u) => u());
@@ -539,8 +645,8 @@ export function TerminalPane({
     <div
       ref={shellRef}
       data-term-drop={`${paneId}:${session.id}`}
-      className={`vs-terminalShell${isActive ? " is-active" : ""}${isAgentSession ? " is-agentChat" : ""}${!isAgentSession && dropping ? " is-dropFile" : ""}`}
-      data-drop-label={t("term.dropHint")}
+      className={`vs-terminalShell${isActive ? " is-active" : ""}${isAgentSession ? " is-agentChat" : ""}${dropping ? (isAgentSession ? " is-dropChat" : " is-dropFile") : ""}`}
+      data-drop-label={isAgentSession ? t("term.dropHintAgent") : t("term.dropHint")}
       onMouseDown={() => {
         onFocus();
         terminalRef.current?.focus();
@@ -550,9 +656,10 @@ export function TerminalPane({
           event.preventDefault();
           return;
         }
-        if (isAgentSession && isExternalFileDrag(event.dataTransfer.types)) {
+        if (isExternalFileDrag(event.dataTransfer.types)) {
           event.preventDefault();
           event.dataTransfer.dropEffect = "copy";
+          setDropping(true);
           return;
         }
         event.preventDefault();
@@ -564,9 +671,10 @@ export function TerminalPane({
           event.dataTransfer.dropEffect = "copy";
           return;
         }
-        if (isAgentSession && isExternalFileDrag(event.dataTransfer.types)) {
+        if (isExternalFileDrag(event.dataTransfer.types)) {
           event.preventDefault();
           event.dataTransfer.dropEffect = "copy";
+          setDropping(true);
           return;
         }
         event.preventDefault();
@@ -590,43 +698,44 @@ export function TerminalPane({
           setDropping(false);
           clearFileDropPaint();
           emitPaneDrag(false, "file");
-          const inChat = isAgentChatDropRelease(shellRef.current, event.clientY);
 
-          if (inChat) {
+          // cmux-style: default drop into the agent prompt as @paths.
+          // Hold Shift to open as media/preview in the pane instead.
+          if (event.shiftKey) {
             void (async () => {
-              if (files?.length) {
-                const fromFiles = await payloadFromFileList(files, { agentId });
-                if (fromFiles) {
-                  pasteInto(fromFiles);
-                  return;
-                }
-              }
               const paths = await resolvePreviewPathsFromDrop(event.dataTransfer, { cwd });
-              if (paths.length) {
-                const attachment = formatAgentAttachment(agentId, paths);
-                if (attachment) pasteInto(attachment);
-                return;
+              if (paths[0]) {
+                await handleFileDropAt(paneId, "center", "", {
+                  shiftKey: true,
+                  rawPaths: paths,
+                });
               }
-              const diskPaths = rawPathsFromDataTransfer(event.dataTransfer, { cwd });
-              if (diskPaths.length) {
-                const attachment = formatAgentAttachment(agentId, diskPaths);
-                if (attachment) pasteInto(attachment);
-                return;
-              }
-              const payload = payloadFromDataTransfer(event.dataTransfer, { cwd });
-              if (payload) pasteInto(payload);
             })().catch(() => undefined);
             return;
           }
 
           void (async () => {
-            const paths = await resolvePreviewPathsFromDrop(event.dataTransfer, { cwd });
-            if (paths[0]) {
-              await handleFileDropAt(paneId, "center", "", {
-                shiftKey: event.shiftKey,
-                rawPaths: paths,
-              });
+            if (files?.length) {
+              const fromFiles = await payloadFromFileList(files, { agentId });
+              if (fromFiles) {
+                pasteInto(fromFiles);
+                return;
+              }
             }
+            const paths = await resolvePreviewPathsFromDrop(event.dataTransfer, { cwd });
+            if (paths.length) {
+              const attachment = formatAgentAttachment(agentId, paths);
+              if (attachment) pasteInto(attachment);
+              return;
+            }
+            const diskPaths = rawPathsFromDataTransfer(event.dataTransfer, { cwd });
+            if (diskPaths.length) {
+              const attachment = formatAgentAttachment(agentId, diskPaths);
+              if (attachment) pasteInto(attachment);
+              return;
+            }
+            const payload = payloadFromDataTransfer(event.dataTransfer, { cwd });
+            if (payload) pasteInto(payload);
           })().catch(() => undefined);
           return;
         }

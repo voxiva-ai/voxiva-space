@@ -87,21 +87,53 @@ function ctx() {
 
 ensureAudioUnlocked();
 
-function tone(freqs: number[], duration = 0.35, gain = 0.12) {
+function tone(
+  freqs: number[],
+  duration = 0.35,
+  gain = 0.12,
+  opts?: { type?: OscillatorType; delay?: number; detune?: number },
+) {
   const c = ctx();
-  const now = c.currentTime;
+  const now = c.currentTime + (opts?.delay ?? 0);
   const g = c.createGain();
   g.connect(c.destination);
-  g.gain.setValueAtTime(gain, now);
+  g.gain.setValueAtTime(0.001, now);
+  g.gain.exponentialRampToValueAtTime(gain, now + 0.018);
+  g.gain.exponentialRampToValueAtTime(gain * 0.34, now + duration * 0.45);
   g.gain.exponentialRampToValueAtTime(0.001, now + duration);
   for (const f of freqs) {
     const o = c.createOscillator();
-    o.type = "sine";
+    o.type = opts?.type ?? "sine";
     o.frequency.value = f;
+    if (opts?.detune) o.detune.value = opts.detune;
     o.connect(g);
     o.start(now);
     o.stop(now + duration);
   }
+}
+
+function noise(duration = 0.12, gain = 0.018, delay = 0) {
+  const c = ctx();
+  const now = c.currentTime + delay;
+  const samples = Math.max(1, Math.floor(c.sampleRate * duration));
+  const buffer = c.createBuffer(1, samples, c.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < samples; i += 1) {
+    data[i] = (Math.random() * 2 - 1) * (1 - i / samples);
+  }
+  const src = c.createBufferSource();
+  const filter = c.createBiquadFilter();
+  const g = c.createGain();
+  filter.type = "highpass";
+  filter.frequency.value = 1800;
+  g.gain.setValueAtTime(gain, now);
+  g.gain.exponentialRampToValueAtTime(0.001, now + duration);
+  src.buffer = buffer;
+  src.connect(filter);
+  filter.connect(g);
+  g.connect(c.destination);
+  src.start(now);
+  src.stop(now + duration);
 }
 
 function playPreset(preset: SoundPreset, customDataUrl: string | null) {
@@ -112,16 +144,21 @@ function playPreset(preset: SoundPreset, customDataUrl: string | null) {
     return;
   }
   if (preset === "soft") {
-    tone([523.25, 659.25], 0.22, 0.06);
+    tone([659.25, 987.77], 0.24, 0.045);
+    tone([1318.51], 0.18, 0.028, { delay: 0.07 });
+    noise(0.08, 0.01);
     return;
   }
   if (preset === "chime") {
-    tone([784.0], 0.14, 0.07);
-    window.setTimeout(() => tone([1046.5], 0.22, 0.06), 100);
+    tone([523.25, 783.99], 0.2, 0.05);
+    tone([659.25, 1046.5], 0.24, 0.045, { delay: 0.09 });
+    tone([1567.98], 0.16, 0.025, { delay: 0.16 });
     return;
   }
   // bell
-  tone([880, 1320], 0.32, 0.08);
+  tone([880, 1760], 0.28, 0.055, { type: "triangle" });
+  tone([1320], 0.18, 0.03, { delay: 0.045, detune: -8 });
+  noise(0.1, 0.012);
 }
 
 export type SoundEvent = "attention" | "exit";
