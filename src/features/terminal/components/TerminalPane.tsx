@@ -154,9 +154,9 @@ function fitHostToPty(
     cell = { width: fs * 0.62, height: fs * 1.2 };
   }
 
-  // Margin of 1 cell — Gemini status / Codex wrap need this headroom on HiDPI.
-  let cols = Math.max(2, Math.floor(availW / cell.width) - 1);
-  let rows = Math.max(2, Math.floor(availH / cell.height) - 1);
+  // Ceiled cell metrics already provide HiDPI headroom without a visible empty row/column.
+  let cols = Math.max(2, Math.floor(availW / cell.width));
+  let rows = Math.max(2, Math.floor(availH / cell.height));
   while (cols > 2 && cols * cell.width > availW - 1) cols -= 1;
   while (rows > 2 && rows * cell.height > availH - 1) rows -= 1;
 
@@ -164,8 +164,8 @@ function fitHostToPty(
     terminal.resize(cols, rows);
   }
 
-  const pixelWidth = Math.max(1, Math.min(availW, Math.floor(cols * cell.width)));
-  const pixelHeight = Math.max(1, Math.min(availH, Math.floor(rows * cell.height)));
+  const pixelWidth = Math.max(1, availW);
+  const pixelHeight = Math.max(1, availH);
   return { cols, rows, pixelWidth, pixelHeight, fontChanged };
 }
 

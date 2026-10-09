@@ -16,7 +16,7 @@ export type UpdateCheckResult = {
   downloadsPage: string;
 };
 
-const GH_RELEASES = "https://api.github.com/repos/voxiva-ai/voxiva-space/releases/latest";
+const GH_RELEASES = "https://api.github.com/repos/voxiva-ai/voxiva-space/releases?per_page=20";
 const SITE_RELEASE = "https://voxiva.ai/api/releases/voxiva-space";
 
 function parseSemver(v: string): [number, number, number] | null {
@@ -54,26 +54,29 @@ async function checkGitHub(meta: AppMetadata): Promise<UpdateCheckResult> {
     },
   });
   if (!res.ok) throw new Error(`GitHub ${res.status}`);
-  const remote = (await res.json()) as {
+  const releases = (await res.json()) as Array<{
     tag_name?: string;
     name?: string;
     body?: string;
     html_url?: string;
+    draft?: boolean;
     assets?: { name: string; browser_download_url: string }[];
-  };
+  }>;
+  const remote = releases.find((release) => !release.draft);
+  if (!remote) throw new Error("GitHub has no published release");
   const latestVersion = (remote.tag_name || remote.name || "").replace(/^v/i, "");
   if (!latestVersion) throw new Error("GitHub release has no version");
   const downloadUrl =
     pickExeAsset(remote.assets) ||
     remote.html_url ||
-    "https://github.com/voxiva-ai/voxiva-space/releases/latest";
+    "https://github.com/voxiva-ai/voxiva-space/releases";
   return {
     currentVersion: meta.version,
     latestVersion,
     updateAvailable: isNewer(latestVersion, meta.version),
     notes: (remote.body ?? "").trim().slice(0, 280),
     downloadUrl,
-    downloadsPage: remote.html_url || "https://github.com/voxiva-ai/voxiva-space/releases/latest",
+    downloadsPage: remote.html_url || "https://github.com/voxiva-ai/voxiva-space/releases",
   };
 }
 

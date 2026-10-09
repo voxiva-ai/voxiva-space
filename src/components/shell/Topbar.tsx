@@ -6,6 +6,11 @@ import type { ViewId } from "@/lib/types";
 import type { MsgKey } from "@/i18n";
 import { WindowControls } from "@/components/shell/WindowControls";
 import { beginWindowDrag, toggleMaximize } from "@/features/ui/windowDrag";
+import {
+  checkForUpdates,
+  openUpdateUrl,
+  type UpdateCheckResult,
+} from "@/features/updates/api";
 
 const TITLE_KEY: Record<ViewId, MsgKey> = {
   space: "nav.space",
@@ -37,6 +42,7 @@ export function Topbar() {
   } = useSpace();
   const { view } = useView();
   const [editing, setEditing] = useState(false);
+  const [update, setUpdate] = useState<UpdateCheckResult | null>(null);
   const [nameDraft, setNameDraft] = useState(activeWorkspace?.name ?? "");
   /** Name in chrome only for non-space app views — space name lives in the sidebar. */
   const showWorkspaceName =
@@ -51,6 +57,15 @@ export function Topbar() {
     setNameDraft(activeWorkspace?.name ?? "");
     setEditing(false);
   }, [activeWorkspace?.id, activeWorkspace?.name]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void checkForUpdates()
+        .then((result) => setUpdate(result.updateAvailable ? result : null))
+        .catch(() => undefined);
+    }, 1800);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const onRename = () => {
@@ -169,6 +184,20 @@ export function Topbar() {
         onPointerDown={beginWindowDrag}
         onDoubleClick={toggleMaximize}
       />
+      {update ? (
+        <button
+          type="button"
+          className="vs-updateNotice"
+          data-no-drag
+          title={t("settings.updateAvailable")
+            .replace("{latest}", update.latestVersion)
+            .replace("{current}", update.currentVersion)}
+          onClick={() => void openUpdateUrl(update.downloadUrl || update.downloadsPage)}
+        >
+          <span aria-hidden />
+          {t("update.ready").replace("{version}", update.latestVersion)}
+        </button>
+      ) : null}
       <div className="vs-topbarActions" data-no-drag>
         <WindowControls />
       </div>

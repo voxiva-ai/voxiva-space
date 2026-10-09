@@ -886,6 +886,17 @@ pub(crate) fn enriched_path() -> Option<String> {
             extras.push(format!("{local}\\bun"));
             extras.push(format!("{local}\\Volta\\bin"));
             extras.push(format!("{local}\\cursor-agent"));
+            let codex_bin = PathBuf::from(&local).join("OpenAI").join("Codex").join("bin");
+            extras.push(codex_bin.to_string_lossy().into_owned());
+            if let Ok(entries) = fs::read_dir(codex_bin) {
+                extras.extend(
+                    entries
+                        .flatten()
+                        .map(|entry| entry.path())
+                        .filter(|path| path.is_dir())
+                        .map(|path| path.to_string_lossy().into_owned()),
+                );
+            }
         }
         if let Ok(user) = std::env::var("USERPROFILE") {
             extras.push(format!("{user}\\.local\\bin"));
