@@ -17,20 +17,18 @@ function Get-LatestRelease {
 }
 
 function Find-SpaceExe {
-  $candidates = @(
+  return @(
+    (Join-Path $env:LOCALAPPDATA        "Voxiva Space\voxiva-space.exe"),
     (Join-Path $env:LOCALAPPDATA        "Programs\Voxiva Space\Voxiva Space.exe"),
     (Join-Path $env:ProgramFiles        "Voxiva Space\Voxiva Space.exe"),
     (Join-Path ${env:ProgramFiles(x86)} "Voxiva Space\Voxiva Space.exe")
-  ) | Where-Object { $_ -and (Test-Path $_) }
-  if ($candidates.Count -gt 0) { return $candidates[0] }
-  return $null
+  ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 }
 
 function Ensure-DesktopShortcut([string]$ExePath) {
   if (-not $ExePath -or -not (Test-Path $ExePath)) { return }
   $desktop = [Environment]::GetFolderPath("Desktop")
   $lnk = Join-Path $desktop "Voxiva Space.lnk"
-  if (Test-Path $lnk) { return }
   $shell = New-Object -ComObject WScript.Shell
   $sc = $shell.CreateShortcut($lnk)
   $sc.TargetPath = $ExePath
