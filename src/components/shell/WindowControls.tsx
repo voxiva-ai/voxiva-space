@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "@/platform/desktop";
 
 /** Frameless window chrome — min / max / close (F11 fullscreen stays a keyboard shortcut). */
 export function WindowControls() {

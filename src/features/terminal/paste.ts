@@ -1,4 +1,5 @@
 import { writeTempFile } from "./api";
+import { getNativeFilePath } from "@/platform/desktop";
 import { formatPathsForPty, quoteForShell } from "./drop";
 
 /** Bracketed paste so OpenCode/TUIs treat the payload as one paste, not keystrokes. */
@@ -260,9 +261,9 @@ export async function payloadFromFileList(
   if (!list.length) return null;
   const paths: string[] = [];
   for (const file of list) {
-    const anyFile = file as File & { path?: string };
-    if (anyFile.path) {
-      paths.push(anyFile.path);
+    const diskPath = getNativeFilePath(file);
+    if (diskPath) {
+      paths.push(diskPath);
       continue;
     }
     const saved = await saveBlobToTemp(file, file.name);

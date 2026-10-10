@@ -1,0 +1,36 @@
+name: Electron pilot
+
+on:
+  push:
+    branches: [codex/electron-migration]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:electron-pilot
+      - run: npm run test:electron-visibility
+      - run: npm run test:electron-vscode
+      - run: npm run test:electron-vault
+      - run: npm run test:electron-companion
+      - run: npm run test:electron-cookies
+      - run: npm run test:electron-updates
+      - run: npm run test:electron-files
+      - run: npm run build
+      - run: npm run electron:smoke
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --manifest-path native/Cargo.toml
+      - run: cargo build --manifest-path native/Cargo.toml
+      - run: npm run electron:app-smoke
+      - run: cargo build --release --manifest-path native/Cargo.toml
+      - run: npx electron-builder --dir

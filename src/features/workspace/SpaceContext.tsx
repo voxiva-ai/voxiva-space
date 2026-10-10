@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { listen, getCurrentWindow } from "@/platform/desktop";
 import { uid } from "@/lib/constants";
 import { clientError } from "@/lib/errors";
 import type {
@@ -36,6 +36,7 @@ import {
   vscodeServeWebFolderUrl,
 } from "@/features/terminal/api";
 import { enqueueTerminalSpawn, yieldToUi } from "@/features/terminal/spawnQueue";
+import { loadTerminalPrefs } from "@/features/terminal/prefs";
 import {
   outputNeedsAttention,
 } from "@/features/attention/prefs";
@@ -182,6 +183,7 @@ type SpawnOptions = {
   agentId?: string;
   /** replace = kill current tabs (default for empty). tab = add alongside. */
   mode?: "replace" | "tab";
+  background?: boolean;
   /** History drop / repeat launch — do not steal focus of an already-live agent. */
   forceNew?: boolean;
   /** Bracketed paste payload after the shell is online (file drop on empty pane). */
@@ -1142,6 +1144,19 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     async (opts: CreateWorkspaceOptions): Promise<Workspace> => {
       const grid = resolveGrid(opts);
       let layout = buildCreateLayout(grid, Boolean(opts.includeBrowser));
+      const terminalPrefs = loadTerminalPrefs();
+      const setupCommand = terminalPrefs.setupScriptCommand.trim();
+      let setupPaneId: string | null = null;
+      if (setupCommand && terminalPrefs.setupScriptLocation !== "tab" && countLeaves(layout) < 8) {
+        const anchorPaneId = collectLeaves(layout).find((leaf) => leaf.kind !== "browser")?.paneId;
+        const added = anchorPaneId
+          ? addShellBeside(layout, anchorPaneId, terminalPrefs.setupScriptLocation === "vertical" ? "h" : "v")
+          : null;
+        if (added) {
+          layout = added.layout;
+          setupPaneId = added.paneId;
+        }
+      }
       queuePaneSpawns(
         pendingPaneSpawnsRef.current,
         layout,
@@ -1156,6 +1171,19 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         layout = setLeafBrowser(openBrowserTab(layout, seedPane), seedPane, opts.seedBrowserUrl);
       } else if (seedPane && opts.seedSpawn) {
         pendingPaneSpawnsRef.current.set(seedPane, { ...opts.seedSpawn, paneId: seedPane });
+      }
+      if (setupCommand) {
+        const targetPaneId = setupPaneId ?? collectLeaves(layout).find((leaf) => leaf.kind !== "browser")?.paneId;
+        if (targetPaneId) {
+          const setupSpawn = { title: "Setup", command: setupCommand, accent: "green" as const, agentId: "shell", paneId: targetPaneId, background: true };
+          if (setupPaneId) {
+            pendingPaneSpawnsRef.current.set(targetPaneId, setupSpawn);
+          } else {
+            const initialSpawn = pendingPaneSpawnsRef.current.get(targetPaneId) ?? { title: "Shell", accent: "green" as const, agentId: "shell", paneId: targetPaneId };
+            pendingPaneSpawnQueuesRef.current.set(targetPaneId, [initialSpawn, setupSpawn]);
+            pendingPaneSpawnsRef.current.delete(targetPaneId);
+          }
+        }
       }
       let branch: string | null = opts.branch ?? null;
       const cwd = opts.cwd.trim();
@@ -1256,7 +1284,11 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         patchWorkspace(workspace.id, (ws) => ({
           ...ws,
           layout: asTab
-            ? addLeafSession(ws.layout, paneId, session.id)
+            ? activateLeafSession(
+                addLeafSession(ws.layout, paneId, session.id),
+                paneId,
+                opts.background ? leaf?.sessionId ?? session.id : session.id,
+              )
             : setLeafSession(ws.layout, paneId, session.id),
           focusedPaneId: paneId,
         }));
@@ -3184,8 +3216,8 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(flashTimerRef.current);
       setFlashPaneId(target.paneId);
       flashTimerRef.current = window.setTimeout(() => setFlashPaneId(null), 900);
-      void import("@tauri-apps/api/window")
-        .then(({ getCurrentWindow }) => getCurrentWindow().setFocus())
+      void Promise.resolve()
+        .then(() => getCurrentWindow().setFocus())
         .catch(() => undefined);
       return true;
     },

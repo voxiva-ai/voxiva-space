@@ -274,18 +274,20 @@
   font-size: 0.74rem;
 }
 
-.vs-browserNavBar .vs-termIconBtn {
+.vs-browserNavBar .vs-btn.vs-browserUtilityBtn {
+  flex-basis: 26px;
   width: 26px;
+  min-width: 26px;
   height: 26px;
   color: var(--vs-term-chrome-muted);
 }
 
-.vs-browserNavBar .vs-termIconBtn:hover:not(:disabled) {
+.vs-browserNavBar .vs-browserUtilityBtn:hover:not(:disabled) {
   color: var(--vs-term-chrome-text);
   background: var(--vs-bg-hover);
 }
 
-.vs-browserNavBar .vs-termIconBtn.is-active {
+.vs-browserNavBar .vs-browserUtilityBtn.is-active {
   color: var(--vs-accent);
   background: color-mix(in srgb, var(--vs-accent) 14%, transparent);
 }
@@ -476,6 +478,7 @@
 }
 
 .vs-browserBar .vs-browserUtilityBtn,
+.vs-browserNavBar .vs-browserUtilityBtn,
 .vs-browserCompactBar .vs-browserUtilityBtn {
   display: inline-grid;
   place-items: center;
@@ -489,6 +492,7 @@
 }
 
 .vs-browserBar .vs-browserUtilityBtn:hover,
+.vs-browserNavBar .vs-browserUtilityBtn:hover,
 .vs-browserCompactBar .vs-browserUtilityBtn:hover {
   color: var(--vs-text);
   border-color: var(--vs-border-strong);
@@ -503,6 +507,7 @@
 }
 
 .vs-browserBar .vs-browserUtilityBtn.is-active,
+.vs-browserNavBar .vs-browserUtilityBtn.is-active,
 .vs-browserCompactBar .vs-browserUtilityBtn.is-active {
   color: var(--vs-accent);
   border-color: color-mix(in srgb, var(--vs-accent) 55%, var(--vs-border));
@@ -1084,6 +1089,7 @@
     flex-basis: calc(100% - 42px);
   }
 
+  .vs-browserNavBar .vs-browserUtilityBtn.is-external,
   .vs-browserCompactBar .vs-browserUtilityBtn.is-external,
   .vs-browserDragHandle {
     display: none;

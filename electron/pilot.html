@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'">
+<title>Voxiva Space · Electron browser pilot</title>
+<style>
+  * { box-sizing: border-box }
+  body { margin: 0; background: #10151d; color: #dce7f3; font: 14px system-ui, sans-serif }
+  header { height: 64px; display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #293445 }
+  .mark { font-weight: 800; font-size: 22px; background: linear-gradient(120deg,#FFE995,#F49A32 45%,#79E5FF 50%,#2D5BFF); color: transparent; background-clip: text }
+  .title { min-width: 190px; font-weight: 650 }
+  input { flex: 1; min-width: 0; background: #1b2533; color: white; border: 1px solid #3a4d66; border-radius: 7px; padding: 8px }
+  button { background: #294770; color: white; border: 0; border-radius: 7px; padding: 8px 12px; cursor: pointer }
+  main { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #293445; height: calc(100vh - 64px) }
+  .pane { background: #10151d; min-width: 0 }
+</style>
+<header><span class="mark">S</span><span class="title">Voxiva Space · Chromium pilot</span><input id="url" aria-label="URL" value="https://example.com"><button id="open">Open in both panes</button><span id="status" role="status"></span></header>
+<main><div class="pane" id="left"></div><div class="pane" id="right"></div></main>
+<script src="pilot-renderer.js"></script>
+</html>

@@ -1,4 +1,4 @@
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "@/platform/desktop";
 
 /** Frameless window: start a move from the title drag strip (not from buttons). */
 export function beginWindowDrag(event: { button: number }) {

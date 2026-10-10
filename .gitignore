@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 dist/
+release/
 .DS_Store
 *.log
 .env
@@ -12,6 +13,7 @@ _t3themes/
 
 # Tauri / Rust
 src-tauri/target/
+native/target/
 src-tauri/WixTools/
 src-tauri/gen/
 

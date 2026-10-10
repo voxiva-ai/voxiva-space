@@ -570,6 +570,7 @@ function PaneLeaf({
             agentId: items[i]!.agentId,
             paneId,
             mode: i === 0 ? "replace" : "tab",
+            background: items[i]!.background,
             paste: items[i]!.paste,
             shell: items[i]!.shell,
             workspaceId: items[i]!.workspaceId,

@@ -1,4 +1,4 @@
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "@/platform/desktop";
 import type { ThemeId } from "@/features/theme";
 
 /** Catalog themes are opaque — clear any leftover acrylic. */

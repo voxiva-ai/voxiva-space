@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/platform/desktop";
 import { openUrl } from "@/features/terminal/api";
 
 export type AppMetadata = {
@@ -104,6 +104,7 @@ export async function getAppMetadata(): Promise<AppMetadata> {
 }
 
 export async function checkForUpdates(): Promise<UpdateCheckResult> {
+  if (window.voxiva) return invoke<UpdateCheckResult>("app_check_for_updates");
   const meta = await getAppMetadata();
   try {
     return await checkGitHub(meta);
@@ -113,5 +114,9 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
 }
 
 export async function openUpdateUrl(url: string): Promise<void> {
+  if (window.voxiva && url === "electron-update") {
+    await invoke("app_install_update");
+    return;
+  }
   await openUrl(url);
 }
