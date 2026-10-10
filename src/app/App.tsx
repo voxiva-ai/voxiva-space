@@ -64,8 +64,8 @@ function GlobalToast() {
 }
 
 function AppShell() {
-  const { welcomeVisible, setBrowserUrl, isVsCodeFocusActive } = useSpace();
-  const { view } = useView();
+  const { welcomeVisible, setBrowserUrl, isVsCodeFocusActive, sessions, agentRuns } = useSpace();
+  const { view, setView } = useView();
   useHotkeys();
   useWindowChrome();
   useEffect(() => {
@@ -219,6 +219,9 @@ function AppShell() {
 
   const show = (id: ViewId) => view === id;
   const keep = (id: ViewId) => mountedViews.has(id);
+  const liveSessions = Object.values(sessions).filter((session) => session.status === "online");
+  const liveAgents = liveSessions.filter((session) => session.agentId);
+  const agentNames = [...new Set(liveAgents.map((session) => session.title))].join(", ");
 
   return (
     <div
@@ -295,6 +298,13 @@ function AppShell() {
             pendingUrl={pendingAssistUrl}
             onPendingUrlConsumed={() => setPendingAssistUrl(null)}
           />
+        </div>
+        <div className="vs-statusBar" role="status">
+          <span title="Online terminal sessions">Sessions {liveSessions.length}</span>
+          <button type="button" onClick={() => setView("agents")} title={agentNames || "No active agents"}>
+            Agents {liveAgents.length}
+          </button>
+          <span title="Recorded agent launches">Launches {agentRuns.length}</span>
         </div>
       </main>
       <NewSpaceModal open={newSpaceOpen} onClose={() => setNewSpaceOpen(false)} />

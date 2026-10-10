@@ -996,6 +996,30 @@
   background: transparent;
 }
 
+.vs-statusBar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 25px;
+  padding: 0 12px;
+  border-top: 1px solid var(--vs-border);
+  color: var(--vs-text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.vs-statusBar button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.vs-statusBar button:hover { color: var(--vs-text); }
+
 .vs-topbar {
   display: flex;
   align-items: center;
