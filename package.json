@@ -8,6 +8,7 @@
     "electron:smoke": "electron electron/pilot-main.cjs --smoke",
     "electron:app": "npm run build && cargo build --manifest-path native/Cargo.toml && electron electron/main.cjs",
     "electron:app-smoke": "electron electron/main.cjs --smoke",
+    "test:electron-files": "node electron/files.test.cjs",
     "test:electron-pilot": "node electron/pilot-bounds.test.cjs",
     "dev": "node scripts/tauri-dev.mjs",
     "dev:kill": "node -e \"import('./scripts/dev-port.mjs').then(m=>{m.killStaleVoxiva();m.killPort(1422);console.log('[dev:kill] port 1422 cleared')})\"",

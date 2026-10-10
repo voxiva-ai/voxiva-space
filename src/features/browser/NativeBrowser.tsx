@@ -114,6 +114,7 @@ export function NativeBrowser({
   const [loadedUrl, setLoadedUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [live, setLive] = useState(false);
+  const [snapshot, setSnapshot] = useState("");
   const [localError, setLocalError] = useState("");
   const [omniboxOpen, setOmniboxOpen] = useState(false);
   const [omniboxIndex, setOmniboxIndex] = useState(0);
@@ -232,6 +233,7 @@ export function NativeBrowser({
         setLive(false);
       } else {
         setLive(true);
+        setSnapshot("");
       }
       // Re-apply bounds after paint — child HWND can land at 0×0 on first create.
       await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)));
@@ -256,6 +258,7 @@ export function NativeBrowser({
     setLocalError("");
     onUrlChange("");
     setLive(false);
+    setSnapshot("");
     setBusy(false);
     setInspector(false);
     inspectorRef.current = false;
@@ -372,11 +375,11 @@ export function NativeBrowser({
     const onDrag = (event: Event) => {
       const dragging = Boolean((event as CustomEvent<{ active?: boolean }>).detail?.active);
       dragSuppressedRef.current = dragging;
-      applySuppression(dragging || overlayCoversHost() || !active);
+      applySuppression(dragging || overlayCoversHost() || !active || (omniboxOpen && suggestions.length > 0));
     };
     window.addEventListener("voxiva-pane-drag", onDrag);
     return () => window.removeEventListener("voxiva-pane-drag", onDrag);
-  }, [active, applySuppression, overlayCoversHost]);
+  }, [active, applySuppression, overlayCoversHost, omniboxOpen, suggestions.length]);
 
   useEffect(() => {
     const onOverlay = (event: Event) => {
@@ -384,16 +387,23 @@ export function NativeBrowser({
       const key = detail?.key || "overlay";
       if (detail?.active) overlayKeysRef.current.set(key, detail.rects ?? null);
       else overlayKeysRef.current.delete(key);
-      applySuppression(dragSuppressedRef.current || overlayCoversHost() || !active);
+      applySuppression(dragSuppressedRef.current || overlayCoversHost() || !active || (omniboxOpen && suggestions.length > 0));
     };
     window.addEventListener("voxiva-native-overlay", onOverlay);
     return () => window.removeEventListener("voxiva-native-overlay", onOverlay);
-  }, [active, applySuppression, overlayCoversHost]);
+  }, [active, applySuppression, overlayCoversHost, omniboxOpen, suggestions.length]);
 
   // Tab switch: hide native surface when this browser tab is not selected.
   useEffect(() => {
-    applySuppression(!active || dragSuppressedRef.current || overlayCoversHost());
-  }, [active, applySuppression, overlayCoversHost]);
+    applySuppression(!active || dragSuppressedRef.current || overlayCoversHost() || (omniboxOpen && suggestions.length > 0));
+  }, [active, applySuppression, overlayCoversHost, omniboxOpen, suggestions.length]);
+
+  useEffect(() => {
+    const unlisten = listen<{ label: string; data: string }>("browser://snapshot", ({ payload }) => {
+      if (payload.label === label && aliveRef.current) setSnapshot(payload.data);
+    });
+    return () => { void unlisten.then((stop) => stop()); };
+  }, [label]);
 
   useEffect(() => {
     const unlisten = listen<{ label: string; url: string }>(
@@ -937,7 +947,12 @@ export function NativeBrowser({
 
       {/* Host is always mounted so WebView2 bounds exist before the first create. */}
       <div className="vs-browserViewport">
-        <div className="vs-browserFrameWrap" ref={bindHost} data-has-page={Boolean(loadedUrl)}>
+        <div
+          className="vs-browserFrameWrap"
+          ref={bindHost}
+          data-has-page={Boolean(loadedUrl)}
+          style={snapshot && suppressedRef.current ? { backgroundImage: `url(${snapshot})`, backgroundSize: "100% 100%" } : undefined}
+        >
           <div
             className={`vs-browserNativeSlot${loadedUrl && live && !busy ? " is-covered" : ""}`}
           >

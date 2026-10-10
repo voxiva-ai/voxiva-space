@@ -1,15 +1,25 @@
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 const readline = require("node:readline");
 const { spawn } = require("node:child_process");
-const { app, BrowserWindow, WebContentsView, ipcMain, Menu, dialog, shell } = require("electron");
+const { app, BrowserWindow, WebContentsView, ipcMain, Menu, dialog, shell, protocol, net } = require("electron");
 const { bounds } = require("./pilot-bounds.cjs");
+const { files } = require("./files.cjs");
 
 const terminalCommands = new Set(["get_default_terminal_cwd", "get_app_metadata", "get_git_branch", "check_commands", "create_terminal_session", "write_terminal_session", "resize_terminal_session", "kill_terminal_session"]);
 const browserCommands = new Set(["browser_open", "browser_set_bounds", "browser_navigate", "browser_reload", "browser_hide", "browser_close", "browser_hide_all", "browser_close_all", "browser_open_devtools", "browser_page_meta", "browser_toggle_inspector", "browser_take_selection", "browser_configure_inspector"]);
+const fileCommands = new Set(["list_workspace_dir", "read_text_file", "write_text_file", "workspace_file_info", "read_binary_file", "create_workspace_dir", "write_temp_file"]);
 const validLabel = (label) => typeof label === "string" && /^[\w-]{1,128}$/.test(label);
 const webUrl = (raw) => { const url = new URL(raw); if (!["http:", "https:"].includes(url.protocol)) throw new Error("Only HTTP(S) pages are allowed"); return url.href; };
 
+protocol.registerSchemesAsPrivileged([{ scheme: "voxiva-media", privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }]);
+
 app.whenReady().then(() => {
+  const allowedMedia = new Set();
+  protocol.handle("voxiva-media", (request) => {
+    const file = decodeURIComponent(new URL(request.url).pathname.slice(1));
+    return allowedMedia.has(file) ? net.fetch(pathToFileURL(file).href) : new Response("Forbidden", { status: 403 });
+  });
   const smoke = process.argv.includes("--smoke");
   const window = new BrowserWindow({
     width: 1240, height: 780, minWidth: 960, minHeight: 620, show: false,
@@ -82,7 +92,14 @@ app.whenReady().then(() => {
     }
     if (!view) throw new Error("Browser pane not found");
     if (command === "browser_set_bounds") { showView(view); view.setBounds(bounds(args, window.getContentBounds())); return; }
-    if (command === "browser_hide") { hideView(view); return; }
+    if (command === "browser_hide") {
+      try {
+        const image = await view.webContents.capturePage();
+        if (!image.isEmpty()) event("browser://snapshot", { label, data: image.toDataURL() });
+      } catch { /* The page may be navigating; the next open still restores it. */ }
+      hideView(view);
+      return;
+    }
     if (command === "browser_navigate") { await view.webContents.loadURL(webUrl(args.url)); return; }
     if (command === "browser_reload") { view.webContents.reload(); return; }
     if (command === "browser_open_devtools") { view.webContents.openDevTools({ mode: "detach" }); return; }
@@ -114,6 +131,11 @@ app.whenReady().then(() => {
     if (eventSource.sender !== window.webContents || typeof command !== "string" || !args || typeof args !== "object") throw new Error("Invalid app request");
     if (terminalCommands.has(command)) return native(command, args);
     if (browserCommands.has(command)) return browser(command, args);
+    if (fileCommands.has(command)) {
+      const result = await files(command, args);
+      if (command === "workspace_file_info") allowedMedia.add(result.absolutePath);
+      return result;
+    }
     if (command.startsWith("window_")) return windowCommand(command, args);
     if (command === "pick_workspace_folder") {
       const start = typeof args.startDir === "string" ? args.startDir : undefined;

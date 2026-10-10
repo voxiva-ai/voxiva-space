@@ -41,6 +41,6 @@ export function getCurrentWindow(): ReturnType<typeof tauriWindow> {
 }
 
 export function convertFileSrc(path: string): string {
-  if (window.voxiva) throw new Error("Use the binary file preview in Electron");
+  if (window.voxiva) return `voxiva-media://preview/${encodeURIComponent(path)}`;
   return tauriConvertFileSrc(path);
 }
