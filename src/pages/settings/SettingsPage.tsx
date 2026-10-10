@@ -54,8 +54,9 @@ import {
   ensureAutoCookieImport,
   loadAutoCookieStatus,
 } from "@/features/browser/autoCookies";
+import { TerminalSettings } from "./TerminalSettings";
 
-type SectionId = "general" | "appearance" | "sounds" | "hotkeys" | "browser" | "mobile" | "welcome" | "about";
+type SectionId = "general" | "appearance" | "sounds" | "hotkeys" | "terminal" | "browser" | "mobile" | "welcome" | "about";
 
 function Toggle({
   on,
@@ -265,6 +266,7 @@ export function SettingsPage() {
     { id: "appearance", title: t("settings.theme") },
     { id: "sounds", title: t("settings.sounds") },
     { id: "hotkeys", title: t("settings.hotkeys") },
+    { id: "terminal", title: t("settings.terminal") },
     { id: "browser", title: t("settings.browser") },
     { id: "mobile", title: t("settings.mobile") },
     { id: "welcome", title: t("settings.welcome") },
@@ -632,6 +634,8 @@ export function SettingsPage() {
             </div>
           </section>
         )}
+
+        {section === "terminal" && <TerminalSettings />}
 
         {section === "mobile" && (
           <section className="vs-settingsPanelBody">

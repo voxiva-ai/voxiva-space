@@ -38,6 +38,17 @@ import {
   previewPathsFromDataTransfer,
   resolvePreviewPathsFromDrop,
 } from "@/features/workspace/workspaceFileDrop";
+import { loadTerminalPrefs, subscribeTerminalPrefs, trimCommonIndent } from "../prefs";
+
+function copySelection(terminal: XTerm) {
+  const prefs = loadTerminalPrefs();
+  const selection = terminal.getSelection();
+  if (selection) {
+    void navigator.clipboard
+      .writeText(prefs.trimGutterOnCopy ? trimCommonIndent(selection) : selection)
+      .catch(() => undefined);
+  }
+}
 
 function keyEventToPty(event: KeyboardEvent): string | null {
   if (event.isComposing || event.defaultPrevented) return null;
@@ -203,7 +214,18 @@ export function TerminalPane({
   const pendingOutputRef = useRef("");
   const outputBufRef = useRef("");
   const outputRafRef = useRef(0);
+  const terminalPrefsRef = useRef(loadTerminalPrefs());
   sessionIdRef.current = session.id;
+
+  useEffect(() => subscribeTerminalPrefs((prefs) => {
+    terminalPrefsRef.current = prefs;
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    terminal.options.scrollback = prefs.scrollbackRows;
+    terminal.options.scrollSensitivity = prefs.scrollSpeed;
+    terminal.options.fastScrollSensitivity = prefs.fastScrollSpeed;
+    terminal.options.wordSeparator = prefs.wordSeparators;
+  }), []);
 
   const flushPtyWrites = () => {
     if (writeFlushTimerRef.current) {
@@ -344,9 +366,11 @@ export function TerminalPane({
       lineHeight: 1,
       letterSpacing: 0,
       minimumContrastRatio: 1.2,
-      scrollback: 8000,
+      scrollback: terminalPrefsRef.current.scrollbackRows,
       scrollOnUserInput: true,
-      scrollSensitivity: 1,
+      scrollSensitivity: terminalPrefsRef.current.scrollSpeed,
+      fastScrollSensitivity: terminalPrefsRef.current.fastScrollSpeed,
+      wordSeparator: terminalPrefsRef.current.wordSeparators,
       theme: xtermTheme,
       windowsPty: { backend: "conpty" },
     });
@@ -361,6 +385,22 @@ export function TerminalPane({
     }
 
     const dataDisposable = terminal.onData((data) => sendToPty(data));
+    const selectionDisposable = terminal.onSelectionChange(() => {
+      if (terminalPrefsRef.current.copyOnSelect) copySelection(terminal);
+    });
+    const osc52Disposable = terminal.parser.registerOscHandler(52, (data) => {
+      if (!terminalPrefsRef.current.allowOsc52) return false;
+      const separator = data.indexOf(";");
+      const encoded = separator >= 0 ? data.slice(separator + 1) : "";
+      if (separator < 0 || !/^[cp]*$/.test(data.slice(0, separator)) || !encoded || encoded === "?" || encoded.length > 1_400_000) return true;
+      try {
+        const bytes = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
+        void navigator.clipboard.writeText(new TextDecoder().decode(bytes)).catch(() => undefined);
+      } catch {
+        // Ignore malformed OSC 52 data.
+      }
+      return true;
+    });
 
     // VS Code-style clipboard: Ctrl+C copies selection; otherwise SIGINT.
     // Ctrl+V is owned by our paste handler (text + images → @path for agents).
@@ -369,8 +409,7 @@ export function TerminalPane({
       if (!(ev.ctrlKey || ev.metaKey) || ev.altKey) return true;
       if (ev.key === "c" || ev.key === "C") {
         if (terminal.hasSelection()) {
-          const text = terminal.getSelection();
-          void navigator.clipboard.writeText(text).catch(() => undefined);
+          copySelection(terminal);
           return false;
         }
         return true;
@@ -390,7 +429,8 @@ export function TerminalPane({
       if (!focused && event.deltaY !== 0) {
         event.preventDefault();
         event.stopPropagation();
-        const lines = Math.max(1, Math.round(Math.abs(event.deltaY) / 40));
+        const multiplier = event.altKey ? terminalPrefsRef.current.fastScrollSpeed : terminalPrefsRef.current.scrollSpeed;
+        const lines = Math.max(1, Math.round((Math.abs(event.deltaY) / 40) * multiplier));
         terminal.scrollLines(event.deltaY > 0 ? lines : -lines);
       }
     };
@@ -402,6 +442,12 @@ export function TerminalPane({
       terminal.focus();
     };
     host.addEventListener("pointerdown", onHostPointerDown);
+    const onHostPointerEnter = () => {
+      if (!terminalPrefsRef.current.focusFollowsMouse) return;
+      onFocus();
+      terminal.focus();
+    };
+    host.addEventListener("pointerenter", onHostPointerEnter);
 
     let lastCols = 0;
     let lastRows = 0;
@@ -484,7 +530,10 @@ export function TerminalPane({
       observer.disconnect();
       host.removeEventListener("wheel", onWheel);
       host.removeEventListener("pointerdown", onHostPointerDown);
+      host.removeEventListener("pointerenter", onHostPointerEnter);
       dataDisposable.dispose();
+      selectionDisposable.dispose();
+      osc52Disposable.dispose();
       resizeFnRef.current = null;
       flushPtyWrites();
       terminal.dispose();
@@ -549,7 +598,7 @@ export function TerminalPane({
         if (term?.hasSelection()) {
           event.preventDefault();
           event.stopPropagation();
-          void navigator.clipboard.writeText(term.getSelection()).catch(() => undefined);
+          copySelection(term);
           return;
         }
         if (document.activeElement === term?.textarea) return;
@@ -650,6 +699,12 @@ export function TerminalPane({
       onMouseDown={() => {
         onFocus();
         terminalRef.current?.focus();
+      }}
+      onContextMenu={(event) => {
+        if (!terminalPrefsRef.current.rightClickPaste || event.ctrlKey || event.metaKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void navigator.clipboard.readText().then((text) => { if (text) pasteInto(text); }).catch(() => undefined);
       }}
       onDragEnter={(event) => {
         if (isAgentDrag(event.dataTransfer)) {

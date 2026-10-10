@@ -113,6 +113,51 @@
   margin-bottom: 0;
 }
 
+.vs-terminalSettings { max-width: 58rem; gap: 1.35rem; }
+.vs-terminalSettingsGroup { padding: 0 0 1.15rem; border-bottom: 1px solid var(--vs-border); }
+.vs-terminalSettingsGroup:last-child { padding-bottom: 0; border: 0; }
+.vs-terminalSettingsGroup h3 { margin: 0 0 0.35rem; font-size: 0.96rem; font-weight: 650; }
+.vs-terminalSettingsGroup > .vs-settingsHint { margin-bottom: 0.9rem; }
+.vs-terminalRangeGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; margin-bottom: 0.8rem; }
+.vs-terminalRangeCard { display: grid; gap: 0.45rem; padding: 0.8rem 0.85rem 0.6rem; border: 1px solid var(--vs-border); border-radius: 10px; background: color-mix(in srgb, var(--vs-bg-raised) 72%, transparent); }
+.vs-terminalRangeCard > span:first-child { display: flex; align-items: center; justify-content: space-between; color: var(--vs-text); font-size: 0.84rem; font-weight: 600; }
+.vs-terminalRangeCard b { padding: 0.15rem 0.4rem; border: 1px solid var(--vs-border); border-radius: 6px; font-family: var(--vs-mono); font-size: 0.72rem; font-weight: 500; }
+.vs-terminalRangeCard > small { min-height: 2em; color: var(--vs-muted); font-size: 0.75rem; line-height: 1.4; }
+.vs-terminalRangeCard input[type="range"] { width: 100%; accent-color: var(--vs-accent); }
+.vs-terminalRangeEnds { display: flex; justify-content: space-between; color: var(--vs-muted); }
+.vs-terminalSettingsRows { border-top: 1px solid var(--vs-border); }
+.vs-terminalSettingRow { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 3.15rem; padding: 0.4rem 0; border-bottom: 1px solid var(--vs-border); }
+.vs-terminalSettingRow > span { display: grid; gap: 0.18rem; min-width: 0; }
+.vs-terminalSettingRow strong { color: var(--vs-text); font-size: 0.84rem; font-weight: 600; }
+.vs-terminalSettingRow small { color: var(--vs-muted); font-size: 0.75rem; line-height: 1.4; }
+.vs-terminalSettingField { display: grid; grid-template-columns: minmax(10rem, 1fr) minmax(10rem, 16rem); align-items: center; gap: 1rem; min-height: 3.1rem; border-bottom: 1px solid var(--vs-border); color: var(--vs-text); font-size: 0.82rem; }
+.vs-terminalSettingField select, .vs-terminalSettingField input { box-sizing: border-box; width: 100%; min-width: 0; padding: 0.5rem 0.65rem; border: 1px solid var(--vs-border); border-radius: 7px; background: var(--vs-bg-raised); color: var(--vs-text); font: inherit; }
+.vs-terminalRangeChoices { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0; }
+.vs-terminalRangeChoices button { min-height: 2rem; padding: 0.35rem 0.65rem; border: 1px solid var(--vs-border); border-right: 0; background: var(--vs-bg-raised); color: var(--vs-text-muted); font-size: 0.75rem; cursor: pointer; }
+.vs-terminalRangeChoices button:first-child { border-radius: 7px 0 0 7px; }
+.vs-terminalRangeChoices button:last-of-type { border-right: 1px solid var(--vs-border); border-radius: 0 7px 7px 0; }
+.vs-terminalRangeChoices button.is-active { background: var(--vs-bg-hover); color: var(--vs-text); }
+.vs-terminalRangeChoices input { max-width: 7.5rem; margin-left: 0.5rem; }
+.vs-terminalSessionList { border: 1px solid var(--vs-border); border-radius: 10px; overflow: hidden; }
+.vs-terminalSessionHead { padding: 0.65rem 0.8rem; border-bottom: 1px solid var(--vs-border); color: var(--vs-muted); font-size: 0.76rem; }
+.vs-terminalSessionRow { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto auto; align-items: center; gap: 0.65rem; min-height: 2.9rem; padding: 0.35rem 0.7rem; border-bottom: 1px solid var(--vs-border); }
+.vs-terminalSessionRow:last-child { border-bottom: 0; }
+.vs-terminalSessionRow > i { width: 7px; height: 7px; border-radius: 50%; background: var(--vs-muted); }
+.vs-terminalSessionRow > i.is-online { background: var(--vs-ok); }
+.vs-terminalSessionRow > i.is-starting { background: var(--vs-accent); }
+.vs-terminalSessionRow > span { display: grid; min-width: 0; }
+.vs-terminalSessionRow strong, .vs-terminalSessionRow small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vs-terminalSessionRow strong { color: var(--vs-text); font-size: 0.79rem; font-weight: 600; }
+.vs-terminalSessionRow small { max-width: 34rem; color: var(--vs-muted); font-family: var(--vs-mono); font-size: 0.68rem; }
+.vs-terminalSessionRow .vs-btn { min-height: 1.85rem; padding: 0.25rem 0.55rem; font-size: 0.72rem; }
+
+@media (max-width: 760px) {
+  .vs-terminalRangeGrid { grid-template-columns: 1fr; }
+  .vs-terminalSettingField { grid-template-columns: 1fr; gap: 0.45rem; padding: 0.65rem 0; }
+  .vs-terminalSessionRow { grid-template-columns: 8px minmax(0, 1fr) auto; }
+  .vs-terminalSessionRow .vs-btn:last-child { grid-column: 2 / -1; justify-self: end; }
+}
+
 .vs-settingsBlock h3 {
   margin: 0 0 0.35rem;
   font-size: 0.95rem;
