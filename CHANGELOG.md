@@ -2,6 +2,15 @@
 
 All notable changes to Voxiva Space are documented here.
 
+## [0.2.4] - 2026-10-10
+
+### Fixed
+
+- Context menus now hide only browser views they actually cover; websites in other panes remain visible.
+- Browser submenus choose the side that avoids an open website and stay within the window, including the "Browser below" action.
+- The right-side browser uses the same compact controls and styling as workspace browser panes.
+- Showing an existing browser no longer triggers a misleading loading indicator.
+
 ## [0.2.3] - 2026-10-10
 
 ### Fixed

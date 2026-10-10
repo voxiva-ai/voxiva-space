@@ -95,7 +95,7 @@ export function NativeBrowser({
   const openedRef = useRef(false);
   const suppressedRef = useRef(!active);
   const dragSuppressedRef = useRef(false);
-  const overlayKeysRef = useRef(new Set<string>());
+  const overlayKeysRef = useRef(new Map<string, Bounds[] | null>());
   const lastBounds = useRef<Bounds | null>(null);
   const rafRef = useRef(0);
   const inspectorRef = useRef(false);
@@ -179,6 +179,17 @@ export function NativeBrowser({
     return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
   }, []);
 
+  const overlayCoversHost = useCallback(() => {
+    const host = readBounds();
+    for (const rects of overlayKeysRef.current.values()) {
+      if (!rects || !host || rects.some((rect) =>
+        rect.x < host.x + host.width && rect.x + rect.width > host.x &&
+        rect.y < host.y + host.height && rect.y + rect.height > host.y
+      )) return true;
+    }
+    return false;
+  }, [readBounds]);
+
   const syncBounds = useCallback(async () => {
     if (!openedRef.current || suppressedRef.current || !aliveRef.current) return;
     const next = readBounds();
@@ -205,7 +216,7 @@ export function NativeBrowser({
       }
       if (!bounds || !aliveRef.current) throw new Error("Browser area is not ready");
       lastBounds.current = bounds;
-      setBusy(true);
+      if (navigate) setBusy(true);
       setLocalError("");
       await browserOpen({ label, url: next, ...bounds, navigate });
       if (!aliveRef.current) {
@@ -257,6 +268,7 @@ export function NativeBrowser({
 
   const applySuppression = useCallback(
     (suppressed: boolean) => {
+      if (suppressedRef.current === suppressed) return;
       suppressedRef.current = suppressed;
       if (!openedRef.current) return;
       if (suppressed) {
@@ -270,13 +282,11 @@ export function NativeBrowser({
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           if (suppressedRef.current) return;
-          void openAt(next, false)
-            .then(() => syncBounds())
-            .catch(() => undefined);
+          void openAt(next, false).catch(() => undefined);
         });
       });
     },
-    [draft, label, loadedUrl, openAt, syncBounds],
+    [draft, label, loadedUrl, openAt],
   );
 
   const go = useCallback(
@@ -362,28 +372,28 @@ export function NativeBrowser({
     const onDrag = (event: Event) => {
       const dragging = Boolean((event as CustomEvent<{ active?: boolean }>).detail?.active);
       dragSuppressedRef.current = dragging;
-      applySuppression(dragging || overlayKeysRef.current.size > 0 || !active);
+      applySuppression(dragging || overlayCoversHost() || !active);
     };
     window.addEventListener("voxiva-pane-drag", onDrag);
     return () => window.removeEventListener("voxiva-pane-drag", onDrag);
-  }, [active, applySuppression]);
+  }, [active, applySuppression, overlayCoversHost]);
 
   useEffect(() => {
     const onOverlay = (event: Event) => {
-      const detail = (event as CustomEvent<{ key?: string; active?: boolean }>).detail;
+      const detail = (event as CustomEvent<{ key?: string; active?: boolean; rects?: Bounds[] }>).detail;
       const key = detail?.key || "overlay";
-      if (detail?.active) overlayKeysRef.current.add(key);
+      if (detail?.active) overlayKeysRef.current.set(key, detail.rects ?? null);
       else overlayKeysRef.current.delete(key);
-      applySuppression(dragSuppressedRef.current || overlayKeysRef.current.size > 0 || !active);
+      applySuppression(dragSuppressedRef.current || overlayCoversHost() || !active);
     };
     window.addEventListener("voxiva-native-overlay", onOverlay);
     return () => window.removeEventListener("voxiva-native-overlay", onOverlay);
-  }, [active, applySuppression]);
+  }, [active, applySuppression, overlayCoversHost]);
 
   // Tab switch: hide native surface when this browser tab is not selected.
   useEffect(() => {
-    applySuppression(!active || dragSuppressedRef.current || overlayKeysRef.current.size > 0);
-  }, [active, applySuppression]);
+    applySuppression(!active || dragSuppressedRef.current || overlayCoversHost());
+  }, [active, applySuppression, overlayCoversHost]);
 
   useEffect(() => {
     const unlisten = listen<{ label: string; url: string }>(
@@ -927,11 +937,11 @@ export function NativeBrowser({
 
       {/* Host is always mounted so WebView2 bounds exist before the first create. */}
       <div className="vs-browserViewport">
-        <div className="vs-browserFrameWrap" ref={bindHost}>
+        <div className="vs-browserFrameWrap" ref={bindHost} data-has-page={Boolean(loadedUrl)}>
           <div
             className={`vs-browserNativeSlot${loadedUrl && live && !busy ? " is-covered" : ""}`}
           >
-            {loadedUrl && (busy || !live) ? (
+            {loadedUrl && !suppressedRef.current && (busy || !live) ? (
               <span className={`vs-browserLoadPulse${busy ? " is-busy" : ""}`}>
                 {busy ? t("browser.loading") : localError || t("browser.waiting")}
               </span>

@@ -124,14 +124,27 @@ function Submenu({
   children: ReactNode;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
+  const flyoutRef = useRef<HTMLDivElement>(null);
   const [side, setSide] = useState<"right" | "left">("right");
+  const [top, setTop] = useState(-5);
   const closeTimer = useRef(0);
 
   useLayoutEffect(() => {
     if (!open || !rowRef.current) return;
     const rect = rowRef.current.getBoundingClientRect();
-    const flyoutW = 220;
-    setSide(rect.right + flyoutW > window.innerWidth - 8 ? "left" : "right");
+    const flyoutW = flyoutRef.current?.offsetWidth ?? 220;
+    const height = flyoutRef.current?.offsetHeight ?? 0;
+    const nextTop = Math.max(8 - rect.top, Math.min(-5, window.innerHeight - 8 - rect.top - height));
+    setTop(nextTop);
+    const pageRects = [...document.querySelectorAll<HTMLElement>(".vs-browserFrameWrap[data-has-page='true']")]
+      .map((element) => element.getBoundingClientRect());
+    const overlap = (x: number) => pageRects.reduce((area, page) =>
+      area + Math.max(0, Math.min(x + flyoutW, page.right) - Math.max(x, page.left)) *
+        Math.max(0, Math.min(rect.top + nextTop + height, page.bottom) - Math.max(rect.top + nextTop, page.top)), 0);
+    const rightX = rect.right + 4;
+    const leftX = rect.left - flyoutW - 4;
+    setSide(rightX + flyoutW > window.innerWidth - 8 ||
+      (leftX >= 8 && overlap(leftX) < overlap(rightX)) ? "left" : "right");
   }, [open]);
 
   const cancelClose = () => {
@@ -181,8 +194,10 @@ function Submenu({
       </button>
       {open ? (
         <div
+          ref={flyoutRef}
           className={`vs-paneMenuFlyout is-${side}`}
           role="menu"
+          style={{ top }}
           onPointerDown={(e) => e.stopPropagation()}
           onPointerEnter={cancelClose}
         >
@@ -243,12 +258,26 @@ export function PaneContextMenu({ menu, onClose }: PaneContextMenuProps) {
     setPos({ x, y });
   }, [menu]);
 
+  useLayoutEffect(() => {
+    if (!menu || !ref.current) return;
+    const key = `pane-menu-${menu.paneId}`;
+    const notify = () => {
+      if (!ref.current) return;
+      const rects = [ref.current, ...ref.current.querySelectorAll<HTMLElement>(".vs-paneMenuFlyout")]
+        .map((element) => element.getBoundingClientRect())
+        .map(({ x, y, width, height }) => ({ x, y, width, height }));
+      window.dispatchEvent(new CustomEvent("voxiva-native-overlay", {
+        detail: { key, active: true, rects },
+      }));
+    };
+    notify();
+    const frame = requestAnimationFrame(notify);
+    return () => cancelAnimationFrame(frame);
+  }, [menu, pos, openSub]);
+
   useEffect(() => {
     if (!menu) return;
     const key = `pane-menu-${menu.paneId}`;
-    window.dispatchEvent(
-      new CustomEvent("voxiva-native-overlay", { detail: { key, active: true } }),
-    );
     const onPointerDown = (e: PointerEvent) => {
       if (ref.current?.contains(e.target as Node)) return;
       onClose();

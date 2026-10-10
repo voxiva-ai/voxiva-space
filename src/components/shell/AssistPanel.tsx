@@ -142,6 +142,7 @@ export function AssistPanel({
         <div className="vs-assistBody">
           <div className="vs-assistBrowser" hidden={tab !== "browser"}>
             <NativeBrowser
+              compact
               active={open && tab === "browser"}
               instanceId="assist"
               url={assistUrl}

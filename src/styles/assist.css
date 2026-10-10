@@ -165,27 +165,6 @@
   border-radius: 0;
 }
 
-.vs-assistBrowser .vs-browserBar {
-  min-height: var(--vs-pane-chrome-h, 34px);
-  height: var(--vs-pane-chrome-h, 34px);
-  max-height: var(--vs-pane-chrome-h, 34px);
-  padding: 0 0.4rem;
-  gap: 0.3rem;
-  box-sizing: border-box;
-}
-
-.vs-assistBrowser .vs-browserUrlField {
-  height: 26px;
-  padding: 0 0.55rem;
-  border-radius: 6px;
-  gap: 0.35rem;
-}
-
-.vs-assistBrowser .vs-browserBar input,
-.vs-assistBrowser .vs-browserUrlField input {
-  font-size: 0.72rem;
-}
-
 @media (max-width: 960px) {
   .vs-assist {
     position: absolute;

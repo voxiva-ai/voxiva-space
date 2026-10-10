@@ -1,6 +1,6 @@
 [package]
 name = "voxiva-space"
-version = "0.2.3"
+version = "0.2.4"
 description = "Voxiva Space — desktop workspace for terminals, files, and AI agents"
 authors = ["Voxiva"]
 license = "MIT"
