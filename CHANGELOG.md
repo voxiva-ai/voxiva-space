@@ -2,6 +2,15 @@
 
 All notable changes to Voxiva Space are documented here.
 
+## [0.2.3] - 2026-10-10
+
+### Fixed
+
+- Clicking an attention notification focuses and expands the relevant pane while preserving neighboring sessions and browser pages.
+- Multiple browser panes remain visible even when a different pane has keyboard focus.
+- Browser pages wait for their pane to become visible before opening, avoiding blank or failed previews.
+- The right-side browser panel hides correctly and keeps its page when switching workspaces.
+
 ## [0.2.2] - 2026-10-10
 
 ### Improved

@@ -21,7 +21,7 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-39d9ff?style=flat-square" /></a>
 </p>
 
-> **Beta v0.2.2.** Voxiva Space is usable today, but the interface and session model are still evolving.
+> **Beta v0.2.3.** Voxiva Space is usable today, but the interface and session model are still evolving.
 
 ## One window for the whole agent workflow
 

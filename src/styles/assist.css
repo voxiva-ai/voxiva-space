@@ -19,6 +19,11 @@
   flex-shrink: 0;
 }
 
+.vs-assist[hidden],
+.vs-assistBrowser[hidden] {
+  display: none;
+}
+
 .vs-assistResize {
   position: absolute;
   z-index: 4;

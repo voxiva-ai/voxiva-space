@@ -3174,6 +3174,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         layout: activateLeafSession(ws.layout, target.paneId, target.sessionId),
         focusedPaneId: target.paneId,
       }));
+      setMaximizedPaneId(target.paneId);
       clearAttentionNotifyState(target.sessionId);
       setSessions((current) => {
         const row = current[target.sessionId];

@@ -235,6 +235,7 @@ function TabGlyph({ children }: { children: ReactNode }) {
 
 function PaneLeaf({
   paneId,
+  maximizedPaneId,
   kind,
   sessionId,
   sessionIds,
@@ -245,6 +246,7 @@ function PaneLeaf({
   mediaPath,
 }: {
   paneId: string;
+  maximizedPaneId: string | null;
   kind: PaneKind;
   sessionId: string | null;
   sessionIds?: string[];
@@ -285,6 +287,7 @@ function PaneLeaf({
     t,
   } = useSpace();
   const focused = activeWorkspace?.focusedPaneId === paneId;
+  const visibleInGrid = !maximizedPaneId || maximizedPaneId === paneId;
   const tabIds =
     sessionIds && sessionIds.length
       ? sessionIds
@@ -1072,7 +1075,7 @@ function PaneLeaf({
                 >
                   <NativeBrowser
                     compact
-                    active={Boolean(view === "space" && focused && visible)}
+                    active={Boolean(view === "space" && visible && visibleInGrid)}
                     dragPaneId={paneId}
                     instanceId={`${paneId}-${tab.id}`}
                     url={tab.url || ""}
@@ -1104,7 +1107,7 @@ function PaneLeaf({
                   hidden={!visible}
                 >
         <TerminalPane
-                    isActive={focused && visible}
+                    isActive={focused && visible && visibleInGrid}
                     session={s}
           paneId={paneId}
                     chrome="body"
@@ -1135,7 +1138,7 @@ function PaneLeaf({
   );
 }
 
-function SplitView({ node }: { node: SplitNode }) {
+function SplitView({ node, maximizedPaneId }: { node: SplitNode; maximizedPaneId: string | null }) {
   const { setSplitRatio } = useSpace();
   const [liveRatio, setLiveRatio] = useState<number | null>(null);
 
@@ -1143,6 +1146,7 @@ function SplitView({ node }: { node: SplitNode }) {
     return (
       <PaneLeaf
         paneId={node.paneId}
+        maximizedPaneId={maximizedPaneId}
         kind={node.kind ?? "terminal"}
         sessionId={node.sessionId}
         sessionIds={node.sessionIds}
@@ -1157,30 +1161,35 @@ function SplitView({ node }: { node: SplitNode }) {
 
   const baseRatio = Math.min(0.78, Math.max(0.22, Number.isFinite(node.ratio) ? node.ratio : 0.5));
   const ratio = liveRatio ?? baseRatio;
+  const firstVisible = !maximizedPaneId || Boolean(findLeaf(node.first, maximizedPaneId));
+  const secondVisible = !maximizedPaneId || Boolean(findLeaf(node.second, maximizedPaneId));
   const firstStyle = {
-    flexGrow: ratio,
+    flexGrow: maximizedPaneId ? 1 : ratio,
     flexShrink: 1,
     flexBasis: 0,
     minWidth: 0,
     minHeight: 0,
     overflow: "hidden",
+    display: firstVisible ? undefined : "none",
   } as CSSProperties;
   const secondStyle = {
-    flexGrow: 1 - ratio,
+    flexGrow: maximizedPaneId ? 1 : 1 - ratio,
     flexShrink: 1,
     flexBasis: 0,
     minWidth: 0,
     minHeight: 0,
     overflow: "hidden",
+    display: secondVisible ? undefined : "none",
   } as CSSProperties;
 
   return (
     <div className={`vs-splitNode is-${node.direction}`}>
       <div className="vs-splitChild is-first" style={firstStyle}>
-        <SplitView node={node.first} />
+        <SplitView node={node.first} maximizedPaneId={maximizedPaneId} />
       </div>
       <div
         className="vs-splitDivider"
+        style={maximizedPaneId ? { display: "none" } : undefined}
         role="separator"
         onPointerDown={(event) => {
           event.preventDefault();
@@ -1207,7 +1216,7 @@ function SplitView({ node }: { node: SplitNode }) {
         }}
       />
       <div className="vs-splitChild is-second" style={secondStyle}>
-        <SplitView node={node.second} />
+        <SplitView node={node.second} maximizedPaneId={maximizedPaneId} />
       </div>
     </div>
   );
@@ -1225,7 +1234,7 @@ export function SplitGrid({ layout }: { layout: SplitNode }) {
 
   return (
     <div className={`vs-splitRoot${maximizedLeaf ? " is-maximized" : ""}`}>
-      <SplitView node={maximizedLeaf ?? layout} />
+      <SplitView node={layout} maximizedPaneId={maximizedLeaf ? maximizedPaneId : null} />
     </div>
   );
 }

@@ -55,10 +55,6 @@ export function AssistPanel({
   }, [width]);
 
   useEffect(() => {
-    setAssistUrl("");
-  }, [activeWorkspace?.id]);
-
-  useEffect(() => {
     if (!open || !pendingUrl) return;
     setAssistUrl(pendingUrl);
     onTabChange("browser");

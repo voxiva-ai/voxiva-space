@@ -333,6 +333,7 @@ export function NativeBrowser({
 
   // Parent-driven URL (suggest toast / setPaneBrowserUrl) — never re-enter our own writes.
   useEffect(() => {
+    if (!active) return;
     const next = normalizeBrowserUrl(url || "");
     if (next === appliedUrlRef.current) return;
     if (!next) {
@@ -340,7 +341,7 @@ export function NativeBrowser({
       return;
     }
     void go(next);
-  }, [url]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [url, active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!hostEl) return;
