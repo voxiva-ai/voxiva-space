@@ -16,6 +16,8 @@ import { applyAttentionPrefs } from "@/features/attention/prefs";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { ensureAutoCookieImport } from "@/features/browser/autoCookies";
 import { WelcomePage } from "@/pages/welcome/WelcomePage";
+import { agentIdForSession } from "@/features/agents/sessionAgent";
+import { botDisplayName } from "@/features/agents/history";
 import type { ViewId } from "@/lib/types";
 
 const AgentsPage = lazy(() =>
@@ -220,8 +222,12 @@ function AppShell() {
   const show = (id: ViewId) => view === id;
   const keep = (id: ViewId) => mountedViews.has(id);
   const liveSessions = Object.values(sessions).filter((session) => session.status === "online");
-  const liveAgents = liveSessions.filter((session) => session.agentId);
-  const agentNames = [...new Set(liveAgents.map((session) => session.title))].join(", ");
+  const agentCounts = new Map<string, number>();
+  for (const session of liveSessions) {
+    const agentId = agentIdForSession(session, agentRuns);
+    if (agentId !== "shell") agentCounts.set(agentId, (agentCounts.get(agentId) ?? 0) + 1);
+  }
+  const activeAgents = [...agentCounts].map(([id, count]) => `${botDisplayName(id)} ${count}`);
 
   return (
     <div
@@ -300,11 +306,13 @@ function AppShell() {
           />
         </div>
         <div className="vs-statusBar" role="status">
-          <span title="Online terminal sessions">Sessions {liveSessions.length}</span>
-          <button type="button" onClick={() => setView("agents")} title={agentNames || "No active agents"}>
-            Agents {liveAgents.length}
+          <button type="button" onClick={() => setView("agents")} title={activeAgents.join(" · ") || "No active agent sessions"}>
+            <span className="vs-statusLabel">Agents</span>
+            <span>{activeAgents.length ? activeAgents.join("  ·  ") : "None active"}</span>
           </button>
-          <span title="Recorded agent launches">Launches {agentRuns.length}</span>
+          <span title="Online terminal sessions">Sessions <b>{liveSessions.length}</b></span>
+          <span title="Recorded agent launches">Launches <b>{agentRuns.length}</b></span>
+          <span className="vs-statusUsage" title="Token and plan quotas are reported by each agent provider, not exposed by the connected terminal CLIs.">Usage <b>—</b></span>
         </div>
       </main>
       <NewSpaceModal open={newSpaceOpen} onClose={() => setNewSpaceOpen(false)} />
