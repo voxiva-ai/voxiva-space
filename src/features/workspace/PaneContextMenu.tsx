@@ -245,6 +245,10 @@ export function PaneContextMenu({ menu, onClose }: PaneContextMenuProps) {
 
   useEffect(() => {
     if (!menu) return;
+    const key = `pane-menu-${menu.paneId}`;
+    window.dispatchEvent(
+      new CustomEvent("voxiva-native-overlay", { detail: { key, active: true } }),
+    );
     const onPointerDown = (e: PointerEvent) => {
       if (ref.current?.contains(e.target as Node)) return;
       onClose();
@@ -255,12 +259,13 @@ export function PaneContextMenu({ menu, onClose }: PaneContextMenuProps) {
     const onResize = () => onClose();
     window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKey);
-    window.addEventListener("blur", onClose);
     window.addEventListener("resize", onResize);
     return () => {
+      window.dispatchEvent(
+        new CustomEvent("voxiva-native-overlay", { detail: { key, active: false } }),
+      );
       window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("blur", onClose);
       window.removeEventListener("resize", onResize);
     };
   }, [menu, onClose]);

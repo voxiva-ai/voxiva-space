@@ -6,7 +6,6 @@ import { NewSpaceModal } from "@/components/shell/NewSpaceModal";
 import { SpaceSettingsModal } from "@/components/shell/SpaceSettingsModal";
 import { useHotkeys } from "@/features/hotkeys/useHotkeys";
 import { isCapturingHotkey } from "@/features/hotkeys/bindings";
-import { browserClose, browserCloseAll, browserHideAll } from "@/features/browser/api";
 import { SpaceProvider, useSpace, useView } from "@/features/workspace/SpaceContext";
 import { SpacePage } from "@/pages/space/SpacePage";
 import { installUiZoom } from "@/features/ui/zoom";
@@ -108,6 +107,22 @@ function AppShell() {
   const [mountedViews, setMountedViews] = useState<Set<ViewId>>(() => new Set(["space"]));
 
   useEffect(() => {
+    const active = newSpaceOpen || Boolean(spaceSettingsId) || paletteOpen;
+    window.dispatchEvent(
+      new CustomEvent("voxiva-native-overlay", {
+        detail: { key: "app-overlay", active },
+      }),
+    );
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent("voxiva-native-overlay", {
+          detail: { key: "app-overlay", active: false },
+        }),
+      );
+    };
+  }, [newSpaceOpen, paletteOpen, spaceSettingsId]);
+
+  useEffect(() => {
     setMountedViews((prev) => {
       if (prev.has(view)) return prev;
       const next = new Set(prev);
@@ -192,27 +207,6 @@ function AppShell() {
     }, 400);
     return () => window.clearTimeout(idle);
   }, [welcomeVisible]);
-
-  useEffect(() => {
-    if (welcomeVisible) {
-      void browserCloseAll().catch(() => undefined);
-      return;
-    }
-    const assistBrowser = assistOpen && assistTab === "browser";
-    if (view === "browser") {
-      void browserCloseAll("browser-page").catch(() => undefined);
-      return;
-    }
-    if (view === "space") {
-      void browserClose("browser-page").catch(() => undefined);
-      if (!assistBrowser) void browserClose("browser-assist").catch(() => undefined);
-      return;
-    }
-    // Agents / projects / … — hide pane browsers, don't destroy them.
-    void browserHideAll().catch(() => undefined);
-    void browserClose("browser-page").catch(() => undefined);
-    if (!assistBrowser) void browserClose("browser-assist").catch(() => undefined);
-  }, [assistOpen, assistTab, welcomeVisible, view]);
 
   if (welcomeVisible) {
     return (

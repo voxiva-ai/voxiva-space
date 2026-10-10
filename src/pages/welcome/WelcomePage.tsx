@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import logoUrl from "@/assets/brand/voxiva-space-mark.svg";
+import logoUrl from "@/assets/brand/voxiva-space-mark.png";
 import { LiveGridPreview } from "@/components/shell/LiveGridPreview";
 import { WindowControls } from "@/components/shell/WindowControls";
 import { beginWindowDrag, toggleMaximize } from "@/features/ui/windowDrag";

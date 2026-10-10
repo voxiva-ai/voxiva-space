@@ -2,6 +2,15 @@
 
 All notable changes to Voxiva Space are documented here.
 
+## [0.2.2] - 2026-10-10
+
+### Improved
+
+- Restored the dimensional folded-ribbon Voxiva Space mark requested by the project owner.
+- Enlarged the symbol inside desktop and package icons and refined it to the Voxiva AI amber/cyan-blue palette.
+- Kept browser pages alive across views, tabs, and the right assist panel instead of closing them.
+- Prevented native browser surfaces from covering context menus, flyouts, and dialogs.
+
 ## [0.2.1] - 2026-10-09
 
 ### Improved

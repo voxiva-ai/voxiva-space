@@ -53,7 +53,7 @@ import { readAgentDrag, isAgentDrag, endAgentDragSession, type AgentDragPayload 
 import { agentBots, resolveBotCommand, resumeCommandFor } from "@/features/agents/bots";
 import { PaneActions } from "@/features/workspace/PaneActions";
 import { PaneContextMenu, type PaneMenuState } from "@/features/workspace/PaneContextMenu";
-import { useSpace } from "@/features/workspace/SpaceContext";
+import { useSpace, useView } from "@/features/workspace/SpaceContext";
 import { IconBrowser, IconGrip, IconX } from "@/components/icons";
 import { ShellTabIcon } from "@/components/shell/ShellTabIcon";
 
@@ -254,6 +254,7 @@ function PaneLeaf({
   activeBrowserId?: string | null;
   mediaPath?: string | null;
 }) {
+  const { view } = useView();
   const {
     activeWorkspace,
     sessions,
@@ -1071,7 +1072,7 @@ function PaneLeaf({
                 >
                   <NativeBrowser
                     compact
-                    active={Boolean(focused && visible)}
+                    active={Boolean(view === "space" && focused && visible)}
                     dragPaneId={paneId}
                     instanceId={`${paneId}-${tab.id}`}
                     url={tab.url || ""}

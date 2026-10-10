@@ -56,6 +56,8 @@ type NativeBrowserProps = {
 
 type Bounds = { x: number; y: number; width: number; height: number };
 
+const browserOwners = new Map<string, symbol>();
+
 function sameBounds(a: Bounds | null, b: Bounds) {
   return Boolean(
     a &&
@@ -77,6 +79,8 @@ export function NativeBrowser({
 }: NativeBrowserProps) {
   const reactId = useId().replace(/:/g, "");
   const label = `browser-${instanceId ?? dragPaneId ?? reactId}`;
+  const ownerRef = useRef(Symbol(label));
+  const inheritedBrowserRef = useRef(browserOwners.has(label));
   const {
     activeWorkspace,
     agentAvailability,
@@ -89,7 +93,9 @@ export function NativeBrowser({
   const [hostEl, setHostEl] = useState<HTMLDivElement | null>(null);
   const aliveRef = useRef(true);
   const openedRef = useRef(false);
-  const suppressedRef = useRef(false);
+  const suppressedRef = useRef(!active);
+  const dragSuppressedRef = useRef(false);
+  const overlayKeysRef = useRef(new Set<string>());
   const lastBounds = useRef<Bounds | null>(null);
   const rafRef = useRef(0);
   const inspectorRef = useRef(false);
@@ -151,10 +157,12 @@ export function NativeBrowser({
 
   useEffect(() => {
     aliveRef.current = true;
+    browserOwners.set(label, ownerRef.current);
     return () => {
       aliveRef.current = false;
       window.setTimeout(() => {
-        if (aliveRef.current) return;
+        if (aliveRef.current || browserOwners.get(label) !== ownerRef.current) return;
+        browserOwners.delete(label);
         openedRef.current = false;
         void browserClose(label).catch(() => undefined);
       }, 0);
@@ -201,12 +209,19 @@ export function NativeBrowser({
       setLocalError("");
       await browserOpen({ label, url: next, ...bounds, navigate });
       if (!aliveRef.current) {
-        await browserClose(label).catch(() => undefined);
+        if (browserOwners.get(label) === ownerRef.current) {
+          await browserClose(label).catch(() => undefined);
+        }
         return;
       }
       openedRef.current = true;
       setLoadedUrl(next);
-      setLive(true);
+      if (suppressedRef.current) {
+        await browserHide(label).catch(() => undefined);
+        setLive(false);
+      } else {
+        setLive(true);
+      }
       // Re-apply bounds after paint — child HWND can land at 0×0 on first create.
       await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)));
       lastBounds.current = null;
@@ -240,6 +255,30 @@ export function NativeBrowser({
     }
   }, [label, onUrlChange]);
 
+  const applySuppression = useCallback(
+    (suppressed: boolean) => {
+      suppressedRef.current = suppressed;
+      if (!openedRef.current) return;
+      if (suppressed) {
+        void browserHide(label).catch(() => undefined);
+        setLive(false);
+        return;
+      }
+      const next = loadedUrl || normalizeBrowserUrl(draft);
+      if (!next) return;
+      lastBounds.current = null;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (suppressedRef.current) return;
+          void openAt(next, false)
+            .then(() => syncBounds())
+            .catch(() => undefined);
+        });
+      });
+    },
+    [draft, label, loadedUrl, openAt, syncBounds],
+  );
+
   const go = useCallback(
     async (raw?: string) => {
       const source = raw ?? draft;
@@ -261,7 +300,9 @@ export function NativeBrowser({
       onUrlChange(next);
       rememberBrowserUrl(next);
       try {
-        await openAt(next, true);
+        const navigate = !inheritedBrowserRef.current;
+        inheritedBrowserRef.current = false;
+        await openAt(next, navigate);
         if (gen !== navGenRef.current) return;
       } catch (error) {
         if (!aliveRef.current || gen !== navGenRef.current) return;
@@ -319,49 +360,29 @@ export function NativeBrowser({
   useEffect(() => {
     const onDrag = (event: Event) => {
       const dragging = Boolean((event as CustomEvent<{ active?: boolean }>).detail?.active);
-      suppressedRef.current = dragging || !active;
-      if (!openedRef.current) return;
-      if (dragging || !active) {
-        void browserHide(label).catch(() => undefined);
-        setLive(false);
-        return;
-      }
-      const next = loadedUrl || normalizeBrowserUrl(draft);
-      if (!next) return;
-      lastBounds.current = null;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          void openAt(next, false)
-            .then(() => syncBounds())
-            .catch(() => undefined);
-        });
-      });
+      dragSuppressedRef.current = dragging;
+      applySuppression(dragging || overlayKeysRef.current.size > 0 || !active);
     };
     window.addEventListener("voxiva-pane-drag", onDrag);
     return () => window.removeEventListener("voxiva-pane-drag", onDrag);
-  }, [active, draft, label, loadedUrl, openAt, syncBounds]);
+  }, [active, applySuppression]);
+
+  useEffect(() => {
+    const onOverlay = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string; active?: boolean }>).detail;
+      const key = detail?.key || "overlay";
+      if (detail?.active) overlayKeysRef.current.add(key);
+      else overlayKeysRef.current.delete(key);
+      applySuppression(dragSuppressedRef.current || overlayKeysRef.current.size > 0 || !active);
+    };
+    window.addEventListener("voxiva-native-overlay", onOverlay);
+    return () => window.removeEventListener("voxiva-native-overlay", onOverlay);
+  }, [active, applySuppression]);
 
   // Tab switch: hide native surface when this browser tab is not selected.
   useEffect(() => {
-    if (!openedRef.current) return;
-    if (!active) {
-      suppressedRef.current = true;
-      void browserHide(label).catch(() => undefined);
-      setLive(false);
-      return;
-    }
-    suppressedRef.current = false;
-    const next = loadedUrl || normalizeBrowserUrl(draft);
-    if (!next) return;
-    lastBounds.current = null;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        void openAt(next, false)
-          .then(() => syncBounds())
-          .catch(() => undefined);
-      });
-    });
-  }, [active, draft, label, loadedUrl, openAt, syncBounds]);
+    applySuppression(!active || dragSuppressedRef.current || overlayKeysRef.current.size > 0);
+  }, [active, applySuppression]);
 
   useEffect(() => {
     const unlisten = listen<{ label: string; url: string }>(
@@ -385,7 +406,7 @@ export function NativeBrowser({
           return;
         }
         setBusy(false);
-        setLive(true);
+        setLive(!suppressedRef.current);
         if (/^https?:\/\//i.test(payload.url)) {
           setDraft(payload.url);
           setLoadedUrl(payload.url);

@@ -39,7 +39,12 @@ export function AssistPanel({
     return DEFAULT_W;
   });
   const [assistUrl, setAssistUrl] = useState("");
+  const [mounted, setMounted] = useState(open);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
+
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
 
   useEffect(() => {
     try {
@@ -79,12 +84,17 @@ export function AssistPanel({
     dragRef.current = null;
   }
 
-  if (!open) {
+  if (!mounted) {
     return null;
   }
 
   return (
-    <aside className="vs-assist is-open" style={{ width }} aria-label={t("assist.title")}>
+    <aside
+      className={`vs-assist${open ? " is-open" : ""}`}
+      style={{ width }}
+      aria-label={t("assist.title")}
+      hidden={!open}
+    >
       <div
         className="vs-assistResize"
         onPointerDown={onResizeStart}
@@ -134,11 +144,14 @@ export function AssistPanel({
         </div>
       ) : (
         <div className="vs-assistBody">
-          {tab === "browser" && (
-            <div className="vs-assistBrowser">
-                  <NativeBrowser instanceId="assist" url={assistUrl} onUrlChange={setAssistUrl} />
-            </div>
-          )}
+          <div className="vs-assistBrowser" hidden={tab !== "browser"}>
+            <NativeBrowser
+              active={open && tab === "browser"}
+              instanceId="assist"
+              url={assistUrl}
+              onUrlChange={setAssistUrl}
+            />
+          </div>
 
           {tab === "agents" && (
             <div className="vs-assistAgents">

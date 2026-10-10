@@ -48,7 +48,7 @@ import {
   shouldScanOutputForAttention,
   stampAttention,
 } from "@/features/attention/notify";
-import { browserClose, browserHideAll } from "@/features/browser/api";
+import { browserClose } from "@/features/browser/api";
 import { normalizeBrowserUrl, resolveOmniboxInput } from "@/features/browser/url";
 import {
   createTask,
@@ -713,8 +713,6 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     if (current === next) return;
     ++viewTransitionRef.current;
     viewRef.current = next;
-    // Don't block navigation on browser IPC — hide in background.
-    void browserHideAll().catch(() => undefined);
     startTransition(() => {
       setViewState(next);
     });

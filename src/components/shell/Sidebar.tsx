@@ -14,7 +14,7 @@ import { PromptDialog } from "@/components/PromptDialog";
 import { clientError } from "@/lib/errors";
 import { savedLayoutPaneCount } from "@/features/workspace/savedLayouts";
 import { Pin01, Pin02 } from "@untitledui/icons";
-import logoUrl from "@/assets/brand/voxiva-space-mark.svg";
+import logoUrl from "@/assets/brand/voxiva-space-mark.png";
 import { formatHotkey, loadHotkeys } from "@/features/hotkeys/bindings";
 
 function orderWorkspaces<T extends { pinned?: boolean }>(list: T[]) {
@@ -95,6 +95,22 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist }: SidebarProps
   }, [workspaces, sessions]);
 
   const notifyItems = useMemo(() => listAttention(), [listAttention, sessions, workspaces]);
+
+  useEffect(() => {
+    const active = Boolean(menu || plusOpen || notifyOpen || saveOpen);
+    window.dispatchEvent(
+      new CustomEvent("voxiva-native-overlay", {
+        detail: { key: "sidebar-menu", active },
+      }),
+    );
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent("voxiva-native-overlay", {
+          detail: { key: "sidebar-menu", active: false },
+        }),
+      );
+    };
+  }, [menu, notifyOpen, plusOpen, saveOpen]);
 
   useEffect(() => {
     if (!plusOpen && !notifyOpen) return;
