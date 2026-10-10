@@ -1,0 +1,23 @@
+name: Electron pilot
+
+on:
+  push:
+    branches: [codex/electron-migration]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:electron-pilot
+      - run: npm run build
+      - run: npm run electron:smoke

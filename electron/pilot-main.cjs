@@ -3,7 +3,9 @@ const { app, BrowserWindow, WebContentsView, ipcMain, Menu, shell } = require("e
 const { bounds } = require("./pilot-bounds.cjs");
 
 app.whenReady().then(() => {
+  const smoke = process.argv.includes("--smoke");
   const window = new BrowserWindow({
+    show: !smoke,
     width: 1200,
     height: 760,
     minWidth: 700,
@@ -17,6 +19,23 @@ app.whenReady().then(() => {
     },
   });
   const views = new Map();
+
+  if (smoke) {
+    const view = new WebContentsView({ webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+    window.contentView.addChildView(view);
+    view.setBounds(bounds({ x: 0, y: 0, width: 400, height: 300 }, window.getContentBounds()));
+    void view.webContents.loadURL("data:text/html,<title>Chromium smoke</title>")
+      .then(() => {
+        if (view.webContents.getTitle() !== "Chromium smoke") throw new Error("Chromium view failed to load");
+        console.log("Electron BrowserWindow and WebContentsView passed");
+        app.exit(0);
+      })
+      .catch((error) => {
+        console.error(error);
+        app.exit(1);
+      });
+    return;
+  }
 
   ipcMain.handle("pilot:open", async (event, label, rawUrl) => {
     if (event.sender !== window.webContents || !["left", "right"].includes(label)) throw new Error("Invalid pane");
