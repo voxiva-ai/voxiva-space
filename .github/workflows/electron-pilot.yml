@@ -21,3 +21,7 @@ jobs:
       - run: npm run test:electron-pilot
       - run: npm run build
       - run: npm run electron:smoke
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --manifest-path native/Cargo.toml
+      - run: cargo build --manifest-path native/Cargo.toml
+      - run: npm run electron:app-smoke

@@ -12,6 +12,7 @@ _t3themes/
 
 # Tauri / Rust
 src-tauri/target/
+native/target/
 src-tauri/WixTools/
 src-tauri/gen/
 

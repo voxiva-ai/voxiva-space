@@ -1,4 +1,4 @@
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "@/platform/desktop";
 
 /** Show the main window after first paint (starts hidden to avoid transparent flash). */
 export async function revealMainWindow() {

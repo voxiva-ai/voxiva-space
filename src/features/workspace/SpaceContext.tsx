@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { listen, getCurrentWindow } from "@/platform/desktop";
 import { uid } from "@/lib/constants";
 import { clientError } from "@/lib/errors";
 import type {
@@ -3184,8 +3184,8 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(flashTimerRef.current);
       setFlashPaneId(target.paneId);
       flashTimerRef.current = window.setTimeout(() => setFlashPaneId(null), 900);
-      void import("@tauri-apps/api/window")
-        .then(({ getCurrentWindow }) => getCurrentWindow().setFocus())
+      void Promise.resolve()
+        .then(() => getCurrentWindow().setFocus())
         .catch(() => undefined);
       return true;
     },

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { listen } from "@/platform/desktop";
 import {
   browserClose,
   browserConfigureInspector,

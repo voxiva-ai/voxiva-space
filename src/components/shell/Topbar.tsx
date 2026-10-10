@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { IconChevronLeft, IconChevronRight, IconReopen } from "@/components/icons";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "@/platform/desktop";
 import { useSpace, useView } from "@/features/workspace/SpaceContext";
 import type { ViewId } from "@/lib/types";
 import type { MsgKey } from "@/i18n";

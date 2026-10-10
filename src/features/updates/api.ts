@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/platform/desktop";
 import { openUrl } from "@/features/terminal/api";
 
 export type AppMetadata = {

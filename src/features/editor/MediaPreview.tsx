@@ -1,4 +1,4 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@/platform/desktop";
 import { useMemo, useState, type DragEvent } from "react";
 import { joinWorkspacePath, VOXIVA_PATH_MIME } from "@/features/terminal/drop";
 import {

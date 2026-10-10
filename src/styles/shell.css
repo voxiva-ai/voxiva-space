@@ -1018,6 +1018,8 @@
   cursor: grab;
 }
 
+html[data-electron] .vs-titleDrag { -webkit-app-region: drag; }
+
 .vs-titleDrag:active {
   cursor: grabbing;
 }

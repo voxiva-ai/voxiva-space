@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/platform/desktop";
 import type { VaultSession } from "@/lib/types";
 
 export function scanVaultSessions(opts?: {
