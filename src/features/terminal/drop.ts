@@ -1,4 +1,6 @@
 /** MIME for workspace / absolute file paths dropped into a terminal. */
+import { getNativeFilePath } from "@/platform/desktop";
+
 export const VOXIVA_PATH_MIME = "application/x-voxiva-path";
 /** MIME for editor selection / multiline text (not a path). */
 export const VOXIVA_TEXT_MIME = "application/x-voxiva-text";
@@ -90,7 +92,7 @@ export function rawPathsFromDataTransfer(
 
   if (data.files?.length) {
     for (const file of Array.from(data.files)) {
-      const path = (file as File & { path?: string }).path;
+      const path = getNativeFilePath(file);
       if (path) push(path);
     }
   }
@@ -139,6 +141,7 @@ function clearHighlights(except?: string) {
 }
 
 async function ensureOsDropListener() {
+  if (window.voxiva) return;
   if (osUnlisten || osBoot) return osBoot ?? undefined;
   osBoot = (async () => {
     try {

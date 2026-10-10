@@ -1,4 +1,5 @@
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+mod legacy;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
@@ -148,9 +149,26 @@ fn create(state: &Arc<State>, args: &Value) -> Result<Value, String> {
     if let Some(cwd) = cwd {
         cmd.cwd(cwd);
     }
+    #[cfg(windows)]
+    if ["powershell", "powershell.exe", "pwsh", "pwsh.exe"]
+        .iter()
+        .any(|name| shell.eq_ignore_ascii_case(name))
+    {
+        cmd.args(["-NoLogo"]);
+    }
+    #[cfg(windows)]
+    if ["cmd", "cmd.exe"]
+        .iter()
+        .any(|name| shell.eq_ignore_ascii_case(name))
+    {
+        cmd.args(["/K", "chcp 65001 >nul"]);
+    }
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "VoxivaSpace");
+    cmd.env("FORCE_COLOR", "3");
+    cmd.env("CLICOLOR_FORCE", "1");
+    cmd.env_remove("NO_COLOR");
     cmd.env("PATH", enriched_path());
     let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
     let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
@@ -238,6 +256,30 @@ fn create(state: &Arc<State>, args: &Value) -> Result<Value, String> {
 
 fn handle(state: &Arc<State>, request: &Request) -> Result<Value, String> {
     match request.command.as_str() {
+        "read_legacy_state" => Ok(json!(legacy::read()?)),
+        "read_browser_cookies" => {
+            let source = value(&request.args, "from")?.trim().to_ascii_lowercase();
+            let domains = request.args.get("domains").and_then(Value::as_array).map(|items| {
+                items.iter().filter_map(Value::as_str).map(str::to_owned).collect::<Vec<_>>()
+            });
+            let cookies = match source.as_str() {
+                "chrome" => rookie::chrome(domains),
+                "edge" => rookie::edge(domains),
+                "firefox" => rookie::firefox(domains),
+                "brave" => rookie::brave(domains),
+                "chromium" => rookie::chromium(domains),
+                _ => return Err("Unknown browser cookie source".into()),
+            }.map_err(|error| error.to_string())?;
+            Ok(Value::Array(cookies.into_iter().take(10_000).map(|cookie| json!({
+                "name": cookie.name,
+                "value": cookie.value,
+                "domain": cookie.domain,
+                "path": cookie.path,
+                "secure": cookie.secure,
+                "httpOnly": cookie.http_only,
+                "expires": cookie.expires,
+            })).collect()))
+        }
         "get_default_terminal_cwd" => Ok(json!(default_cwd())),
         "get_app_metadata" => Ok(
             json!({"name":"Voxiva Space","version":env!("CARGO_PKG_VERSION"),"channel":"electron-beta"}),

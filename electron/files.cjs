@@ -96,4 +96,35 @@ async function files(command, args) {
   throw new Error("Unsupported file command");
 }
 
-module.exports = { files, workspacePath };
+async function findComponentFiles(args) {
+  const root = await fs.realpath(args.workspaceRoot);
+  if (!(await fs.stat(root)).isDirectory()) throw new Error("Invalid workspace root");
+  const component = /^[A-Z]/.test(args.component || "") ? args.component.trim() : "";
+  const classes = Array.isArray(args.classes) ? args.classes.filter((item) => typeof item === "string" && item.length >= 4).slice(0, 8) : [];
+  const text = typeof args.text === "string" ? args.text.trim().slice(0, 64) : "";
+  const matches = [];
+  const stack = [root];
+  let visited = 0;
+  while (stack.length && visited < 3000 && matches.length < 80) {
+    const dir = stack.pop();
+    const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (visited >= 3000 || matches.length >= 80) break;
+      if (entry.name.startsWith(".") || hidden.has(entry.name) || entry.isSymbolicLink()) continue;
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) { stack.push(file); continue; }
+      visited += 1;
+      if (!/\.(tsx?|jsx?|vue|svelte|html|s?css)$/i.test(entry.name)) continue;
+      const stat = await fs.stat(file).catch(() => null);
+      if (!stat?.isFile() || stat.size > MAX_TEXT) continue;
+      const content = await fs.readFile(file, "utf8").catch(() => "");
+      const score = (component && content.includes(component) ? 5 : 0)
+        + classes.filter((item) => content.includes(item)).length
+        + (text && content.includes(text) ? 3 : 0);
+      if (score) matches.push({ score, path: path.relative(root, file).split(path.sep).join("/") });
+    }
+  }
+  return matches.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path)).slice(0, 12).map((item) => item.path);
+}
+
+module.exports = { files, workspacePath, findComponentFiles };

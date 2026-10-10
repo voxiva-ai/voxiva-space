@@ -806,9 +806,9 @@ export function NativeBrowser({
     }
   };
 
-  const urlField = (compactField: boolean) => (
+  const urlField = () => (
     <div className={`vs-browserUrlField${omniboxOpen && suggestions.length ? " is-suggesting" : ""}`}>
-      {!compactField ? <IconSearch size={15} className="vs-browserSearchIcon" /> : null}
+      <IconSearch size={15} className="vs-browserSearchIcon" />
       <input
         ref={urlInputRef}
         value={draft}
@@ -863,43 +863,43 @@ export function NativeBrowser({
     <div className={`vs-browser${compact ? " is-compact" : ""}`}>
       {compact ? (
         <div className="vs-browserNavBar" data-no-drag>
-          {urlField(true)}
+          {urlField()}
           {!isVsCode ? (
             <button
               type="button"
-              className={`vs-termIconBtn${inspector ? " is-active" : ""}`}
+              className={`vs-btn vs-browserUtilityBtn${inspector ? " is-active" : ""}`}
               disabled={!loadedUrl}
               title={t("browser.inspectHint")}
               aria-label={t("browser.inspect")}
               aria-pressed={inspector}
               onClick={toggleInspector}
             >
-              <IconInspect size={14} />
+              <IconInspect size={15} />
             </button>
           ) : null}
           <button
             type="button"
-            className="vs-termIconBtn"
+            className="vs-btn vs-browserUtilityBtn"
             disabled={!loadedUrl}
             title={t("browser.devtools")}
             aria-label={t("browser.devtools")}
             onClick={openNativeDevtools}
           >
-            <IconCodeBrowser size={14} />
+            <IconCodeBrowser size={15} />
           </button>
           <button
             type="button"
-            className="vs-termIconBtn"
+            className="vs-btn vs-browserUtilityBtn is-external"
             title={t("browser.external")}
             aria-label={t("browser.external")}
             onClick={openExternal}
           >
-            <IconExternalLink size={14} />
+            <IconExternalLink size={15} />
           </button>
         </div>
       ) : (
         <div className="vs-browserBar" data-no-drag>
-          {urlField(false)}
+          {urlField()}
           <button
             type="button"
             className="vs-btn vs-browserUtilityBtn"
@@ -954,7 +954,7 @@ export function NativeBrowser({
           style={snapshot && suppressedRef.current ? { backgroundImage: `url(${snapshot})`, backgroundSize: "100% 100%" } : undefined}
         >
           <div
-            className={`vs-browserNativeSlot${loadedUrl && live && !busy ? " is-covered" : ""}`}
+            className={`vs-browserNativeSlot${(loadedUrl && live && !busy) || (snapshot && suppressedRef.current) ? " is-covered" : ""}`}
           >
             {loadedUrl && !suppressedRef.current && (busy || !live) ? (
               <span className={`vs-browserLoadPulse${busy ? " is-busy" : ""}`}>

@@ -5,6 +5,7 @@ import { getCurrentWindow as tauriWindow } from "@tauri-apps/api/window";
 type ElectronBridge = {
   invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
   listen: (event: string, callback: (payload: unknown) => void) => () => void;
+  getPathForFile: (file: File) => string;
 };
 
 declare global { interface Window { voxiva?: ElectronBridge } }
@@ -43,4 +44,9 @@ export function getCurrentWindow(): ReturnType<typeof tauriWindow> {
 export function convertFileSrc(path: string): string {
   if (window.voxiva) return `voxiva-media://preview/${encodeURIComponent(path)}`;
   return tauriConvertFileSrc(path);
+}
+
+export function getNativeFilePath(file: File): string {
+  try { return window.voxiva?.getPathForFile(file) || (file as File & { path?: string }).path || ""; }
+  catch { return ""; }
 }

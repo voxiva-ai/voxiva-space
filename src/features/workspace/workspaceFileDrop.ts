@@ -1,5 +1,6 @@
 import { formatPathsForPty, payloadFromDataTransfer, VOXIVA_PATH_MIME } from "@/features/terminal/drop";
 import { bracketedPaste, payloadFromFileList, saveBlobToTemp } from "@/features/terminal/paste";
+import { getNativeFilePath } from "@/platform/desktop";
 import {
   isPanePreviewMime,
   isPanePreviewPath,
@@ -42,7 +43,7 @@ export function previewPathsFromDataTransfer(
 
   if (data.files?.length) {
     for (const file of Array.from(data.files)) {
-      const path = (file as File & { path?: string }).path;
+      const path = getNativeFilePath(file);
       if (path) push(path);
       else if (isPanePreviewMime(file.type) && file.name) push(file.name);
     }
@@ -60,7 +61,7 @@ export async function resolvePreviewPathsFromDrop(
   if (!data.files?.length) return [];
   const paths: string[] = [];
   for (const file of Array.from(data.files)) {
-    const disk = (file as File & { path?: string }).path?.trim();
+    const disk = getNativeFilePath(file).trim();
     if (disk && isPreviewDropPath(disk)) {
       paths.push(disk);
       continue;
