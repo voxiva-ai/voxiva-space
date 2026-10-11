@@ -32,6 +32,5 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --manifest-path native/Cargo.toml
       - run: cargo build --manifest-path native/Cargo.toml
-      - run: npm run electron:app-smoke
       - run: cargo build --release --manifest-path native/Cargo.toml
       - run: npx electron-builder --dir

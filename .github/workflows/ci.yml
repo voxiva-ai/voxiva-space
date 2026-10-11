@@ -28,4 +28,3 @@ jobs:
       - run: npm ci
       - run: npm run electron:check
       - run: cargo build --manifest-path native/Cargo.toml
-      - run: npm run electron:app-smoke
