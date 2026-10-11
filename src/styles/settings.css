@@ -200,14 +200,17 @@
 .vs-terminalSettingRow > span { display: grid; gap: 0.18rem; min-width: 0; }
 .vs-terminalSettingRow strong { color: var(--vs-text); font-size: 0.84rem; font-weight: 600; }
 .vs-terminalSettingRow small { color: var(--vs-muted); font-size: 0.75rem; line-height: 1.4; }
-.vs-terminalSettingField { display: grid; grid-template-columns: minmax(10rem, 1fr) minmax(10rem, 16rem); align-items: center; gap: 1rem; min-height: 3.1rem; border-bottom: 1px solid var(--vs-border); color: var(--vs-text); font-size: 0.82rem; }
+.vs-terminalSettingField { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 32rem); align-items: center; gap: 1rem; min-height: 3.1rem; border-bottom: 1px solid var(--vs-border); color: var(--vs-text); font-size: 0.82rem; }
+.vs-terminalSettingField > span { min-width: 0; }
 .vs-terminalSettingField select, .vs-terminalSettingField input { box-sizing: border-box; width: 100%; min-width: 0; padding: 0.5rem 0.65rem; border: 1px solid var(--vs-border); border-radius: 7px; background: var(--vs-bg-raised); color: var(--vs-text); font: inherit; }
-.vs-terminalRangeChoices { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0; }
-.vs-terminalRangeChoices button { min-height: 2rem; padding: 0.35rem 0.65rem; border: 1px solid var(--vs-border); border-right: 0; background: var(--vs-bg-raised); color: var(--vs-text-muted); font-size: 0.75rem; cursor: pointer; }
+.vs-terminalRangeChoices { display: flex; width: 100%; flex-wrap: wrap; justify-content: flex-end; gap: 0; }
+.vs-terminalRangeChoices button { flex: 1 1 0; min-width: 0; min-height: 2.15rem; padding: 0.35rem 0.5rem; border: 1px solid var(--vs-border); border-right: 0; background: var(--vs-bg-raised); color: var(--vs-text-muted); font-size: 0.75rem; white-space: nowrap; cursor: pointer; }
 .vs-terminalRangeChoices button:first-child { border-radius: 7px 0 0 7px; }
 .vs-terminalRangeChoices button:last-of-type { border-right: 1px solid var(--vs-border); border-radius: 0 7px 7px 0; }
-.vs-terminalRangeChoices button.is-active { background: var(--vs-bg-hover); color: var(--vs-text); }
-.vs-terminalRangeChoices input { max-width: 7.5rem; margin-left: 0.5rem; }
+.vs-terminalRangeChoices button:hover:not(:disabled) { background: var(--vs-bg-hover); color: var(--vs-text); }
+.vs-terminalRangeChoices button.is-active { position: relative; z-index: 1; border-color: color-mix(in srgb, var(--vs-accent) 55%, var(--vs-border)); background: var(--vs-accent-soft); color: var(--vs-text); }
+.vs-terminalRangeChoices button:focus-visible { position: relative; z-index: 2; outline: 2px solid var(--vs-accent); outline-offset: 1px; }
+.vs-terminalRangeChoices input { flex: 0 1 7.5rem; max-width: 7.5rem; min-width: 5rem; margin-left: 0.5rem; }
 .vs-terminalSessionList { border: 1px solid var(--vs-border); border-radius: 10px; overflow: hidden; }
 .vs-terminalSessionHead { padding: 0.65rem 0.8rem; border-bottom: 1px solid var(--vs-border); color: var(--vs-muted); font-size: 0.76rem; }
 .vs-terminalSessionRow { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto auto; align-items: center; gap: 0.65rem; min-height: 2.9rem; padding: 0.35rem 0.7rem; border-bottom: 1px solid var(--vs-border); }
