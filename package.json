@@ -4,7 +4,7 @@
   "description": "A desktop workspace for terminals, coding agents, files, and browser previews.",
   "author": "Voxiva AI",
   "private": true,
-  "version": "0.2.5",
+  "version": "0.2.6",
   "type": "module",
   "scripts": {
     "electron:pilot": "electron electron/pilot-main.cjs",
