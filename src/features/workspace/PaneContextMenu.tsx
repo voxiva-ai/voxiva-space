@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { Plus } from "@untitledui/icons";
+import { Plus } from "lucide-react";
 import { IconBrowser, IconCodeBrowser, IconRefresh, IconTerminal, IconX } from "@/components/icons";
 import { agentBots } from "@/features/agents/bots";
 import { useSpace } from "@/features/workspace/SpaceContext";
@@ -227,6 +227,8 @@ export function PaneContextMenu({ menu, onClose }: PaneContextMenuProps) {
     sessions,
   } = useSpace();
   const ref = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [openSub, setOpenSub] = useState<"terminal" | "browser" | "fork" | null>(null);
   const menuRef = menu;
@@ -280,12 +282,12 @@ export function PaneContextMenu({ menu, onClose }: PaneContextMenuProps) {
     const key = `pane-menu-${menu.paneId}`;
     const onPointerDown = (e: PointerEvent) => {
       if (ref.current?.contains(e.target as Node)) return;
-      onClose();
+      onCloseRef.current();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
-    const onResize = () => onClose();
+    const onResize = () => onCloseRef.current();
     window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", onResize);
@@ -297,7 +299,7 @@ export function PaneContextMenu({ menu, onClose }: PaneContextMenuProps) {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", onResize);
     };
-  }, [menu, onClose]);
+  }, [menu?.paneId]);
 
   if (!menuRef) return null;
 

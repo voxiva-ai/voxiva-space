@@ -50,6 +50,9 @@ const MARK: Record<string, string> = {
 
 /** CLI-specific marks: Claude Code, Codex, Gemini CLI, OpenCode, … */
 export function AgentBrandIcon({ id, size = 20, className }: Props) {
-  const svg = MARK[id] ?? MARK.shell;
-  return <BrandMark svg={svg} size={size} className={className} />;
+  const svg = MARK[id];
+  if (svg) return <BrandMark svg={svg} size={size} className={className} />;
+  const colors = ["#7c5cff", "#14a88a", "#e57642", "#3978e8", "#c54b78", "#1697a8"];
+  const color = colors[[...id].reduce((sum, char) => sum + char.charCodeAt(0), 0) % colors.length];
+  return <span className={`vs-agentBrandFallback${className ? ` ${className}` : ""}`} style={{ width: size, height: size, background: `${color}18`, color, fontSize: size * 0.52 }} aria-hidden="true">{id.replace(/[^a-z0-9]/gi, "").slice(0, 1).toUpperCase()}</span>;
 }

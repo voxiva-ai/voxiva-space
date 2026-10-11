@@ -13,10 +13,21 @@ function Switch({ checked, label, onChange }: { checked: boolean; label: string;
   return <button type="button" role="switch" aria-checked={checked} aria-label={label} className={`vs-toggle${checked ? " is-on" : ""}`} onClick={onChange}><i /></button>;
 }
 
+function Choices<T extends string>({ value, options, onChange }: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return <div className="vs-terminalRangeChoices">{options.map((option) => (
+    <button key={option.value} type="button" className={value === option.value ? "is-active" : ""} aria-pressed={value === option.value} onClick={() => onChange(option.value)}>{option.label}</button>
+  ))}</div>;
+}
+
 export function TerminalSettings() {
   const { t, activeWorkspace, sessions, restartSession, closeSession, preferredShell, setPreferredShell, setError } = useSpace();
   const [prefs, setPrefs] = useState<TerminalPrefs>(() => loadTerminalPrefs());
   const [busySession, setBusySession] = useState<string | null>(null);
+  const isWindows = navigator.userAgent.includes("Windows");
   const ids = activeWorkspace ? collectSessionIds(activeWorkspace.layout) : [];
   const liveSessions = ids.map((id) => sessions[id]).filter((session) => Boolean(session));
   const patch = (value: Partial<TerminalPrefs>) => setPrefs((current) => {
@@ -33,6 +44,48 @@ export function TerminalSettings() {
     <section className="vs-settingsPanelBody vs-terminalSettings">
       <h2>{t("settings.terminal")}</h2>
       <p className="vs-settingsHint">{t("settings.terminalHint")}</p>
+
+      {isWindows ? <div className="vs-terminalSettingsGroup">
+        <h3>{t("settings.termWindowsShell")}</h3>
+        <p className="vs-settingsHint">{t("settings.termWindowsShellHint")}</p>
+        <label className="vs-terminalSettingField"><span>{t("settings.termDefaultShell")}</span>
+          <select value={preferredShell} onChange={(event) => setPreferredShell(event.target.value)}>
+            {TERMINAL_OPTIONS.map((option) => <option key={option.value || "auto"} value={option.value}>{option.label}</option>)}
+          </select>
+        </label>
+      </div> : null}
+
+      <div className="vs-terminalSettingsGroup">
+        <h3>{t("settings.termRendering")}</h3>
+        <p className="vs-settingsHint">{t("settings.termRenderingHint")}</p>
+        <div className="vs-terminalSettingsRows">
+          <div className="vs-terminalSettingRow">
+            <span><strong>{t("settings.termGpu")}</strong><small>{t("settings.termGpuHint")}</small></span>
+            <Choices value={prefs.gpuAcceleration} options={[
+              { value: "auto", label: t("settings.termAuto") },
+              { value: "on", label: t("settings.termOn") },
+              { value: "off", label: t("settings.termOff") },
+            ]} onChange={(gpuAcceleration) => patch({ gpuAcceleration })} />
+          </div>
+          <div className="vs-terminalSettingRow">
+            <span><strong>{t("settings.termContrast")}</strong><small>{t("settings.termContrastHint")}</small></span>
+            <Choices value={prefs.colorContrast} options={[
+              { value: "automatic", label: t("settings.termAutomatic") },
+              { value: "off", label: t("settings.termOff") },
+              { value: "custom", label: t("settings.termCustom") },
+            ]} onChange={(colorContrast) => patch({ colorContrast })} />
+          </div>
+          {prefs.colorContrast === "custom" ? <label className="vs-terminalSettingField">
+            <span>{t("settings.termContrastRatio")}: {prefs.customContrastRatio.toFixed(1)}:1</span>
+            <input type="range" min="1" max="7" step="0.5" value={prefs.customContrastRatio} onChange={(event) => patch({ customContrastRatio: Number(event.target.value) })} />
+          </label> : null}
+          <div className="vs-terminalSettingRow">
+            <span><strong>{t("settings.termInlineImages")}</strong><small>{t("settings.termInlineImagesHint")}</small></span>
+            <Switch checked={prefs.inlineImages} label={t("settings.termInlineImages")} onChange={() => patch({ inlineImages: !prefs.inlineImages })} />
+          </div>
+        </div>
+        <p className="vs-settingsHint">{t("settings.termNewPanesHint")}</p>
+      </div>
 
       <div className="vs-terminalSettingsGroup">
         <h3>{t("settings.termInteraction")}</h3>
@@ -93,11 +146,6 @@ export function TerminalSettings() {
         <label className="vs-terminalSettingField"><span>{t("settings.termWordSeparators")}</span>
           <input value={prefs.wordSeparators} onChange={(event) => patch({ wordSeparators: event.target.value })} />
         </label>
-        {navigator.userAgent.includes("Windows") ? <label className="vs-terminalSettingField"><span>{t("settings.termPowerShell")}</span>
-          <select value={preferredShell} onChange={(event) => setPreferredShell(event.target.value)}>
-            {TERMINAL_OPTIONS.map((option) => <option key={option.value || "auto"} value={option.value}>{option.label}</option>)}
-          </select>
-        </label> : null}
         <button className="vs-btn vs-btnGhost" type="button" onClick={() => { const next = { ...DEFAULT_TERMINAL_PREFS }; saveTerminalPrefs(next); setPrefs(next); setPreferredShell(""); }}>{t("settings.termReset")}</button>
       </div>
 

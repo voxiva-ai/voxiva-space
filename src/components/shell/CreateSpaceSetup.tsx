@@ -5,6 +5,7 @@ import type { GridPreset } from "@/features/workspace/layout";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import type { MsgKey } from "@/i18n";
 import { SPACE_COLOR_HEX, SPACE_TAB_COLORS, type SpaceColor } from "@/lib/types";
+import { isAgentEnabled } from "@/features/agents/prefs";
 
 const LAYOUTS: Array<{ id: GridPreset; cells: number; labelKey: MsgKey; hintKey: MsgKey }> = [
   { id: 1, cells: 1, labelKey: "welcome.single", hintKey: "welcome.singleHint" },
@@ -124,7 +125,7 @@ export function CreateSpaceSetup({
             <p className="vs-createAgentsHint">{t("projects.agentsHint")}</p>
             <div className="vs-createAgentChips">
               {selectableBots
-                .filter((bot) => isBotReady(bot, agentAvailability, agentsScanned))
+                .filter((bot) => isAgentEnabled(bot.id) && isBotReady(bot, agentAvailability, agentsScanned))
                 .map((bot) => {
                 const selected = selectedSet.has(bot.id);
                 const full = !selected && value.agentIds.length >= slots;
@@ -147,7 +148,7 @@ export function CreateSpaceSetup({
                 );
               })}
               {agentsScanned &&
-                selectableBots.every((bot) => !isBotReady(bot, agentAvailability, agentsScanned)) && (
+                selectableBots.every((bot) => !isAgentEnabled(bot.id) || !isBotReady(bot, agentAvailability, agentsScanned)) && (
                   <p className="vs-createAgentsHint">{t("projects.agentsNoneInstalled")}</p>
                 )}
             </div>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Folder as FolderIcon } from "@untitledui/icons";
+import { ChevronDown, ChevronRight, Folder as FolderIcon } from "lucide-react";
 import { listDirectory, getWorkspaceFileInfo } from "@/features/editor/api";
 import { isPanePreviewPath, type FileEntry } from "@/features/editor/types";
 import { MaterialFileIcon } from "@/features/editor/MaterialFileIcon";

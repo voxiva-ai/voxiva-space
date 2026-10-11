@@ -19,6 +19,7 @@
 }
 
 .vs-settingsLayout {
+  --vs-settings-divider: color-mix(in srgb, var(--vs-text) 10%, transparent);
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   height: 100%;
@@ -31,13 +32,45 @@
   flex-direction: column;
   gap: 0.15rem;
   padding: 1.25rem 1rem;
-  border-right: 1px solid var(--vs-border);
-  background: transparent;
+  border-right: 1px solid var(--vs-settings-divider);
+  background: color-mix(in srgb, var(--vs-bg-raised) 42%, var(--vs-bg));
   overflow: auto;
 }
 
+.vs-settingsSearch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.35rem;
+  margin: 0 0 0.5rem;
+  padding: 0 0.6rem;
+  border: 1px solid var(--vs-settings-divider);
+  border-radius: 8px;
+  background: var(--vs-bg-raised);
+  color: var(--vs-muted);
+}
+
+.vs-settingsSearch:focus-within {
+  border-color: color-mix(in srgb, var(--vs-accent) 55%, var(--vs-settings-divider));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--vs-accent) 12%, transparent);
+}
+
+.vs-settingsSearch input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--vs-text);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.vs-settingsSearch input::placeholder { color: var(--vs-muted); }
+.vs-settingsSearch kbd { flex: none; padding: 0.1rem 0.3rem; border: 1px solid var(--vs-settings-divider); border-radius: 4px; color: var(--vs-muted); font: 0.65rem var(--vs-font); }
+
 .vs-settingsNavTitle {
-  margin: 0 0.5rem 1rem;
+  margin: 0.55rem 0.5rem 0.45rem;
   color: var(--vs-muted);
   font-size: 0.7rem;
   font-weight: 700;
@@ -46,7 +79,7 @@
 }
 
 .vs-settingsNavGroup + .vs-settingsNavGroup {
-  margin-top: 0.85rem;
+  margin-top: 0.45rem;
 }
 
 .vs-settingsBack {
@@ -70,18 +103,27 @@
   color: var(--vs-text);
 }
 
+.vs-settingsBack > span { color: var(--vs-muted); font-size: 1rem; }
+.vs-settingsNavEmpty { padding: 0.5rem; color: var(--vs-muted); font-size: 0.8rem; }
+
 .vs-settingsNavItem {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   width: 100%;
-  padding: 0.68rem 0.8rem;
+  min-height: 2.15rem;
+  padding: 0.42rem 0.62rem;
   border: 0;
-  border-radius: 10px;
+  border-radius: 7px;
   background: transparent;
   color: var(--vs-muted);
   font-size: 0.88rem;
-  font-weight: 600;
+  font-weight: 500;
   text-align: left;
   transition: background 120ms ease, color 120ms ease;
 }
+
+.vs-settingsNavItem svg { flex: none; color: var(--vs-muted); stroke-width: 1.6; }
 
 .vs-settingsNavItem:hover {
   background: var(--vs-bg-hover);
@@ -89,9 +131,11 @@
 }
 
 .vs-settingsNavItem.is-active {
-  background: var(--vs-surface);
+  background: color-mix(in srgb, var(--vs-accent) 9%, var(--vs-bg-raised));
   color: var(--vs-text);
 }
+
+.vs-settingsNavItem.is-active svg { color: var(--vs-accent); }
 
 .vs-settingsPanel {
   min-width: 0;
@@ -105,7 +149,7 @@
   width: 100%;
   margin: 0 auto 1.25rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid var(--vs-border);
+  border-bottom: 1px solid var(--vs-settings-divider);
 }
 .vs-settingsPageHead h1 {
   margin: 0;
@@ -135,24 +179,19 @@
   box-shadow: none;
 }
 
-.vs-settingsGeneral .vs-langRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.vs-settingsGeneral .vs-langChip {
-  min-width: 8.5rem;
-  flex-direction: row;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 2rem 0.6rem 0.75rem;
+.vs-languageSelect { display: flex; width: min(100%, 18rem); }
+.vs-languageSelect select {
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.5rem 2.2rem 0.5rem 0.75rem;
+  border: 1px solid var(--vs-border);
   border-radius: 8px;
+  background: var(--vs-bg-raised);
+  color: var(--vs-text);
+  font: inherit;
+  cursor: pointer;
 }
-
-.vs-settingsGeneral .vs-langChip small {
-  margin-left: auto;
-}
+.vs-languageSelect select:focus-visible { outline: 2px solid var(--vs-accent); outline-offset: 2px; }
 
 .vs-settingsPanelBody h2 {
   margin: 0 0 0.35rem;
@@ -174,7 +213,7 @@
   box-sizing: border-box;
   margin: 0 0 0.75rem;
   padding: 1rem 1.05rem;
-  border: 1px solid var(--vs-border);
+  border: 1px solid var(--vs-settings-divider);
   border-radius: var(--vs-radius);
   background: var(--vs-bg-raised);
 }
@@ -184,7 +223,7 @@
 }
 
 .vs-terminalSettings { max-width: 58rem; gap: 1.35rem; }
-.vs-terminalSettingsGroup { padding: 0 0 1.15rem; border-bottom: 1px solid var(--vs-border); }
+.vs-terminalSettingsGroup { padding: 0 0 1.15rem; border-bottom: 1px solid var(--vs-settings-divider); }
 .vs-terminalSettingsGroup:last-child { padding-bottom: 0; border: 0; }
 .vs-terminalSettingsGroup h3 { margin: 0 0 0.35rem; font-size: 0.96rem; font-weight: 650; }
 .vs-terminalSettingsGroup > .vs-settingsHint { margin-bottom: 0.9rem; }
@@ -195,12 +234,13 @@
 .vs-terminalRangeCard > small { min-height: 2em; color: var(--vs-muted); font-size: 0.75rem; line-height: 1.4; }
 .vs-terminalRangeCard input[type="range"] { width: 100%; accent-color: var(--vs-accent); }
 .vs-terminalRangeEnds { display: flex; justify-content: space-between; color: var(--vs-muted); }
-.vs-terminalSettingsRows { border-top: 1px solid var(--vs-border); }
-.vs-terminalSettingRow { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 3.15rem; padding: 0.4rem 0; border-bottom: 1px solid var(--vs-border); }
+.vs-terminalSettingsRows { border-top: 1px solid var(--vs-settings-divider); }
+.vs-terminalSettingRow { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 3.15rem; padding: 0.4rem 0; border-bottom: 1px solid var(--vs-settings-divider); }
 .vs-terminalSettingRow > span { display: grid; gap: 0.18rem; min-width: 0; }
 .vs-terminalSettingRow strong { color: var(--vs-text); font-size: 0.84rem; font-weight: 600; }
 .vs-terminalSettingRow small { color: var(--vs-muted); font-size: 0.75rem; line-height: 1.4; }
-.vs-terminalSettingField { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 32rem); align-items: center; gap: 1rem; min-height: 3.1rem; border-bottom: 1px solid var(--vs-border); color: var(--vs-text); font-size: 0.82rem; }
+.vs-terminalSettingRow > .vs-terminalRangeChoices { width: auto; min-width: 11rem; flex: 0 0 auto; }
+.vs-terminalSettingField { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 32rem); align-items: center; gap: 1rem; min-height: 3.1rem; border-bottom: 1px solid var(--vs-settings-divider); color: var(--vs-text); font-size: 0.82rem; }
 .vs-terminalSettingField > span { min-width: 0; }
 .vs-terminalSettingField select, .vs-terminalSettingField input { box-sizing: border-box; width: 100%; min-width: 0; padding: 0.5rem 0.65rem; border: 1px solid var(--vs-border); border-radius: 7px; background: var(--vs-bg-raised); color: var(--vs-text); font: inherit; }
 .vs-terminalRangeChoices { display: flex; width: 100%; flex-wrap: wrap; justify-content: flex-end; gap: 0; }
@@ -226,6 +266,8 @@
 
 @media (max-width: 760px) {
   .vs-terminalRangeGrid { grid-template-columns: 1fr; }
+  .vs-terminalSettingRow { flex-wrap: wrap; }
+  .vs-terminalSettingRow > .vs-terminalRangeChoices { width: 100%; min-width: 0; }
   .vs-terminalSettingField { grid-template-columns: 1fr; gap: 0.45rem; padding: 0.65rem 0; }
   .vs-terminalSessionRow { grid-template-columns: 8px minmax(0, 1fr) auto; }
   .vs-terminalSessionRow .vs-btn:last-child { grid-column: 2 / -1; justify-self: end; }
@@ -270,7 +312,7 @@
   list-style: none;
   display: grid;
   gap: 0;
-  border-top: 1px solid var(--vs-border);
+  border-top: 1px solid var(--vs-settings-divider);
 }
 
 .vs-hotkeyRows li {
@@ -280,11 +322,11 @@
   align-items: center;
   min-height: 3rem;
   padding: 0.35rem 0;
-  border-bottom: 1px solid var(--vs-border);
+  border-bottom: 1px solid var(--vs-settings-divider);
 }
 
 .vs-hotkeyRows li:last-child {
-  border-bottom: 1px solid var(--vs-border);
+  border-bottom: 1px solid var(--vs-settings-divider);
 }
 
 .vs-hotkeyEdit {
@@ -320,11 +362,11 @@
   justify-content: space-between;
   gap: 2rem;
   padding: 1rem 0;
-  border-bottom: 1px solid var(--vs-border);
+  border-bottom: 1px solid var(--vs-settings-divider);
 }
 
 .vs-soundRow:first-child {
-  border-top: 1px solid var(--vs-border);
+  border-top: 1px solid var(--vs-settings-divider);
 }
 
 .vs-soundRow strong {
@@ -679,8 +721,10 @@
     flex-direction: row;
     flex-wrap: wrap;
     border-right: 0;
-    border-bottom: 1px solid var(--vs-border);
+    border-bottom: 1px solid var(--vs-settings-divider);
   }
+
+  .vs-settingsSearch { flex-basis: 100%; }
 
   .vs-settingsNavItem {
     width: auto;
@@ -746,6 +790,36 @@
 .vs-settingsRow h3 {
   margin: 0 0 0.35rem;
   font-size: 0.95rem;
+}
+
+.vs-agentSettings .vs-settingsRow { align-items: center; }
+.vs-agentSettings .vs-settingsRow > div { min-width: 0; }
+.vs-agentSettings .vs-settingsRow select { min-width: 13rem; padding: 0.5rem 0.7rem; border: 1px solid var(--vs-border); border-radius: 8px; background: var(--vs-bg-raised); color: var(--vs-text); font: inherit; }
+.vs-agentSettingsList { border-top: 1px solid var(--vs-border); }
+.vs-agentSettingsRow { display: grid; grid-template-columns: 2rem minmax(8rem, 1fr) 6.5rem auto; align-items: center; gap: 0.7rem; min-height: 3.5rem; padding: 0.4rem 0.2rem; border-bottom: 1px solid var(--vs-settings-divider); }
+.vs-agentSettingsRow > .vs-agentIcon { width: 2rem; height: 2rem; }
+.vs-agentSettingsRow .vs-agentIcon svg, .vs-agentSettingsRow .vs-agentIcon .vs-brandMark { width: 1.35rem; height: 1.35rem; }
+.vs-agentSettingsName { display: grid; min-width: 0; gap: 0.12rem; }
+.vs-agentSettingsName strong { overflow: hidden; color: var(--vs-text); font-size: 0.84rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.vs-agentSettingsName small { overflow: hidden; color: var(--vs-muted); font: 0.7rem var(--vs-mono); text-overflow: ellipsis; white-space: nowrap; }
+.vs-agentSettingsStatus { color: var(--vs-muted); font-size: 0.72rem; white-space: nowrap; }
+.vs-agentSettingsStatus.is-ready { color: var(--vs-ok); }
+.vs-agentSettingsActions { display: flex; align-items: center; justify-content: flex-end; gap: 0.4rem; }
+.vs-agentAvailability { min-width: 5.25rem; min-height: 1.9rem; padding: 0.3rem 0.65rem; border: 1px solid var(--vs-settings-divider); border-radius: 6px; background: var(--vs-bg-raised); color: var(--vs-muted); font: inherit; font-size: 0.76rem; font-weight: 550; cursor: pointer; transition: background 120ms ease, color 120ms ease, border-color 120ms ease; }
+.vs-agentAvailability:hover { background: var(--vs-bg-hover); color: var(--vs-text); }
+.vs-agentAvailability.is-enabled { border-color: color-mix(in srgb, var(--vs-accent) 35%, var(--vs-settings-divider)); background: var(--vs-accent-soft); color: var(--vs-text); }
+.vs-agentAvailability:focus-visible, .vs-agentGuide:focus-visible { outline: 2px solid var(--vs-accent); outline-offset: 2px; }
+.vs-agentGuide { display: inline-grid; width: 1.9rem; height: 1.9rem; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--vs-muted); cursor: pointer; transition: background 120ms ease, color 120ms ease; }
+.vs-agentGuide:hover { background: var(--vs-bg-hover); color: var(--vs-text); }
+.vs-agentSettingsCount { margin-left: 0.4rem; padding: 0.16rem 0.42rem; border: 1px solid var(--vs-border); border-radius: 999px; color: var(--vs-muted); font-size: 0.68rem; font-weight: 500; vertical-align: middle; }
+.vs-agentBrandFallback { display: inline-grid; flex: 0 0 auto; place-items: center; border: 1px solid currentColor; border-radius: 8px; font-weight: 750; line-height: 1; }
+
+@media (max-width: 700px) {
+  .vs-agentSettingsRow { grid-template-columns: 2rem minmax(0, 1fr); gap: 0.45rem 0.5rem; }
+  .vs-agentSettingsStatus { display: none; }
+  .vs-agentSettingsActions { grid-column: 2; justify-content: flex-start; }
+  .vs-agentSettingsName { grid-column: 2; }
+  .vs-agentSettingsRow .vs-agentIcon { grid-row: 1 / span 2; }
 }
 
 .vs-settingsField {
@@ -919,54 +993,6 @@
   margin-top: 0.55rem;
 }
 
-.vs-langRow {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 14rem));
-  gap: 0.75rem;
-  max-width: none;
-}
-
-.vs-langChip {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.15rem;
-  padding: 0.75rem 0.85rem;
-  border: 1px solid var(--vs-border);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--vs-text);
-  text-align: left;
-  cursor: pointer;
-}
-
-.vs-langChip strong {
-  font-size: 0.92rem;
-  font-weight: 700;
-}
-
-.vs-langChip small {
-  color: var(--vs-muted);
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.vs-langChip.is-active {
-  border-color: color-mix(in srgb, var(--vs-accent) 40%, var(--vs-border));
-  background: var(--vs-accent-soft);
-  box-shadow: none;
-}
-
-.vs-langChip .vs-themeCheck {
-  position: absolute;
-  top: 0.55rem;
-  right: 0.55rem;
-  background: var(--vs-accent);
-  color: var(--vs-on-accent);
-}
-
 .vs-hotkeyRows li > span {
   display: flex;
   flex-direction: column;
@@ -1093,14 +1119,14 @@
 }
 
 .vs-settingsItem {
-  border: 1px solid var(--vs-border);
+  border: 1px solid var(--vs-settings-divider);
   border-radius: var(--vs-radius);
   background: var(--vs-bg-raised);
   overflow: hidden;
 }
 
 .vs-settingsItem.is-open {
-  border-color: color-mix(in srgb, var(--vs-accent) 35%, var(--vs-border));
+  border-color: var(--vs-settings-divider);
 }
 
 .vs-settingsItemHead {
@@ -1139,7 +1165,10 @@
 .vs-settingsChevron {
   color: var(--vs-muted);
   font-size: 0.7rem;
+  transition: transform 140ms ease, color 140ms ease;
 }
+
+.vs-settingsItem.is-open .vs-settingsChevron { transform: rotate(90deg); }
 
 .vs-settingsItemBody {
   padding: 0 0.65rem 0.75rem;

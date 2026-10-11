@@ -30,11 +30,13 @@
     "electron:check": "npm run build && cargo test --manifest-path native/Cargo.toml && node --test electron/*.test.cjs"
   },
   "dependencies": {
-    "@untitledui/icons": "^0.0.22",
     "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-image": "^0.9.0",
+    "@xterm/addon-webgl": "^0.19.0",
     "@xterm/xterm": "^6.0.0",
     "dompurify": "^3.4.16",
     "electron-updater": "^6.8.9",
+    "lucide-react": "^0.577.0",
     "marked": "^18.0.9",
     "material-icon-theme": "^5.37.0",
     "qrcode": "^1.5.4",
@@ -64,7 +66,8 @@
       "dist/**/*",
       "electron/**/*",
       "src-tauri/src/inspector/inject.js",
-      "package.json"
+      "package.json",
+      "THIRD-PARTY-NOTICES.md"
     ],
     "win": {
       "target": "nsis",

@@ -13,7 +13,7 @@ import { IconAssistPanel, IconBell, IconMore, IconPlusStroke, IconSettings, Icon
 import { PromptDialog } from "@/components/PromptDialog";
 import { clientError } from "@/lib/errors";
 import { savedLayoutPaneCount } from "@/features/workspace/savedLayouts";
-import { Pin01, Pin02 } from "@untitledui/icons";
+import { Copy, FolderPlus, LayoutGrid, Pin, PinOff, Save } from "lucide-react";
 import logoUrl from "@/assets/brand/voxiva-space-mark.png";
 import { formatHotkey, loadHotkeys } from "@/features/hotkeys/bindings";
 import { getCurrentWindow } from "@/platform/desktop";
@@ -312,7 +312,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
         </button>
         {ws.pinned ? (
           <span className="vs-wsItemPinMark" title={t("spaces.pinned")} aria-hidden>
-            <Pin01 size={12} />
+            <Pin size={12} />
           </span>
         ) : null}
         <button
@@ -484,11 +484,12 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
                       disabled={item.disabled}
                       onClick={() => runPlusAction(item.id)}
                     >
+                      {item.id === "new-space" ? <FolderPlus size={14} aria-hidden /> : <Copy size={14} aria-hidden />}
                       {item.label}
                     </button>
                   ))}
                   <div className="vs-chromeMenuSep" role="separator" />
-                  <div className="vs-chromeMenuLabel">{t("layouts.menu")}</div>
+                  <div className="vs-chromeMenuLabel"><LayoutGrid size={13} aria-hidden />{t("layouts.menu")}</div>
                   <button
                     type="button"
                     role="menuitem"
@@ -496,6 +497,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
                     disabled={!canSaveLayout}
                     onClick={() => closePlusAnd(() => setSaveOpen(true))}
                   >
+                    <Save size={14} aria-hidden />
                     {t("layouts.saveCurrent")}
                   </button>
                   {savedLayouts.length === 0 ? (
@@ -731,11 +733,11 @@ function SpaceActionMenu({
             >
               {ws.pinned ? (
                 <>
-                  <Pin02 size={14} aria-hidden /> {t("spaces.unpin")}
+                  <PinOff size={14} aria-hidden /> {t("spaces.unpin")}
                 </>
               ) : (
                 <>
-                  <Pin01 size={14} aria-hidden /> {t("spaces.pin")}
+                  <Pin size={14} aria-hidden /> {t("spaces.pin")}
                 </>
               )}
             </button>

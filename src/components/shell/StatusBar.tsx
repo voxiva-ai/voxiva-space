@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { CpuChip01 } from "@untitledui/icons";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
+import { Cpu } from "lucide-react";
 import { AgentBrandIcon } from "@/components/agents/AgentBrandIcon";
 import { IconRefresh, IconTerminal, IconX } from "@/components/icons";
 import { ConfirmDialog } from "@/components/PromptDialog";
@@ -7,6 +7,7 @@ import { useSpace, useView } from "@/features/workspace/SpaceContext";
 import { agentIdForSession } from "@/features/agents/sessionAgent";
 import { invoke } from "@/platform/desktop";
 import { collectSessionIds } from "@/features/workspace/layout";
+import { agentBots, isBotReady } from "@/features/agents/bots";
 
 type Quota = { used: number; minutes: number; resetsAt: number };
 type Snapshot = {
@@ -23,7 +24,7 @@ type DiskUsage = { path: string; bytes: number; scannedEntries: number; complete
 const formatBytes = (bytes: number) => bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(2)} GB` : bytes >= 1024 ** 2 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${(bytes / 1024).toFixed(0)} KB`;
 
 export function StatusBar() {
-  const { sessions, workspaces, activeWorkspace, t, openBrowserWithUrl, setError, selectWorkspace, removeWorkspace } = useSpace();
+  const { sessions, workspaces, t, openBrowserWithUrl, setError, selectWorkspace, removeWorkspace, agentAvailability, agentsScanned } = useSpace();
   const { setView } = useView();
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [loading, setLoading] = useState(false);
@@ -32,6 +33,7 @@ export function StatusBar() {
   const [portsLoading, setPortsLoading] = useState(false);
   const [panel, setPanel] = useState<string | null>(null);
   const [usageMode, setUsageMode] = useState<"detailed" | "compact">("detailed");
+  const [selectedUsageAgent, setSelectedUsageAgent] = useState("codex");
   const [mode, setMode] = useState<AwakeMode>("off");
   const [awake, setAwake] = useState(false);
   const [awakePending, setAwakePending] = useState(false);
@@ -45,9 +47,6 @@ export function StatusBar() {
   const resourcesPanel = useRef<HTMLDivElement>(null);
   const live = Object.values(sessions).filter((session) => session.status === "online");
   const liveAgents = live.filter((session) => agentIdForSession(session) !== "shell");
-  const sessionTabs = workspaces.flatMap((workspace) => collectSessionIds(workspace.layout)
-    .map((id) => sessions[id]).filter((session) => session !== undefined)
-    .map((session) => ({ ...session, workspace })));
   const hasAgents = liveAgents.length > 0;
   const desktop = Boolean(window.voxiva);
   const refresh = useCallback(async () => {
@@ -115,6 +114,12 @@ export function StatusBar() {
   const cleanupTarget = workspaces.find((workspace) => workspace.id === cleanupId);
 
   const quotas = snapshot?.limits?.windows.filter((quota) => quota.resetsAt > Date.now()) ?? [];
+  const detectedAgents = agentsScanned ? agentBots.filter((bot) => bot.id !== "shell" && isBotReady(bot, agentAvailability, true)) : [];
+  const usageAgents = detectedAgents.some((bot) => bot.id === "codex") || quotas.length
+    ? [agentBots.find((bot) => bot.id === "codex")!, ...detectedAgents.filter((bot) => bot.id !== "codex")]
+    : detectedAgents;
+  const selectedUsageBot = usageAgents.find((bot) => bot.id === selectedUsageAgent) ?? usageAgents[0];
+  const selectedQuotas = selectedUsageBot?.id === "codex" ? quotas : [];
   const remaining = (at: number) => {
     const minutes = Math.max(0, Math.ceil((at - Date.now()) / 60_000));
     return minutes >= 1440 ? `${Math.floor(minutes / 1440)}d ${Math.floor(minutes % 1440 / 60)}h` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
@@ -124,23 +129,23 @@ export function StatusBar() {
     : null;
   const heading = (id: string, title: string) => <header><strong id={`${id}-title`}>{title}</strong><button type="button" popoverTarget={`status-${id}`} popoverTargetAction="hide" aria-label={t("status.close")}><IconX size={14} /></button></header>;
   const quotaWindow = (minutes: number) => minutes >= 10_000 ? "wk" : minutes >= 1_000 ? "day" : `${Math.round(minutes / 60)}h`;
+  const overallUsage = quotas.length ? Math.round(quotas.reduce((sum, quota) => sum + quota.used, 0) / quotas.length) : null;
 
   return <footer className="vs-statusBar" aria-label={t("status.title")}>
-    <button type="button" className="vs-statusUsageTrigger" popoverTarget="status-usage" aria-expanded={panel === "usage"} title={t("status.usage")}>
-      <AgentBrandIcon id="codex" size={14} />
-      {quotas.length ? <><span>{Math.round(quotas[0].used)}%</span><span className="vs-statusUsageMiniMeter"><i style={{ width: `${quotas[0].used}%` }} /></span><small>{remaining(quotas[0].resetsAt)}</small></> : <span>{t("status.usage")}</span>}
-    </button>
-    <nav className="vs-statusSessions" aria-label={t("status.sessions")}>
-      {sessionTabs.map((session) => <button type="button" key={session.id} className={session.workspace.id === activeWorkspace?.id ? "is-active" : ""} title={`${session.title} · ${session.workspace.name} · ${session.cwd}`} onClick={() => { resourcesPanel.current?.hidePopover(); selectWorkspace(session.workspace.id); }}>
-        <i className={`vs-statusDot${session.status === "online" ? " is-active" : ""}`} />
-        <span>{session.title}</span>
+    <div className="vs-statusUsageModels" aria-label={t("status.usage")}>
+      <button type="button" className="vs-statusUsageSummary" popoverTarget="status-usage" aria-expanded={panel === "usage"} title={t("status.usage")}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M4 19V5m0 14h17M8 15l4-4 3 2 5-6" /></svg>
+        {overallUsage === null ? <span>{t("status.usage")}</span> : <><i className="vs-statusUsageMiniMeter"><b style={{ width: `${overallUsage}%` }} /></i><strong>{overallUsage}%</strong><small>{remaining(Math.min(...quotas.map((quota) => quota.resetsAt)))}</small></>}
+      </button>
+      {quotas.map((quota) => <button type="button" className="vs-statusQuotaShortcut" key={quota.minutes} popoverTarget="status-usage" aria-expanded={panel === "usage"} title={`${quotaWindow(quota.minutes)} · ${Math.round(quota.used)}% · ${remaining(quota.resetsAt)}`}>
+        <small>{quotaWindow(quota.minutes)}</small><i className="vs-statusUsageMiniMeter"><b style={{ width: `${quota.used}%` }} /></i><strong>{Math.round(quota.used)}%</strong>
       </button>)}
-    </nav>
+    </div>
     <div className="vs-statusRight">
       <button type="button" popoverTarget="status-awake" aria-expanded={panel === "awake"} title={t("status.awake")}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M4 8h12v7a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8ZM16 9h2a3 3 0 0 1 0 6h-2M7 2v3M12 2v3" /></svg><span>{t(`status.${mode}`)}</span><i className={`vs-statusDot${awake ? " is-active" : ""}`} /></button>
-      <button type="button" className="vs-statusMemory" popoverTarget="status-resources" aria-expanded={panel === "resources"} title={t("status.resources")}><CpuChip01 size={13} aria-hidden="true" /><span>{snapshot && !failed ? `${snapshot.memoryMb} MB` : "—"}</span></button>
+      <button type="button" className="vs-statusMemory" popoverTarget="status-resources" aria-expanded={panel === "resources"} title={t("status.resources")}><Cpu size={13} aria-hidden="true" /><span>{snapshot && !failed ? `${snapshot.memoryMb} MB` : "—"}</span></button>
       <button type="button" onClick={() => setView("space")} title={t("status.sessions")} aria-label={`${t("status.sessions")}: ${live.length}`}><IconTerminal size={13} /><span>{live.length}</span></button>
-      <button type="button" className="vs-statusAgents" onClick={() => setView("agents")} title={t("nav.agents")} aria-label={t("nav.agents")}><AgentBrandIcon id={liveAgents[0] ? agentIdForSession(liveAgents[0]) : "codex"} size={14} /></button>
+      <button type="button" className="vs-statusAgents" onClick={() => setView("agents")} title={t("nav.agents")} aria-label={t("nav.agents")}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2" /><path d="M3 19v-1a6 6 0 0 1 12 0v1m1-5a4 4 0 0 1 5 4v1" /></svg></button>
       <button type="button" popoverTarget="status-ports" aria-expanded={panel === "ports"} title={t("status.ports")}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M8 2v6m8-6v6M6 8h12v4a6 6 0 0 1-12 0V8Zm6 10v4" /></svg><span>{t("status.ports")}</span></button>
     </div>
 
@@ -159,20 +164,40 @@ export function StatusBar() {
         </span>
       </header>
       <div className="vs-usageToolbar">
-        <span><AgentBrandIcon id="codex" size={15} />Codex</span>
+        <span>{agentsScanned ? t("status.usageAllAgents") : t("status.usageScanning")}</span>
         <div role="group" aria-label={t("status.usageView")}>
           {(["detailed", "compact"] as const).map((value) => <button key={value} type="button" aria-pressed={usageMode === value} onClick={() => setUsageMode(value)}>{t(`status.${value}`)}</button>)}
         </div>
       </div>
-      {quotas.length ? <div className="vs-usageRows">{quotas.map((quota) => <div className="vs-usageRow" key={quota.minutes}>
-        <div className="vs-usageRowHead"><strong>{quotaWindow(quota.minutes)}</strong><span>{Math.round(quota.used)}%</span></div>
-        <div className="vs-usageMeter" data-level={quota.used >= 90 ? "danger" : quota.used >= 70 ? "warning" : "normal"}><i style={{ width: `${quota.used}%` }} /></div>
-        {usageMode === "detailed" && <small>{t("status.usageResetsIn")} {remaining(quota.resetsAt)}</small>}
-      </div>)}</div> : <p className="vs-usageEmpty">{t(desktop ? "status.usageEmpty" : "status.desktopOnly")}</p>}
+      <div className="vs-usageWorkspace">
+      <div className="vs-usageProviders">
+        {usageAgents.map((bot) => {
+          const metrics = bot.id === "codex" ? quotas : [];
+          return <button type="button" className={`vs-usageProvider${selectedUsageBot?.id === bot.id ? " is-selected" : ""}`} key={bot.id} aria-pressed={selectedUsageBot?.id === bot.id} onMouseEnter={() => setSelectedUsageAgent(bot.id)} onFocus={() => setSelectedUsageAgent(bot.id)} onClick={() => setSelectedUsageAgent(bot.id)}>
+            <span className="vs-usageProviderHead">{bot.id === "codex" ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M4 19V5m0 14h17M8 15l4-4 3 2 5-6" /></svg> : <AgentBrandIcon id={bot.id} size={16} />}<strong>{bot.name}</strong>{metrics.length > 0 && <small>{t("status.usageResetsIn")} {remaining(Math.min(...metrics.map((quota) => quota.resetsAt)))}</small>}<span aria-hidden="true">›</span></span>
+            {metrics.length ? <span className="vs-usageProviderMeters">{metrics.map((quota) => <span className="vs-usageProviderMeter" key={quota.minutes}>
+              <span className="vs-usageRowHead"><strong>{quotaWindow(quota.minutes)}</strong><span>{Math.round(quota.used)}%</span></span>
+              <span className="vs-usageMeter" data-level={quota.used >= 90 ? "danger" : quota.used >= 70 ? "warning" : "normal"}><i style={{ width: `${quota.used}%` }} /></span>
+            </span>)}</span> : <span className="vs-usageAgentUnknown">{t("status.usageUnavailable")}</span>}
+          </button>;
+        })}
+        {!usageAgents.length && <p className="vs-usageEmpty">{t(agentsScanned ? "status.usageUnavailable" : "status.usageScanning")}</p>}
+      </div>
+      {selectedUsageBot && <section className="vs-usageDetail" aria-label={selectedUsageBot.name}>
+        <header><span>{selectedUsageBot.id === "codex" ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M4 19V5m0 14h17M8 15l4-4 3 2 5-6" /></svg> : <AgentBrandIcon id={selectedUsageBot.id} size={16} />}<strong>{selectedUsageBot.name}</strong></span><small>{snapshot?.limits?.at ? `${t("status.usageUpdated")} ${new Date(snapshot.limits.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : t("status.usageUnavailable")}</small></header>
+        {selectedQuotas.length ? <div className="vs-usageDetailLimits">{selectedQuotas.map((quota, index) => <div className="vs-usageDetailLimit" key={quota.minutes}>
+          <strong>{t(index === 0 ? "status.usageSession" : "status.usageWeekly")}</strong>
+          <div className="vs-usageMeter" data-level={quota.used >= 90 ? "danger" : quota.used >= 70 ? "warning" : "normal"}><i style={{ width: `${quota.used}%` }} /></div>
+          <div><span>{Math.round(quota.used)}% {t("status.usageUsed")}</span><span>{t("status.usageResetsIn")} {remaining(quota.resetsAt)}</span></div>
+        </div>)}</div> : <p className="vs-usageUnavailable">{t(selectedUsageBot.id === "codex" ? "status.usageEmpty" : "status.usageUnavailable")}</p>}
+        {selectedUsageBot.id === "codex" && <div className="vs-usageAccount"><strong>{t("status.usageCodexAccount")}</strong><span>{t("status.usageLocalCli")}</span><span aria-hidden="true">›</span></div>}
+      </section>}
+      </div>
+      <button type="button" className="vs-usageDetailsLink" onClick={() => setView("agents")}>{t("status.usageDetailsHistory")} <span aria-hidden="true">›</span></button>
+      <button type="button" className="vs-usageDetailsLink" onClick={() => setView("settings")}>{t("status.usageManageAccounts")} <span aria-hidden="true">›</span></button>
       <footer className="vs-usageFoot">{t("status.usageSource")}</footer>
     </div>
-
-    <div ref={resourcesPanel} id="status-resources" className="vs-statusPopup vs-statusResources" popover="auto" role="dialog" aria-labelledby="resources-title" onToggle={(event) => setPanel((prev) => event.newState === "open" ? "resources" : prev === "resources" ? null : prev)}>
+<div ref={resourcesPanel} id="status-resources" className="vs-statusPopup vs-statusResources" popover="auto" role="dialog" aria-labelledby="resources-title" onToggle={(event) => setPanel((prev) => event.newState === "open" ? "resources" : prev === "resources" ? null : prev)}>
       <header>
         <strong id="resources-title">{t("status.resources")}</strong>
         <span className="vs-statusResourceActions">
@@ -220,3 +245,5 @@ export function StatusBar() {
     {cleanupOpen && !cleanupId && <div className="vs-modalScrim vs-promptScrim" role="presentation" onClick={() => setCleanupOpen(false)}><div className="vs-modal vs-promptModal" role="dialog" aria-modal="true" aria-label={t("status.cleanupTitle")} onClick={(event) => event.stopPropagation()}><div className="vs-modalHeader"><strong>{t("status.cleanupTitle")}</strong></div><p className="vs-modalLead">{t("status.cleanupHint")}</p><div className="vs-statusCleanupList">{cleanupCandidates.map(({ workspace }) => <button key={workspace.id} type="button" onClick={() => setCleanupId(workspace.id)}><span>{workspace.name}</span><small>{workspace.cwd}</small><strong>{t("status.cleanupReview")}</strong></button>)}</div><div className="vs-modalActions"><button type="button" className="vs-btn vs-btnGhost" onClick={() => setCleanupOpen(false)}>{t("projects.cancel")}</button></div></div></div>}
   </footer>;
 }
+
+

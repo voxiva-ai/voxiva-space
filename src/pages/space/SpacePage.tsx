@@ -1,4 +1,4 @@
-import { Plus, TerminalSquare } from "@untitledui/icons";
+import { Plus, SquareTerminal as TerminalSquare } from "lucide-react";
 import { SplitGrid } from "@/features/workspace/SplitGrid";
 import { useSpace } from "@/features/workspace/SpaceContext";
 

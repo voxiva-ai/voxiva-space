@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { ChevronDown, Folder, SearchMd } from "@untitledui/icons";
+import { ChevronDown, Folder, Search } from "lucide-react";
 import { AgentBrandIcon } from "@/components/agents/AgentBrandIcon";
 import { agentBots } from "@/features/agents/bots";
 import { beginAgentDragSession } from "@/features/agents/drag";
@@ -501,7 +501,7 @@ export function AgentHistoryPanel({
               aria-expanded={searchOpen}
               onClick={() => setSearchOpen((open) => !open)}
             >
-              <SearchMd size={14} aria-hidden />
+              <Search size={14} aria-hidden />
             </button>
           ) : null}
         </div>
@@ -523,7 +523,7 @@ export function AgentHistoryPanel({
 
         {searchOpen || isPage ? (
           <label className="vs-agentHistorySearch">
-            <SearchMd size={13} aria-hidden />
+            <Search size={13} aria-hidden />
             <input
               type="search"
               value={query}

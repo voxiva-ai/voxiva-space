@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { ChevronDown } from "@untitledui/icons";
+import { ChevronDown } from "lucide-react";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import type { TaskPriority } from "@/features/board/store";
 

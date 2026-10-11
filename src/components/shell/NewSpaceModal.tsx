@@ -8,7 +8,8 @@ import { useFolderBrowse } from "@/features/workspace/useFolderBrowse";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import { clientError } from "@/lib/errors";
 import { type SpaceColor } from "@/lib/types";
-import { Folder } from "@untitledui/icons";
+import { Folder } from "lucide-react";
+import { loadAgentPrefs } from "@/features/agents/prefs";
 
 type NewSpaceModalProps = {
   open: boolean;
@@ -45,9 +46,10 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
     setName("");
     setCwd("");
     setBusy(false);
+    const defaultAgent = loadAgentPrefs().defaultId;
     setSetup({
       grid: 2,
-      agentIds: [],
+      agentIds: defaultAgent !== "auto" && defaultAgent !== "none" ? [defaultAgent] : [],
       includeBrowser: false,
       color: nextColor(used, workspaces.length),
     });
@@ -94,7 +96,7 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
         grid: setup.grid,
         includeBrowser: setup.includeBrowser,
         color: setup.color,
-        agentIds: [],
+        agentIds: setup.agentIds,
       });
       setName("");
       setCwd("");

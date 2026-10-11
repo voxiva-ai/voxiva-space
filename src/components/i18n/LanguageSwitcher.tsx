@@ -12,21 +12,14 @@ export function LanguageSwitcher({ compact }: Props) {
   const { locale, setLocale, t } = useSpace();
 
   return (
-    <div
-      className={`vs-welcomeLangSwitch${compact ? " is-compact" : ""}`}
-      role="group"
-      aria-label={t("settings.language")}
-    >
-      {LOCALES.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          className={`vs-welcomeLangBtn${locale === item.id ? " is-active" : ""}`}
-          onClick={() => setLocale(item.id)}
-        >
-          {item.label}
-        </button>
-      ))}
+    <div className={`vs-languageSelect${compact ? " is-compact" : ""}`}>
+      <select
+        aria-label={t("settings.language")}
+        value={locale}
+        onChange={(event) => setLocale(event.target.value as Locale)}
+      >
+        {LOCALES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+      </select>
     </div>
   );
 }

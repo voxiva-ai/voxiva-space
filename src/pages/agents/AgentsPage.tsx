@@ -2,6 +2,7 @@ import { agentBots, isBotReady, resolveBotCommand } from "@/features/agents/bots
 import { AgentBrandIcon } from "@/components/agents/AgentBrandIcon";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import type { AgentBot } from "@/lib/types";
+import { isAgentEnabled } from "@/features/agents/prefs";
 
 function AgentCard({ bot }: { bot: AgentBot }) {
   const { launchAgent, activeWorkspace, agentAvailability, t } = useSpace();
@@ -41,7 +42,7 @@ function AgentCard({ bot }: { bot: AgentBot }) {
 export function AgentsPage() {
   const { agentAvailability, agentsScanned, refreshAgents, t } = useSpace();
 
-  const ready = agentBots.filter((bot) => isBotReady(bot, agentAvailability, agentsScanned));
+  const ready = agentBots.filter((bot) => isAgentEnabled(bot.id) && isBotReady(bot, agentAvailability, agentsScanned));
 
   return (
     <div className="vs-page">

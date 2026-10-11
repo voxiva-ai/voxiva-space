@@ -14,23 +14,53 @@
   font-variant-numeric: tabular-nums;
 }
 .vs-statusRight { display: flex; align-items: center; flex-shrink: 0; gap: 4px; height: 100%; }
-.vs-statusSessions { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; height: 100%; margin: 0 12px; overflow-x: auto; scrollbar-width: none; }
-.vs-statusSessions::-webkit-scrollbar { display: none; }
-.vs-statusSessions button { max-width: 160px; min-width: 0; height: 24px; padding-inline: 7px; gap: 6px; border-radius: 5px; }
-.vs-statusSessions button.is-active { color: var(--vs-text); background: color-mix(in srgb, var(--vs-bg-hover) 75%, transparent); }
-.vs-statusSessions button > span { overflow: hidden; text-overflow: ellipsis; }
-.vs-statusSessions .vs-statusDot { flex: none; }
-.vs-statusUsageTrigger { gap: 6px !important; color: var(--vs-text) !important; font-variant-numeric: tabular-nums; }
-.vs-statusUsageTrigger small { color: var(--vs-muted); font-size: 10px; }
-.vs-statusUsageMiniMeter { width: 28px; height: 4px; overflow: hidden; border-radius: 4px; background: var(--vs-border-strong); }
-.vs-statusUsageMiniMeter i { display: block; height: 100%; border-radius: inherit; background: var(--vs-accent); }
-.vs-statusUsage { inset: auto auto 38px 8px; width: min(348px, calc(100vw - 16px)); max-height: calc(100dvh - 52px); }
-.vs-usageToolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--vs-border); }
+.vs-statusUsageTrigger { gap: 8px !important; color: var(--vs-text) !important; font-variant-numeric: tabular-nums; }
+.vs-statusQuotaChip { display: inline-flex; align-items: center; gap: 5px; color: var(--vs-text); font-size: 10px; }
+.vs-statusQuotaChip small { color: var(--vs-muted); font-size: 9px; }
+.vs-statusUsageMiniMeter { display: inline-block; width: 27px; height: 4px; overflow: hidden; border-radius: 4px; background: var(--vs-border-strong); }
+.vs-statusUsageMiniMeter b { display: block; height: 100%; border-radius: inherit; background: var(--vs-accent); }
+.vs-statusUsageModels { display: flex; align-items: center; min-width: 0; overflow: hidden; }
+.vs-statusUsageSummary, .vs-statusQuotaShortcut { display: inline-flex; align-items: center; gap: 6px !important; min-height: 24px !important; padding-inline: 5px !important; color: var(--vs-text) !important; font-variant-numeric: tabular-nums; }
+.vs-statusUsageSummary strong, .vs-statusQuotaShortcut strong { font-size: 10px; font-weight: 500; }
+.vs-statusUsageSummary small, .vs-statusQuotaShortcut small { color: var(--vs-muted); font-size: 9px; }
+.vs-statusQuotaShortcut { border-left: 1px solid var(--vs-border) !important; border-radius: 0 !important; }
+.vs-statusUsage { inset: auto auto 38px 8px; width: min(660px, calc(100vw - 16px)); max-height: calc(100dvh - 52px); }
+.vs-statusAgents { min-width: 30px; justify-content: center; }
+.vs-usageToolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 38px; padding: 6px 12px; border-bottom: 1px solid var(--vs-border); }
 .vs-usageToolbar > span { display: inline-flex; align-items: center; gap: 7px; color: var(--vs-text); font-weight: 600; }
 .vs-usageToolbar [role="group"] { display: flex; gap: 2px; padding: 2px; border-radius: 7px; background: var(--vs-bg-hover); }
 .vs-usageToolbar [role="group"] button { min-height: 22px; padding: 2px 10px; color: var(--vs-muted); font-size: 10px; }
 .vs-usageToolbar [role="group"] button[aria-pressed="true"] { background: var(--vs-bg-raised); color: var(--vs-text); box-shadow: 0 1px 2px color-mix(in srgb, var(--vs-text) 10%, transparent); }
 .vs-usageRows { display: grid; gap: 12px; padding: 12px 14px; }
+.vs-usageWorkspace { display: grid; grid-template-columns: minmax(300px, 1.2fr) minmax(260px, 1fr); min-height: 180px; }
+.vs-usageProviders { display: grid; align-content: start; padding: 0; border-right: 1px solid var(--vs-border); }
+.vs-usageProvider { display: grid !important; width: 100%; min-width: 0; grid-template-columns: 1fr; gap: 5px; padding: 8px 12px !important; border: 0 !important; border-bottom: 1px solid var(--vs-border) !important; border-radius: 0 !important; text-align: left; }
+.vs-usageProvider.is-selected { background: var(--vs-bg-hover) !important; }
+.vs-usageProviderHead { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--vs-text); }
+.vs-usageProviderHead strong { overflow: hidden; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.vs-usageProviderHead > small { margin-left: auto; white-space: nowrap; }
+.vs-usageProviderHead > span:last-child { color: var(--vs-muted); }
+.vs-usageProviderMeters { display: grid; gap: 7px; }
+.vs-usageProviderMeter { display: grid; grid-template-columns: 28px minmax(28px, 1fr) 30px; align-items: center; gap: 6px; }
+.vs-usageProviderMeter .vs-usageRowHead { display: contents; }
+.vs-usageProviderMeter .vs-usageRowHead strong { color: var(--vs-muted); font-size: 10px; font-weight: 500; }
+.vs-usageProviderMeter .vs-usageRowHead span { grid-column: 3; grid-row: 1; text-align: right; }
+.vs-usageProviderMeter .vs-usageMeter { grid-column: 2; grid-row: 1; height: 5px; }
+.vs-usageProviderMeter > small { grid-column: 2 / -1; grid-row: 2; }
+.vs-usageUnavailable { grid-column: 2; margin: 0 !important; padding: 3px 0 !important; color: var(--vs-muted); font-size: 10px; }
+.vs-usageAgentUnknown { padding-left: 24px; color: var(--vs-muted); font-size: 10px; }
+.vs-usageDetail { min-width: 0; padding: 0 !important; }
+.vs-usageDetail > header { display: flex; align-items: center; gap: 10px; min-height: 43px; padding: 7px 11px; border-bottom: 1px solid var(--vs-border); }
+.vs-usageDetail > header > span { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.vs-usageDetail > header strong { font-weight: 550; }
+.vs-usageDetail > header > small { margin-left: auto; white-space: nowrap; }
+.vs-usageDetailLimits { display: grid; gap: 13px; padding: 12px; }
+.vs-usageDetailLimit { display: grid; gap: 5px; }
+.vs-usageDetailLimit > strong { font-weight: 500; }
+.vs-usageDetailLimit > div:last-child { display: flex; justify-content: space-between; gap: 10px; color: var(--vs-muted); font-size: 10px; }
+.vs-usageAccount { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 38px; padding: 7px 12px; border-top: 1px solid var(--vs-border); }
+.vs-usageAccount strong { font-size: 10px; font-weight: 500; }
+.vs-usageAccount span:nth-child(2) { margin-left: auto; }
 .vs-usageRow { display: grid; gap: 6px; }
 .vs-usageRowHead { display: flex; align-items: center; justify-content: space-between; color: var(--vs-text); font-variant-numeric: tabular-nums; }
 .vs-usageRowHead strong { font-size: 11px; font-weight: 500; }
@@ -43,8 +73,17 @@
 .vs-statusUsage.is-compact .vs-usageRow { grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
 .vs-statusUsage.is-compact .vs-usageMeter { grid-column: 1 / -1; height: 3px; }
 .vs-usageEmpty { padding: 14px; text-align: left; }
-.vs-usageFoot { padding: 8px 12px; border-top: 1px solid var(--vs-border); color: var(--vs-muted); font-size: 10px; }
-.vs-statusAgents { min-width: 30px; justify-content: center; }
+.vs-usageDetailsLink { display: flex !important; justify-content: space-between !important; width: 100%; min-height: 32px !important; padding: 6px 13px !important; border-top: 1px solid var(--vs-border) !important; border-radius: 0 !important; color: var(--vs-text) !important; text-align: left; }
+.vs-usageDetailsLink span { color: var(--vs-muted); }
+.vs-usageFoot { padding: 6px 13px; border-top: 1px solid var(--vs-border); color: var(--vs-muted); font-size: 10px; }
+.vs-usageDetected { border-top: 1px solid var(--vs-border); }
+.vs-usageDetected summary { display: flex; align-items: center; gap: 6px; padding: 9px 12px; color: var(--vs-text); cursor: pointer; list-style: none; }
+.vs-usageDetected summary::-webkit-details-marker { display: none; }
+.vs-usageDetected summary::after { content: "›"; margin-left: auto; color: var(--vs-muted); transition: transform .15s ease; }
+.vs-usageDetected[open] summary::after { transform: rotate(90deg); }
+.vs-usageDetected summary span { padding: 1px 6px; border: 1px solid var(--vs-border); border-radius: 999px; color: var(--vs-muted); font-size: 10px; }
+.vs-usageDetected > div { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px; }
+.vs-usageDetected > div > span { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border: 1px solid var(--vs-border); border-radius: 7px; color: var(--vs-text); font-size: 10px; }
 .vs-statusBar button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex-shrink: 0; min-height: 26px; padding: 3px 8px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer; white-space: nowrap; }
 .vs-statusBar button:hover, .vs-statusBar button[aria-expanded="true"] { background: var(--vs-bg-hover); color: var(--vs-text); }
 .vs-statusBar button:focus-visible { outline: 2px solid var(--vs-accent); outline-offset: -2px; }
@@ -55,6 +94,7 @@
 .vs-statusDot { width: 5px; height: 5px; border-radius: 50%; background: var(--vs-muted); opacity: .5; }
 .vs-statusDot.is-active { background: var(--vs-ok); opacity: 1; }
 .vs-statusPopup { position: fixed; inset: auto 12px 38px auto; margin: 0; padding: 0; width: min(340px, calc(100vw - 24px)); max-height: calc(100dvh - 80px); overflow: auto; color: var(--vs-text); background: var(--vs-bg-raised); border: 1px solid var(--vs-border-strong); border-radius: 12px; box-shadow: var(--vs-shadow); font: 12px/1.5 var(--vs-font); white-space: normal; }
+.vs-statusPopup.vs-statusUsage { inset: auto auto 38px 8px; width: min(660px, calc(100vw - 16px)); }
 .vs-statusPopup::backdrop { background: transparent; }
 .vs-statusLimits { inset-inline: 12px auto; width: min(370px, calc(100vw - 24px)); }
 .vs-statusAwake { right: 100px; }
@@ -120,13 +160,15 @@
 .vs-statusPortList button > span:last-child { margin-left: auto; }
 @media (max-width: 1000px) {
   .vs-statusRight { gap: 2px; }
-  .vs-statusSessions { margin-inline: 5px; }
-  .vs-statusSessions button { max-width: 118px; }
 }
 @media (max-width: 760px) {
-  .vs-statusUsageTrigger small { display: none; }
+  .vs-statusUsageSummary small, .vs-statusQuotaShortcut small { display: none; }
   .vs-statusUsageMiniMeter { width: 20px; }
-  .vs-statusSessions button { max-width: 82px; padding-inline: 5px; }
+  .vs-statusPopup.vs-statusUsage { inset-inline: 8px auto; width: min(400px, calc(100vw - 16px)); }
+  .vs-usageWorkspace { grid-template-columns: minmax(0, 1fr); }
+  .vs-usageProviders { border-right: 0; }
+  .vs-usageDetail { border-top: 1px solid var(--vs-border); }
+  .vs-usageUnavailable { grid-column: 1; }
   .vs-statusBar { padding-inline: 5px; gap: 4px; }
   .vs-statusAwake { right: 12px; }
 }

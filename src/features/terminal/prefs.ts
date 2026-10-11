@@ -1,4 +1,8 @@
 export type TerminalPrefs = {
+  gpuAcceleration: "auto" | "on" | "off";
+  colorContrast: "automatic" | "off" | "custom";
+  customContrastRatio: number;
+  inlineImages: boolean;
   scrollSpeed: number;
   fastScrollSpeed: number;
   rightClickPaste: boolean;
@@ -15,6 +19,10 @@ export type TerminalPrefs = {
 const KEY = "voxiva-terminal-prefs-v1";
 const CHANGE = "voxiva-terminal-prefs-changed";
 export const DEFAULT_TERMINAL_PREFS: TerminalPrefs = {
+  gpuAcceleration: "auto",
+  colorContrast: "automatic",
+  customContrastRatio: 4.5,
+  inlineImages: false,
   scrollSpeed: 1,
   fastScrollSpeed: 5,
   rightClickPaste: true,
@@ -36,6 +44,10 @@ export function loadTerminalPrefs(): TerminalPrefs {
     return {
       ...DEFAULT_TERMINAL_PREFS,
       ...value,
+      gpuAcceleration: value.gpuAcceleration === "on" || value.gpuAcceleration === "off" ? value.gpuAcceleration : "auto",
+      colorContrast: value.colorContrast === "off" || value.colorContrast === "custom" ? value.colorContrast : "automatic",
+      customContrastRatio: clamp(value.customContrastRatio, 1, 21, DEFAULT_TERMINAL_PREFS.customContrastRatio),
+      inlineImages: typeof value.inlineImages === "boolean" ? value.inlineImages : false,
       scrollSpeed: clamp(value.scrollSpeed, 0.5, 3, DEFAULT_TERMINAL_PREFS.scrollSpeed),
       fastScrollSpeed: clamp(value.fastScrollSpeed, 1, 10, DEFAULT_TERMINAL_PREFS.fastScrollSpeed),
       scrollbackRows: clamp(value.scrollbackRows, 1000, 100000, DEFAULT_TERMINAL_PREFS.scrollbackRows),

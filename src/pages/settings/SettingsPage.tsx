@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Check } from "@untitledui/icons";
+import { Bell, Brush, Check, ExternalLink, Globe, Info, Keyboard, RefreshCw, Search, Settings, Smartphone, SquareTerminal, Users, Volume2 } from "lucide-react";
 import { useSpace, useView } from "@/features/workspace/SpaceContext";
-import type { Locale } from "@/i18n";
+import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import {
   appearanceForFamilyCard,
   familyOf,
@@ -55,8 +55,59 @@ import {
   loadAutoCookieStatus,
 } from "@/features/browser/autoCookies";
 import { TerminalSettings } from "./TerminalSettings";
+import { agentBots, isBotReady } from "@/features/agents/bots";
+import { AgentBrandIcon } from "@/components/agents/AgentBrandIcon";
+import { loadAgentPrefs, saveAgentPrefs } from "@/features/agents/prefs";
 
-type SectionId = "general" | "appearance" | "notifications" | "sounds" | "hotkeys" | "terminal" | "browser" | "mobile" | "about";
+type SectionId = "general" | "agents" | "appearance" | "notifications" | "sounds" | "hotkeys" | "terminal" | "browser" | "mobile" | "about";
+
+const AGENT_INSTALL_GUIDES: Record<string, string> = {
+  claude: "https://docs.anthropic.com/en/docs/claude-code/getting-started",
+  codex: "https://help.openai.com/en/articles/11096431-openai-codex-cli-getting-started",
+  opencode: "https://opencode.ai/docs/",
+  gemini: "https://github.com/google-gemini/gemini-cli/blob/main/docs/get-started/installation.mdx",
+  aider: "https://aider.chat/docs/install.html",
+  "cursor-agent": "https://docs.cursor.com/en/cli/installation",
+  amp: "https://ampcode.com/docs/cli",
+  goose: "https://block.github.io/goose/docs/getting-started/installation",
+  copilot: "https://docs.github.com/en/copilot/get-started/cli-quickstart",
+  "claude-teams": "https://docs.anthropic.com/en/docs/claude-code/agent-teams",
+  openclaude: "https://github.com/search?q=openclaude+coding+agent&type=repositories",
+  grok: "https://grok.com/",
+  opencode2: "https://opencode.ai/docs/",
+  mimo: "https://github.com/XiaomiMiMo",
+  ante: "https://github.com/search?q=ante+coding+agent&type=repositories",
+  trae: "https://www.trae.ai/",
+  muse: "https://github.com/search?q=muse+coding+agent+CLI&type=repositories",
+  "deepseek-harness": "https://github.com/deepseek-ai/deepseek-harness",
+  qoder: "https://qoder.com/cli",
+  "qoder-cn": "https://qoder.com/cli",
+  zcode: "https://github.com/search?q=zcode+coding+agent+CLI&type=repositories",
+  pi: "https://github.com/badlogic/pi-mono",
+  omp: "https://github.com/can1357/oh-my-pi",
+  "prime-agent": "https://github.com/PrimeIntellect-ai/prime-agent",
+  antigravity: "https://antigravity.google/",
+  kilocode: "https://kilo.ai/",
+  kiro: "https://kiro.dev/cli/",
+  charm: "https://github.com/charmbracelet/crush",
+  auggie: "https://docs.augmentcode.com/cli/overview",
+  autohand: "https://www.autohand.ai/code/",
+  cline: "https://github.com/cline/cline",
+  codebuff: "https://www.codebuff.com/docs/help/quick-start",
+  freebuff: "https://github.com/CodebuffAI/freebuff",
+  "command-code": "https://github.com/search?q=command-code+AI+agent&type=repositories",
+  continue: "https://docs.continue.dev/cli/overview",
+  droid: "https://docs.factory.ai/cli/getting-started/overview",
+  kimi: "https://moonshotai.github.io/kimi-cli/",
+  "mistral-vibe": "https://github.com/mistralai/mistral-vibe",
+  qwen: "https://github.com/QwenLM/qwen-code",
+  "rovo-dev": "https://support.atlassian.com/rovo/docs/use-rovo-dev-cli/",
+  hermes: "https://hermesagent.tools/install/",
+  devin: "https://devin.ai/",
+  openclaw: "https://github.com/openclaw/openclaw",
+  codebuddy: "https://www.codebuddy.ai/",
+  jcode: "https://github.com/search?q=jcode+coding+agent&type=repositories",
+};
 
 function Toggle({
   on,
@@ -83,7 +134,6 @@ function Toggle({
 export function SettingsPage() {
   const {
     locale,
-    setLocale,
     theme,
     setTheme,
     t,
@@ -91,14 +141,20 @@ export function SettingsPage() {
     setError,
     autoResumeAgents,
     setAutoResumeAgents,
+    agentAvailability,
+    agentsScanned,
+    refreshAgents,
   } = useSpace();
   const { setView } = useView();
   const [hotkeys, setHotkeys] = useState<HotkeyMap>(() => loadHotkeys());
   const [listening, setListening] = useState<HotkeyAction | null>(null);
   const [section, setSection] = useState<SectionId>("general");
+  const [navFilter, setNavFilter] = useState("");
+  const [agentPrefs, setAgentPrefs] = useState(() => loadAgentPrefs());
   const [sounds, setSounds] = useState<SoundPrefs>(() => loadSoundPrefs());
   const [attention, setAttention] = useState<AttentionPrefs>(() => loadAttentionPrefs());
   const fileRef = useRef<HTMLInputElement>(null);
+  const navSearchRef = useRef<HTMLInputElement>(null);
   const [appVersion, setAppVersion] = useState("…");
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
@@ -191,6 +247,17 @@ export function SettingsPage() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [listening]);
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        navSearchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
   function patchSounds(patch: Partial<SoundPrefs>) {
     setSounds((current) => {
       const next = { ...current, ...patch };
@@ -203,6 +270,14 @@ export function SettingsPage() {
     setAttention((current) => {
       const next = { ...current, ...patch };
       saveAttentionPrefs(next);
+      return next;
+    });
+  }
+
+  function patchAgentPrefs(patch: Partial<typeof agentPrefs>) {
+    setAgentPrefs((current) => {
+      const next = { ...current, ...patch };
+      saveAgentPrefs(next);
       return next;
     });
   }
@@ -261,6 +336,7 @@ export function SettingsPage() {
 
   const nav: Array<{ id: SectionId; title: string }> = [
     { id: "general", title: t("settings.general") },
+    { id: "agents", title: t("settings.agents") },
     { id: "appearance", title: t("settings.appearance") },
     { id: "notifications", title: t("settings.notifications") },
     { id: "sounds", title: t("settings.sounds") },
@@ -271,10 +347,15 @@ export function SettingsPage() {
     { id: "about", title: t("settings.about") },
   ];
   const navGroups = [
-    { title: t("settings.groupInterface"), items: nav.slice(0, 5) },
-    { title: t("settings.groupWorkspace"), items: nav.slice(5, 8) },
-    { title: t("settings.groupApp"), items: nav.slice(8) },
+    { title: t("settings.groupInterface"), items: [nav[0], ...nav.slice(2, 6)] },
+    { title: t("settings.groupWorkspace"), items: [nav[1], ...nav.slice(6, 9)] },
+    { title: t("settings.groupApp"), items: nav.slice(9) },
   ];
+  const filteredNavGroups = navGroups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => item.title.toLowerCase().includes(navFilter.trim().toLowerCase())),
+  })).filter((group) => group.items.length > 0);
+  const navIcons = { general: Settings, agents: Users, appearance: Brush, notifications: Bell, sounds: Volume2, hotkeys: Keyboard, terminal: SquareTerminal, browser: Globe, mobile: Smartphone, about: Info };
 
   const presets: Array<{ id: SoundPreset; label: string }> = [
     { id: "bell", label: t("settings.soundBell") },
@@ -289,21 +370,23 @@ export function SettingsPage() {
         <button type="button" className="vs-settingsBack" onClick={() => setView("space")}>
           <span aria-hidden="true">←</span>{t("settings.backToApp")}
         </button>
-        {navGroups.map((group) => (
+        <label className="vs-settingsSearch">
+          <Search size={16} aria-hidden="true" />
+          <input ref={navSearchRef} type="search" value={navFilter} onChange={(event) => setNavFilter(event.target.value)} placeholder={locale === "ru" ? "Поиск настроек" : "Search settings"} aria-label={locale === "ru" ? "Поиск настроек" : "Search settings"} />
+          <kbd>Ctrl F</kbd>
+        </label>
+        {filteredNavGroups.map((group) => (
           <div className="vs-settingsNavGroup" key={group.title}>
             <div className="vs-settingsNavTitle">{group.title}</div>
-            {group.items.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`vs-settingsNavItem${section === item.id ? " is-active" : ""}`}
-                onClick={() => setSection(item.id)}
-              >
-                {item.title}
-              </button>
-            ))}
+            {group.items.map((item) => {
+              const Icon = navIcons[item.id];
+              return <button key={item.id} type="button" aria-current={section === item.id ? "page" : undefined} className={`vs-settingsNavItem${section === item.id ? " is-active" : ""}`} onClick={() => setSection(item.id)}>
+                <Icon size={15} aria-hidden="true" />{item.title}
+              </button>;
+            })}
           </div>
         ))}
+        {!filteredNavGroups.length && <p className="vs-settingsNavEmpty">{locale === "ru" ? "Ничего не найдено" : "No settings found"}</p>}
       </aside>
 
       <div className="vs-settingsPanel">
@@ -314,29 +397,7 @@ export function SettingsPage() {
           <section className="vs-settingsPanelBody vs-settingsGeneral">
             <h2>{t("settings.language")}</h2>
             <p className="vs-settingsHint">{t("settings.languageHint")}</p>
-            <div className="vs-langRow">
-              {(
-                [
-                  { id: "en" as Locale, label: "English", hint: "EN" },
-                  { id: "ru" as Locale, label: "Русский", hint: "RU" },
-                ] as const
-              ).map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`vs-langChip${locale === item.id ? " is-active" : ""}`}
-                  onClick={() => setLocale(item.id)}
-                >
-                  <strong>{item.label}</strong>
-                  <small>{item.hint}</small>
-                  {locale === item.id && (
-                    <span className="vs-themeCheck" aria-hidden>
-                      <Check size={14} />
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
+            <LanguageSwitcher />
 
             <div className="vs-settingsBlock" style={{ marginTop: "1.25rem" }}>
               <div className="vs-settingsRow">
@@ -350,6 +411,40 @@ export function SettingsPage() {
                   label={t("settings.autoResume")}
                 />
               </div>
+            </div>
+          </section>
+        )}
+
+        {section === "agents" && (
+          <section className="vs-settingsPanelBody vs-agentSettings">
+            <p className="vs-settingsHint">{t("settings.agentsHint")}</p>
+            <div className="vs-settingsBlock">
+              <div className="vs-settingsRow">
+                <div><h3>{t("settings.defaultAgent")}</h3><p className="vs-settingsHint">{t("settings.defaultAgentHint")}</p></div>
+                <select aria-label={t("settings.defaultAgent")} value={agentPrefs.defaultId} onChange={(e) => patchAgentPrefs({ defaultId: e.target.value })}>
+                  <option value="auto">{t("settings.agentAuto")}</option><option value="none">{t("settings.agentNone")}</option>
+                  {agentBots.filter((bot) => bot.id !== "shell" && agentPrefs.enabled.includes(bot.id) && isBotReady(bot, agentAvailability, agentsScanned)).map((bot) => <option key={bot.id} value={bot.id}>{bot.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="vs-settingsPanelHead">
+              <div><h2>{t("settings.agentCatalog")} <small className="vs-agentSettingsCount">{agentBots.length - 1}</small></h2><p className="vs-settingsHint">{t("settings.agentCatalogHint")}</p></div>
+              <button type="button" className="vs-btn" onClick={() => void refreshAgents()}><RefreshCw size={14} aria-hidden="true" />{t("settings.refreshAgents")}</button>
+            </div>
+            <div className="vs-agentSettingsList">
+              {agentBots.filter((bot) => bot.id !== "shell").map((bot) => {
+                const ready = isBotReady(bot, agentAvailability, agentsScanned);
+                const enabled = agentPrefs.enabled.includes(bot.id);
+                return <div className={`vs-agentSettingsRow${ready ? " is-ready" : ""}`} key={bot.id}>
+                  <span className={`vs-agentIcon is-${bot.id}`}><AgentBrandIcon id={bot.id} size={22} /></span>
+                  <span className="vs-agentSettingsName"><strong>{bot.name}</strong><small>{bot.command}</small></span>
+                  <span className={`vs-agentSettingsStatus${ready ? " is-ready" : ""}`}>{!agentsScanned ? t("settings.agentNotScanned") : ready ? t("settings.agentDetected") : t("settings.agentNotInstalled")}</span>
+                  <div className="vs-agentSettingsActions">
+                    {ready && <button type="button" className={`vs-agentAvailability${enabled ? " is-enabled" : ""}`} aria-pressed={enabled} onClick={() => patchAgentPrefs({ enabled: enabled ? agentPrefs.enabled.filter((id) => id !== bot.id) : [...agentPrefs.enabled, bot.id], ...(enabled && agentPrefs.defaultId === bot.id ? { defaultId: "auto" } : {}) })}>{enabled ? t("settings.agentEnabled") : t("settings.agentDisabled")}</button>}
+                    <button type="button" className="vs-agentGuide" aria-label={ready ? t("settings.agentDocs") : t("settings.installGuide")} title={ready ? t("settings.agentDocs") : t("settings.installGuide")} onClick={() => void openUpdateUrl(AGENT_INSTALL_GUIDES[bot.id] ?? "https://github.com/search?q=" + encodeURIComponent(`${bot.name} CLI`))}><ExternalLink size={14} aria-hidden="true" /></button>
+                  </div>
+                </div>;
+              })}
             </div>
           </section>
         )}
@@ -431,7 +526,7 @@ export function SettingsPage() {
                               selectFamilyAppearance(family.familyId, "light");
                             }}
                           >
-                            Light
+                            {t("settings.themeLight")}
                           </button>
                         ) : null}
                         {family.appearances.includes("dark") ? (
@@ -447,7 +542,7 @@ export function SettingsPage() {
                               selectFamilyAppearance(family.familyId, "dark");
                             }}
                           >
-                            Dark
+                            {t("settings.themeDark")}
                           </button>
                         ) : null}
                       </div>
@@ -716,6 +811,8 @@ export function SettingsPage() {
               </div>
             </div>
             <div className="vs-settingsActions" style={{ marginTop: "1rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+              <button type="button" className="vs-btn" onClick={() => void openUpdateUrl("https://github.com/voxiva-ai/voxiva-space/releases")}><ExternalLink size={14} aria-hidden="true" />{t("settings.installApp")}</button>
+              <button type="button" className="vs-btn" onClick={() => void openUpdateUrl("https://github.com/voxiva-ai/voxiva-space#readme")}><ExternalLink size={14} aria-hidden="true" />{t("settings.installReadme")}</button>
               <button
                 type="button"
                 className="vs-btn vs-btnPrimary"
@@ -751,6 +848,7 @@ export function SettingsPage() {
                 </button>
               )}
             </div>
+            <p className="vs-settingsHint" style={{ marginTop: "0.5rem" }}>{t("settings.installAppHint")}</p>
             {updateInfo?.updateAvailable ? (
               <p className="vs-settingsHint" style={{ marginTop: "0.75rem" }}>
                 {t("settings.updateAvailable")

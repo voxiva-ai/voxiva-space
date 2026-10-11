@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Folder, Trash01, TerminalSquare, Pin01 } from "@untitledui/icons";
+import { Folder, Pin, SquareTerminal as TerminalSquare, Trash2 as Trash01 } from "lucide-react";
 import { IconX } from "@/components/icons";
 import { ConfirmDialog } from "@/components/PromptDialog";
 import { useFolderBrowse } from "@/features/workspace/useFolderBrowse";
@@ -181,7 +181,7 @@ export function SpaceSettingsModal({ workspaceId, onClose }: SpaceSettingsModalP
                 aria-pressed={Boolean(ws.pinned)}
                 onClick={() => toggleWorkspacePinned(ws.id)}
               >
-                <Pin01 size={15} aria-hidden />
+                <Pin size={15} aria-hidden />
                 {ws.pinned ? t("spaces.unpin") : t("spaces.pin")}
               </button>
             </div>

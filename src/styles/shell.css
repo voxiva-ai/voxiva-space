@@ -1236,12 +1236,13 @@ html[data-electron] .vs-titleDrag { -webkit-app-region: drag; }
   top: calc(100% + 6px);
   right: 0;
   left: auto;
-  min-width: 280px;
-  max-width: min(92vw, 340px);
+  min-width: 296px;
+  max-width: min(92vw, 360px);
+  box-shadow: 0 14px 38px color-mix(in srgb, var(--vs-shadow-color, #111827) 18%, transparent);
 }
 
 .vs-chromeFlyout.is-plusMenu.is-layouts {
-  padding: 0.35rem;
+  padding: 0.45rem;
 }
 
 .vs-chromeFlyout.is-plusMenu .vs-layoutBuildList {
@@ -1253,9 +1254,9 @@ html[data-electron] .vs-titleDrag { -webkit-app-region: drag; }
   flex-direction: column;
   align-items: stretch;
   gap: 0.05rem;
-  padding: 0.2rem;
+  padding: 0.18rem;
   border: 1px solid transparent;
-  background: color-mix(in srgb, var(--vs-bg-hover) 40%, transparent);
+  background: transparent;
 }
 
 .vs-chromeFlyout.is-plusMenu .vs-layoutBuildRow:hover {
@@ -1270,6 +1271,20 @@ html[data-electron] .vs-titleDrag { -webkit-app-region: drag; }
 
 .vs-chromeFlyout.is-plusMenu .vs-layoutBuildMain strong {
   font-size: 0.78rem;
+}
+
+.vs-chromeFlyout.is-plusMenu > button[role="menuitem"] {
+  min-height: 2.2rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 7px;
+}
+
+.vs-chromeFlyout.is-plusMenu > button.is-primary {
+  background: color-mix(in srgb, var(--vs-accent-soft) 68%, transparent);
+}
+
+.vs-chromeFlyout.is-plusMenu > button.is-primary:hover:not(:disabled) {
+  background: var(--vs-accent-soft);
 }
 
 .vs-chromeFlyout.is-plusMenu .vs-layoutBuildActions {
@@ -1361,6 +1376,9 @@ html[data-electron] .vs-titleDrag { -webkit-app-region: drag; }
 }
 
 .vs-chromeFlyout.is-menu .vs-chromeMenuLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   padding: 0.35rem 0.55rem 0.2rem;
   color: var(--vs-muted);
   font-size: 0.68rem;

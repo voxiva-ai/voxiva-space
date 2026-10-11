@@ -1,8 +1,8 @@
-import { Plus } from "@untitledui/icons";
+import { Columns2, Plus, Rows2 } from "lucide-react";
 import { IconBrowser, IconRefresh, IconX } from "@/components/icons";
 import { useSpace } from "@/features/workspace/SpaceContext";
 
-/** Pane chrome: reload · shell tab · browser tab · close. Splits live in the context menu. */
+/** Pane chrome: session, tab, split, and close actions. */
 export function PaneActions({
   paneId,
   sessionId,
@@ -12,7 +12,14 @@ export function PaneActions({
   sessionId: string | null;
   isBrowser?: boolean;
 }) {
-  const { spawnInPane, openBrowserInFocused, closePane, restartSession, t } = useSpace();
+  const {
+    spawnInPane,
+    openBrowserInFocused,
+    closePane,
+    restartSession,
+    splitShellAt,
+    t,
+  } = useSpace();
   const canRefresh = isBrowser || Boolean(sessionId);
 
   return (
@@ -51,6 +58,24 @@ export function PaneActions({
         }
       >
         <Plus size={14} aria-hidden />
+      </button>
+      <button
+        type="button"
+        className="vs-termIconBtn"
+        title={t("space.menu.shellRight")}
+        aria-label={t("space.menu.shellRight")}
+        onClick={() => void splitShellAt(paneId, "right")}
+      >
+        <Columns2 size={14} aria-hidden />
+      </button>
+      <button
+        type="button"
+        className="vs-termIconBtn"
+        title={t("space.menu.shellBelow")}
+        aria-label={t("space.menu.shellBelow")}
+        onClick={() => void splitShellAt(paneId, "bottom")}
+      >
+        <Rows2 size={14} aria-hidden />
       </button>
       <button
         type="button"

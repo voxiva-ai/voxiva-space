@@ -4,7 +4,7 @@ const readline = require("node:readline");
 const http = require("node:http");
 const os = require("node:os");
 const { spawn } = require("node:child_process");
-const { app, BrowserWindow, WebContentsView, ipcMain, Menu, dialog, shell, protocol, net, session, powerSaveBlocker } = require("electron");
+const { app, BrowserWindow, WebContentsView, ipcMain, Menu, dialog, shell, protocol, net, session, powerSaveBlocker, screen } = require("electron");
 const { readLimits, readPorts, formatResourceMetrics, createAwake } = require("./status.cjs");
 const { bounds } = require("./pilot-bounds.cjs");
 const { files, findComponentFiles, workspaceDiskUsage } = require("./files.cjs");
@@ -16,8 +16,12 @@ const { createCompanion } = require("./companion.cjs");
 const cookies = require("./cookies.cjs");
 const { createUpdates } = require("./updates.cjs");
 const { autoUpdater } = require("electron-updater");
+const { ignoreBrokenPipe } = require("./console-pipe.cjs");
 const fs = require("node:fs/promises");
 const syncFs = require("node:fs");
+
+ignoreBrokenPipe(process.stdout);
+ignoreBrokenPipe(process.stderr);
 
 const terminalCommands = new Set(["get_default_terminal_cwd", "get_app_metadata", "get_git_branch", "check_commands", "create_terminal_session", "write_terminal_session", "resize_terminal_session", "kill_terminal_session"]);
 const backendCommands = new Set([...terminalCommands, "read_browser_cookies", "read_legacy_state"]);
@@ -41,8 +45,11 @@ app.whenReady().then(() => {
     if (!allowedMedia.has(file) || await fs.realpath(file).catch(() => null) !== file) return new Response("Forbidden", { status: 403 });
     return net.fetch(pathToFileURL(file).href);
   });
+  const { width: workWidth, height: workHeight } = screen.getPrimaryDisplay().workAreaSize;
   const window = new BrowserWindow({
-    width: 1240, height: 780, minWidth: 760, minHeight: 480, show: false,
+    width: Math.max(760, Math.min(1560, Math.floor(workWidth * 0.98))),
+    height: Math.max(480, Math.min(1000, Math.floor(workHeight * 0.98))),
+    minWidth: 760, minHeight: 480, show: false, center: true,
     frame: false, backgroundColor: "#10151d",
     webPreferences: { preload: path.join(__dirname, "app-preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
@@ -150,7 +157,13 @@ app.whenReady().then(() => {
 
   ipcMain.handle("voxiva:invoke", async (eventSource, command, args = {}) => {
     if (eventSource.sender !== window.webContents || typeof command !== "string" || !args || typeof args !== "object") throw new Error("Invalid app request");
-    if (terminalCommands.has(command)) return native(command, args);
+    if (terminalCommands.has(command)) {
+      try { return await native(command, args); }
+      catch (error) {
+        if (["write_terminal_session", "resize_terminal_session", "kill_terminal_session"].includes(command) && error.message === "Terminal session not found") return null;
+        throw error;
+      }
+    }
     if (command === "status_snapshot") {
       return { limits: await readLimits(), ...formatResourceMetrics(app.getAppMetrics(), os.totalmem(), os.freemem()) };
     }
@@ -256,7 +269,7 @@ app.whenReady().then(() => {
             if (rect.left < 0 || rect.right > innerWidth || rect.bottom > bar.getBoundingClientRect().top) throw new Error('Status popup out of bounds');
             if (id === 'usage') {
               const compact = popup.querySelector('[aria-pressed="false"]');
-              if (!popup.querySelector('.vs-usageRows') || !compact) throw new Error('Usage details did not render');
+              if (!popup.querySelector('.vs-usageProviders, .vs-usageEmpty') || !compact) throw new Error('Usage details did not render');
               compact.click();
               await new Promise(resolve => setTimeout(resolve, 50));
               if (!popup.classList.contains('is-compact')) throw new Error('Compact usage view did not activate');
@@ -278,7 +291,7 @@ app.whenReady().then(() => {
           }; poll(); });
           if (settings.width < 500 || settings.height < 300) throw new Error('Settings page did not fill the window: ' + JSON.stringify(settings));
           const sections = [...document.querySelectorAll('.vs-settingsNavItem')];
-          if (sections.length !== 9) throw new Error('Expected 9 settings sections, found ' + sections.length);
+          if (sections.length !== 10) throw new Error('Expected 10 settings sections, found ' + sections.length);
           for (const section of sections) {
             section.click();
             await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));

@@ -205,8 +205,11 @@ export function TerminalPane({
   const shellRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const webglAddonRef = useRef<{ dispose: () => void } | null>(null);
+  const imageAddonRef = useRef<{ dispose: () => void } | null>(null);
   const resizeFnRef = useRef<(() => void) | null>(null);
   const sessionIdRef = useRef(session.id);
+  const sessionStatusRef = useRef(session.status);
   const writeFailNotified = useRef(false);
   const writeBufRef = useRef("");
   const writeFlushTimerRef = useRef(0);
@@ -215,6 +218,7 @@ export function TerminalPane({
   const outputRafRef = useRef(0);
   const terminalPrefsRef = useRef(loadTerminalPrefs());
   sessionIdRef.current = session.id;
+  sessionStatusRef.current = session.status;
 
   useEffect(() => subscribeTerminalPrefs((prefs) => {
     terminalPrefsRef.current = prefs;
@@ -224,6 +228,9 @@ export function TerminalPane({
     terminal.options.scrollSensitivity = prefs.scrollSpeed;
     terminal.options.fastScrollSensitivity = prefs.fastScrollSpeed;
     terminal.options.wordSeparator = prefs.wordSeparators;
+    terminal.options.minimumContrastRatio = prefs.colorContrast === "off"
+      ? 1
+      : prefs.colorContrast === "custom" ? prefs.customContrastRatio : 1.2;
   }), []);
 
   const flushPtyWrites = () => {
@@ -340,7 +347,11 @@ export function TerminalPane({
       // Fractional lineHeight makes full-screen TUIs (Gemini, OpenCode) crop top/bottom chrome.
       lineHeight: 1,
       letterSpacing: 0,
-      minimumContrastRatio: 1.2,
+      minimumContrastRatio: terminalPrefsRef.current.colorContrast === "off"
+        ? 1
+        : terminalPrefsRef.current.colorContrast === "custom"
+          ? terminalPrefsRef.current.customContrastRatio
+          : 1.2,
       scrollback: terminalPrefsRef.current.scrollbackRows,
       scrollOnUserInput: true,
       scrollSensitivity: terminalPrefsRef.current.scrollSpeed,
@@ -352,6 +363,44 @@ export function TerminalPane({
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.open(host);
+
+    if (
+      terminalPrefsRef.current.gpuAcceleration === "on" ||
+      (terminalPrefsRef.current.gpuAcceleration === "auto" && typeof WebGL2RenderingContext !== "undefined")
+    ) {
+      void import("@xterm/addon-webgl").then(({ WebglAddon }) => {
+        if (terminalRef.current !== terminal || !host.isConnected) return;
+        try {
+          const addon = new WebglAddon();
+          addon.onContextLoss(() => {
+            addon.dispose();
+            if (webglAddonRef.current === addon) webglAddonRef.current = null;
+          });
+          terminal.loadAddon(addon);
+          webglAddonRef.current = addon;
+        } catch {
+          // WebGL is optional; xterm keeps rendering through its DOM renderer.
+        }
+      }).catch(() => undefined);
+    }
+
+    if (terminalPrefsRef.current.inlineImages) {
+      void import("@xterm/addon-image").then(({ ImageAddon }) => {
+        if (terminalRef.current !== terminal || !host.isConnected) return;
+        try {
+          const addon = new ImageAddon({
+            storageLimit: 16,
+            pixelLimit: 2_000_000,
+            sixelSizeLimit: 4_000_000,
+            iipSizeLimit: 4_000_000,
+          });
+          terminal.loadAddon(addon);
+          imageAddonRef.current = addon;
+        } catch {
+          // Unsupported image protocols leave ordinary terminal output intact.
+        }
+      }).catch(() => undefined);
+    }
 
     if (pendingOutputRef.current) {
       const buffered = pendingOutputRef.current;
@@ -429,6 +478,7 @@ export function TerminalPane({
     let lastPxW = 0;
     let lastPxH = 0;
     const resize = () => {
+      if (sessionStatusRef.current !== "online") return;
       try {
         const size = fitHostToPty(host, terminal, fitAddon);
         if (!size) return;
@@ -511,6 +561,8 @@ export function TerminalPane({
       osc52Disposable.dispose();
       resizeFnRef.current = null;
       flushPtyWrites();
+      webglAddonRef.current = null;
+      imageAddonRef.current = null;
       terminal.dispose();
       terminalRef.current = null;
       fitAddonRef.current = null;

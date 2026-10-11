@@ -5,7 +5,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { ChevronLeft, ChevronRight, CodeBrowser, Plus, Trash01 } from "@untitledui/icons";
+import { ChevronLeft, ChevronRight, CodeXml as CodeBrowser, Plus, Trash2 as Trash01 } from "lucide-react";
 import { IconX } from "@/components/icons";
 import { DatePicker } from "@/components/DatePicker";
 import { PrioritySelect } from "@/components/PrioritySelect";

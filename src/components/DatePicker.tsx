@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Calendar, ChevronLeft, ChevronRight } from "@untitledui/icons";
+import { CalendarDays as Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { IconX } from "@/components/icons";
 import { useSpace } from "@/features/workspace/SpaceContext";
 
