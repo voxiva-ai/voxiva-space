@@ -9,7 +9,7 @@ import {
   type Workspace,
 } from "@/lib/types";
 import type { MsgKey } from "@/i18n";
-import { IconAssistPanel, IconBell, IconMore, IconPlusStroke, IconSettings, IconX } from "@/components/icons";
+import { IconAssistPanel, IconBell, IconMore, IconPlusStroke, IconSettings, IconSidebar, IconX } from "@/components/icons";
 import { PromptDialog } from "@/components/PromptDialog";
 import { clientError } from "@/lib/errors";
 import { savedLayoutPaneCount } from "@/features/workspace/savedLayouts";
@@ -45,9 +45,11 @@ type SidebarProps = {
   onNewSpace: () => void;
   assistOpen: boolean;
   onToggleAssist: () => void;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 };
 
-export function Sidebar({ onNewSpace, assistOpen, onToggleAssist }: SidebarProps) {
+export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onToggleCollapsed }: SidebarProps) {
   const {
     workspaces,
     activeWorkspace,
@@ -133,10 +135,6 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist }: SidebarProps
     };
   }, [notifyOpen, plusOpen]);
 
-  useEffect(() => {
-    if (unreadCount === 0 && notifyOpen) setNotifyOpen(false);
-  }, [notifyOpen, unreadCount]);
-
   type PlusItem = {
     id: string;
     label: string;
@@ -204,11 +202,12 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist }: SidebarProps
 
   function openAttentionItem(item: (typeof notifyItems)[number]) {
     setNotifyOpen(false);
-    focusAttention({
+    const focused = focusAttention({
       workspaceId: item.workspaceId,
       paneId: item.paneId,
       sessionId: item.sessionId,
     });
+    if (!focused) setError(t("shell.notify.sessionEnded"));
   }
 
   function markAllNotificationsRead() {
@@ -314,11 +313,21 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist }: SidebarProps
   };
 
   return (
-    <aside className="vs-sidebar">
+    <aside className={`vs-sidebar${collapsed ? " is-rail" : ""}`}>
       <div className="vs-sidebarBrand">
         <img src={logoUrl} alt="" className="vs-sidebarLogo" title="Voxiva Space" />
         <span className="vs-spacer" />
         <div className="vs-sidebarTools">
+          <button
+            type="button"
+            className="vs-iconBtn vs-sidebarCollapse"
+            title={t(collapsed ? "shell.sidebarExpand" : "shell.sidebarCollapse")}
+            aria-label={t(collapsed ? "shell.sidebarExpand" : "shell.sidebarCollapse")}
+            aria-expanded={!collapsed}
+            onClick={onToggleCollapsed}
+          >
+            <IconSidebar size={14} aria-hidden />
+          </button>
           <div className="vs-toolGroup" aria-label={t("shell.tools.workspace")}>
             <button
               type="button"
@@ -340,7 +349,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist }: SidebarProps
                 className={`vs-iconBtn vs-notifyBtn${unreadCount ? " is-attention" : ""}${notifyOpen ? " is-active" : ""}`}
                 title={jumpAttentionHint}
                 aria-label={t("shell.notify.title")}
-                aria-haspopup="menu"
+                aria-haspopup="dialog"
                 aria-expanded={notifyOpen}
                 onClick={onNotifyClick}
               >
@@ -352,13 +361,14 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist }: SidebarProps
                 ) : null}
               </button>
               {notifyOpen ? (
-                <div className="vs-chromeFlyout is-menu is-wide is-notifyMenu" role="menu">
+                <section className="vs-chromeFlyout is-menu is-wide is-notifyMenu" role="dialog" aria-label={t("shell.notify.title")}>
                   <div className="vs-notifyHead">
                     <strong>{t("shell.notify.title")}</strong>
                     {notifyItems.length > 0 ? (
                       <button
                         type="button"
                         className="vs-notifyMarkAll"
+                        aria-label={t("shell.notify.markAll")}
                         onClick={markAllNotificationsRead}
                       >
                         {t("shell.notify.markAll")}
@@ -372,7 +382,6 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist }: SidebarProps
                       <button
                         key={item.sessionId}
                         type="button"
-                        role="menuitem"
                         className="vs-notifyItem"
                         onClick={() => openAttentionItem(item)}
                       >
@@ -392,7 +401,6 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist }: SidebarProps
                       <div className="vs-chromeMenuSep" role="separator" />
                       <button
                         type="button"
-                        role="menuitem"
                         className="is-primary"
                         onClick={() => {
                           setNotifyOpen(false);
@@ -403,7 +411,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist }: SidebarProps
                       </button>
                     </>
                   ) : null}
-                </div>
+                </section>
               ) : null}
             </div>
           </div>

@@ -39,6 +39,7 @@ const SettingsPage = lazy(() =>
 );
 
 const ASSIST_KEY = "voxiva-space-assist-open";
+const SIDEBAR_KEY = "voxiva-space-sidebar-collapsed";
 
 function GlobalToast() {
   const { error, setError, suggestedLocalUrl, dismissSuggestedLocalUrl, t } = useSpace();
@@ -99,6 +100,9 @@ function AppShell() {
     return () => window.cancelAnimationFrame(id);
   }, []);
   const [assistOpen, setAssistOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem(SIDEBAR_KEY) === "1"; } catch { return false; }
+  });
   const [assistTab, setAssistTab] = useState<AssistTab>("browser");
   const [pendingAssistUrl, setPendingAssistUrl] = useState<string | null>(null);
   const [newSpaceOpen, setNewSpaceOpen] = useState(false);
@@ -147,6 +151,10 @@ function AppShell() {
       // ignore
     }
   }, [assistOpen]);
+
+  useEffect(() => {
+    try { localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? "1" : "0"); } catch { /* ignore */ }
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     const onNewSpace = () => setNewSpaceOpen(true);
@@ -219,12 +227,14 @@ function AppShell() {
 
   return (
     <div
-      className={`vs-root${assistOpen ? " is-assistOpen" : ""}${view === "space" ? " is-spaceView" : ""}`}
+      className={`vs-root${assistOpen ? " is-assistOpen" : ""}${sidebarCollapsed ? " is-sidebarCollapsed" : ""}${view === "space" ? " is-spaceView" : ""}`}
     >
       <Sidebar
         onNewSpace={() => setNewSpaceOpen(true)}
         assistOpen={assistOpen}
         onToggleAssist={() => setAssistOpen((v) => !v)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
       />
       <main className="vs-main">
         <Topbar />

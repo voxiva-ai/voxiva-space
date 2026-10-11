@@ -259,8 +259,8 @@ export function SettingsPage() {
   }
 
   const nav: Array<{ id: SectionId; title: string }> = [
-    { id: "general", title: t("settings.language") },
-    { id: "appearance", title: t("settings.theme") },
+    { id: "general", title: t("settings.general") },
+    { id: "appearance", title: t("settings.appearance") },
     { id: "sounds", title: t("settings.sounds") },
     { id: "hotkeys", title: t("settings.hotkeys") },
     { id: "terminal", title: t("settings.terminal") },
@@ -293,6 +293,9 @@ export function SettingsPage() {
       </aside>
 
       <div className="vs-settingsPanel">
+        <header className="vs-settingsPageHead">
+          <h1>{nav.find((item) => item.id === section)?.title}</h1>
+        </header>
         {section === "general" && (
           <section className="vs-settingsPanelBody">
             <h2>{t("settings.language")}</h2>

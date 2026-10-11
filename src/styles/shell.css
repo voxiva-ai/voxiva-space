@@ -9,6 +9,10 @@
   transition: none !important;
 }
 
+.vs-root.is-sidebarCollapsed {
+  grid-template-columns: var(--vs-sidebar-rail) minmax(0, 1fr);
+}
+
 .vs-sidebar,
 .vs-main,
 .vs-mainBody,
@@ -33,11 +37,26 @@
 
 .vs-sidebar.is-rail {
   align-items: center;
-  gap: 0.15rem;
+  gap: 0;
   padding: 0;
   background: var(--vs-bg-raised);
   height: 100%;
 }
+
+.vs-sidebar.is-rail > :not(.vs-sidebarBrand) { display: none !important; }
+.vs-sidebar.is-rail .vs-sidebarBrand {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem 0.25rem;
+  border-bottom: 0;
+}
+.vs-sidebar.is-rail .vs-sidebarBrand .vs-spacer { display: none; }
+.vs-sidebar.is-rail .vs-sidebarTools { height: auto; }
+.vs-sidebar.is-rail .vs-sidebarTools > :not(.vs-sidebarCollapse) { display: none !important; }
+.vs-sidebarCollapse { flex: none; }
 
 .vs-railBrand {
   display: grid;
@@ -60,6 +79,8 @@
 }
 
 .vs-sidebarBrand {
+  position: relative;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -197,6 +218,7 @@
 }
 
 .vs-chromeFlyout.is-notifyMenu {
+  z-index: 120;
   top: calc(100% + 6px);
   right: 0;
   left: auto;
@@ -1309,8 +1331,8 @@ html[data-electron] .vs-titleDrag { -webkit-app-region: drag; }
   padding: 0.3rem;
   border: 1px solid var(--vs-border-strong);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--vs-bg-raised) 97%, #000);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.42);
+  background: var(--vs-bg-raised);
+  box-shadow: var(--vs-shadow);
 }
 
 .vs-chromeFlyout.is-layout {

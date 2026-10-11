@@ -26,7 +26,8 @@ export function StatusBar() {
   const confirmedMode = useRef<AwakeMode>("off");
   const portsPanel = useRef<HTMLDivElement>(null);
   const live = Object.values(sessions).filter((session) => session.status === "online");
-  const hasAgents = live.some((session) => agentIdForSession(session) !== "shell");
+  const liveAgents = live.filter((session) => agentIdForSession(session) !== "shell");
+  const hasAgents = liveAgents.length > 0;
   const desktop = Boolean(window.voxiva);
   const refresh = useCallback(async () => {
     if (!window.voxiva) return;
@@ -86,13 +87,14 @@ export function StatusBar() {
         </span>) : <span className="vs-statusSecondary">{loading ? "…" : t("status.noData")}</span>}
       </button>
       <span className="vs-statusDivider" />
-      <button type="button" className="vs-statusCursor" popoverTarget="status-limits" title={t("status.unavailable")}><AgentBrandIcon id="cursor-agent" size={13} /><span>Cursor</span><span className="vs-statusSecondary">—</span></button>
+      <span className="vs-statusCursor" title={t("status.unavailable")}><AgentBrandIcon id="cursor-agent" size={13} /><span>Cursor</span><span className="vs-statusSecondary">—</span></span>
       <button type="button" className="vs-statusRefresh" onClick={() => void refresh()} disabled={loading || !desktop} aria-label={t("status.refresh")} title={t("status.refresh")}><IconRefresh size={12} /></button>
     </div>
     <div className="vs-statusRight">
       <button type="button" popoverTarget="status-awake" aria-expanded={panel === "awake"} title={t("status.awake")}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M4 8h12v7a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8ZM16 9h2a3 3 0 0 1 0 6h-2M7 2v3M12 2v3" /></svg><span>{t(`status.${mode}`)}</span><i className={`vs-statusDot${awake ? " is-active" : ""}`} /></button>
       <span className="vs-statusMemory" title={t("status.memory")}><CpuChip01 size={13} aria-hidden="true" />{snapshot && !failed ? `${snapshot.memoryMb} MB` : "—"}</span>
       <button type="button" onClick={() => setView("space")} title={t("status.sessions")} aria-label={`${t("status.sessions")}: ${live.length}`}><IconTerminal size={13} />{live.length}</button>
+      <button type="button" className="vs-statusAgents" onClick={() => setView("agents")} title={t("status.runningAgents")} aria-label={`${t("status.runningAgents")}: ${liveAgents.length}`}><AgentBrandIcon id={liveAgents[0] ? agentIdForSession(liveAgents[0]) : "codex"} size={13} /><span>{liveAgents.length}</span></button>
       <button type="button" popoverTarget="status-ports" aria-expanded={panel === "ports"} title={t("status.ports")}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M8 2v6m8-6v6M6 8h12v4a6 6 0 0 1-12 0V8Zm6 10v4" /></svg><span>{t("status.ports")}</span></button>
     </div>
 
