@@ -212,7 +212,7 @@ app.whenReady().then(() => {
     void companion.stop();
   });
   if (smoke) {
-    const timeout = setTimeout(() => { console.error("Electron app smoke timed out"); app.exit(1); }, 30000);
+    const timeout = setTimeout(() => { console.error("Electron app smoke timed out"); app.exit(1); }, 60000);
     window.webContents.once("did-finish-load", async () => {
       try {
         const result = await window.webContents.executeJavaScript("(async () => ({ mounted: document.getElementById('root')?.childElementCount, cwd: await window.voxiva.invoke('get_default_terminal_cwd') }))()");
@@ -227,12 +227,19 @@ app.whenReady().then(() => {
           const bar = document.querySelector('.vs-statusBar');
           if (!bar || Math.abs(bar.getBoundingClientRect().bottom - innerHeight) > 1) throw new Error('Status bar is not at the bottom');
           if (!document.querySelector('.vs-statusMemory') || !document.querySelector('.vs-statusAgents')) throw new Error('Status actions are missing from the status bar');
-          for (const id of ['awake', 'ports', 'resources']) {
+          for (const id of ['awake', 'usage', 'ports', 'resources']) {
             document.querySelector('button[popovertarget="status-' + id + '"]').click();
             const popup = document.getElementById('status-' + id);
             if (!popup.matches(':popover-open')) throw new Error('Status popup did not open: ' + id);
             const rect = popup.getBoundingClientRect();
             if (rect.left < 0 || rect.right > innerWidth || rect.bottom > bar.getBoundingClientRect().top) throw new Error('Status popup out of bounds');
+            if (id === 'usage') {
+              const compact = popup.querySelector('[aria-pressed="false"]');
+              if (!popup.querySelector('.vs-usageRows') || !compact) throw new Error('Usage details did not render');
+              compact.click();
+              await new Promise(resolve => setTimeout(resolve, 50));
+              if (!popup.classList.contains('is-compact')) throw new Error('Compact usage view did not activate');
+            }
             popup.hidePopover();
           }
           const settingsButton = document.querySelector('[data-view-trigger="settings"]');
@@ -250,7 +257,7 @@ app.whenReady().then(() => {
           }; poll(); });
           if (settings.width < 500 || settings.height < 300) throw new Error('Settings page did not fill the window: ' + JSON.stringify(settings));
           const sections = [...document.querySelectorAll('.vs-settingsNavItem')];
-          if (sections.length !== 8) throw new Error('Expected 8 settings sections, found ' + sections.length);
+          if (sections.length !== 9) throw new Error('Expected 9 settings sections, found ' + sections.length);
           for (const section of sections) {
             section.click();
             await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -262,6 +269,11 @@ app.whenReady().then(() => {
           return true;
         })()`);
         if (!status) throw new Error("Status bar smoke failed");
+        await window.webContents.executeJavaScript("document.querySelector('button[popovertarget=\"status-usage\"]').click(); new Promise(resolve => setTimeout(resolve, 100))");
+        const usagePreview = path.join(os.tmpdir(), "voxiva-usage-smoke.png");
+        await fs.writeFile(usagePreview, (await window.webContents.capturePage()).toPNG());
+        await window.webContents.executeJavaScript("document.getElementById('status-usage').hidePopover()");
+        console.log(`Usage preview: ${usagePreview}`);
         await window.webContents.executeJavaScript("document.querySelector('button[popovertarget=\"status-resources\"]').click(); new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
         const resourceOpen = await window.webContents.executeJavaScript("document.getElementById('status-resources').matches(':popover-open')");
         if (!resourceOpen) throw new Error("Resource manager did not stay open for capture");

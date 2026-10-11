@@ -56,7 +56,7 @@ import {
 } from "@/features/browser/autoCookies";
 import { TerminalSettings } from "./TerminalSettings";
 
-type SectionId = "general" | "appearance" | "sounds" | "hotkeys" | "terminal" | "browser" | "mobile" | "about";
+type SectionId = "general" | "appearance" | "notifications" | "sounds" | "hotkeys" | "terminal" | "browser" | "mobile" | "about";
 
 function Toggle({
   on,
@@ -262,6 +262,7 @@ export function SettingsPage() {
   const nav: Array<{ id: SectionId; title: string }> = [
     { id: "general", title: t("settings.general") },
     { id: "appearance", title: t("settings.appearance") },
+    { id: "notifications", title: t("settings.notifications") },
     { id: "sounds", title: t("settings.sounds") },
     { id: "hotkeys", title: t("settings.hotkeys") },
     { id: "terminal", title: t("settings.terminal") },
@@ -270,9 +271,9 @@ export function SettingsPage() {
     { id: "about", title: t("settings.about") },
   ];
   const navGroups = [
-    { title: t("settings.groupInterface"), items: nav.slice(0, 4) },
-    { title: t("settings.groupWorkspace"), items: nav.slice(4, 7) },
-    { title: t("settings.groupApp"), items: nav.slice(7) },
+    { title: t("settings.groupInterface"), items: nav.slice(0, 5) },
+    { title: t("settings.groupWorkspace"), items: nav.slice(5, 8) },
+    { title: t("settings.groupApp"), items: nav.slice(8) },
   ];
 
   const presets: Array<{ id: SoundPreset; label: string }> = [
@@ -455,51 +456,32 @@ export function SettingsPage() {
                 );
               })}
             </div>
-            <h2 style={{ marginTop: "2rem" }}>{t("settings.attentionRing")}</h2>
-            <p className="vs-settingsHint">{t("settings.attentionRingHint")}</p>
+            <h2 style={{ marginTop: "2rem" }}>{t("settings.zoom")}</h2>
+            <p className="vs-settingsHint">{t("settings.zoomHint")}</p>
+            <ZoomControls showRange />
+          </section>
+        )}
+
+        {section === "notifications" && (
+          <section className="vs-settingsPanelBody">
+            <h2>{t("settings.notifications")}</h2>
+            <p className="vs-settingsHint">{t("settings.notificationsHint")}</p>
             <div className="vs-soundCard">
               <div className="vs-soundRow">
-                <div>
-                  <strong>{t("settings.attentionRing")}</strong>
-                  <small>{t("settings.attentionRingHint")}</small>
-                </div>
-                <Toggle
-                  on={attention.ringEnabled}
-                  label={t("settings.attentionRing")}
-                  onClick={() => patchAttention({ ringEnabled: !attention.ringEnabled })}
-                />
+                <div><strong>{t("settings.attentionNotify")}</strong><small>{t("settings.attentionNotifyHint")}</small></div>
+                <Toggle on={attention.notifyEnabled} label={t("settings.attentionNotify")} onClick={() => patchAttention({ notifyEnabled: !attention.notifyEnabled })} />
               </div>
               <div className="vs-soundRow">
-                <div>
-                  <strong>{t("settings.attentionNotify")}</strong>
-                  <small>{t("settings.attentionNotifyHint")}</small>
-                </div>
-                <Toggle
-                  on={attention.notifyEnabled}
-                  label={t("settings.attentionNotify")}
-                  onClick={() => patchAttention({ notifyEnabled: !attention.notifyEnabled })}
-                />
+                <div><strong>{t("settings.attentionRing")}</strong><small>{t("settings.attentionRingHint")}</small></div>
+                <Toggle on={attention.ringEnabled} label={t("settings.attentionRing")} onClick={() => patchAttention({ ringEnabled: !attention.ringEnabled })} />
               </div>
               <div className="vs-soundSection">
                 <div className="vs-hotkeyGroupTitle">{t("settings.attentionColor")}</div>
                 <div className="vs-attentionSwatches">
-                  {ATTENTION_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      className={`vs-attentionSwatch${attention.ringColor === color ? " is-active" : ""}`}
-                      style={{ background: color }}
-                      title={color}
-                      aria-label={color}
-                      onClick={() => patchAttention({ ringColor: color })}
-                    />
-                  ))}
+                  {ATTENTION_COLORS.map((color) => <button key={color} type="button" className={`vs-attentionSwatch${attention.ringColor === color ? " is-active" : ""}`} style={{ background: color }} title={color} aria-label={color} onClick={() => patchAttention({ ringColor: color })} />)}
                 </div>
               </div>
             </div>
-            <h2 style={{ marginTop: "2rem" }}>{t("settings.zoom")}</h2>
-            <p className="vs-settingsHint">{t("settings.zoomHint")}</p>
-            <ZoomControls showRange />
           </section>
         )}
 
