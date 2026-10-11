@@ -15,8 +15,8 @@ export type PersistedHistoryItem = {
 
 export type PersistedState = {
   onboarded: boolean;
-  /** When true, skip the welcome screen and open the workspace shell directly. */
-  skipWelcome?: boolean;
+  /** One-time migration from the former dark branded default. */
+  themeDefaultMigrated?: boolean;
   workspaces: Array<{
     id: string;
     name: string;

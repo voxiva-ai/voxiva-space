@@ -1,0 +1,176 @@
+.vs-helpBtn > span {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.vs-helpBackdrop {
+  position: fixed;
+  z-index: 200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--vs-text) 20%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+.vs-helpDialog {
+  display: flex;
+  flex-direction: column;
+  width: min(820px, 100%);
+  max-height: min(680px, 100%);
+  overflow: hidden;
+  border: 1px solid var(--vs-border-strong);
+  border-radius: 12px;
+  color: var(--vs-text);
+  background: var(--vs-bg);
+  box-shadow: var(--vs-shadow);
+}
+
+.vs-helpHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 23px 26px 20px;
+  border-bottom: 1px solid var(--vs-border);
+}
+
+.vs-helpHeader p,
+.vs-helpEyebrow {
+  margin: 0 0 6px;
+  color: var(--vs-accent);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .04em;
+}
+
+.vs-helpHeader h2,
+.vs-helpDetail h3 {
+  margin: 0;
+  color: var(--vs-text);
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -.025em;
+}
+
+.vs-helpHeader span {
+  display: block;
+  margin-top: 5px;
+  color: var(--vs-muted);
+  font-size: 13px;
+}
+
+.vs-helpLayout {
+  display: grid;
+  grid-template-columns: minmax(180px, 230px) minmax(0, 1fr);
+  min-height: 320px;
+  overflow: auto;
+}
+
+.vs-helpNav {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 12px;
+  border-right: 1px solid var(--vs-border);
+  background: var(--vs-bg-raised);
+}
+
+.vs-helpNav button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--vs-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vs-helpNav button:hover,
+.vs-helpNav button:focus-visible {
+  color: var(--vs-text);
+  background: var(--vs-bg-hover);
+}
+
+.vs-helpNav button.is-active {
+  color: var(--vs-text);
+  background: var(--vs-bg);
+  box-shadow: inset 0 0 0 1px var(--vs-border);
+}
+
+.vs-helpNav button[aria-current="page"] i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vs-accent);
+}
+
+.vs-helpDetail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 28px;
+}
+
+.vs-helpDetail h3 {
+  font-size: 18px;
+}
+
+.vs-helpDetail > p:not(.vs-helpEyebrow) {
+  max-width: 52ch;
+  margin: 0;
+  color: var(--vs-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.vs-helpTip {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  margin: 7px 0 4px;
+  padding: 12px 14px;
+  border-left: 2px solid var(--vs-accent);
+  color: var(--vs-muted);
+  background: var(--vs-bg-raised);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.vs-helpTip strong {
+  color: var(--vs-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.vs-helpDetail .vs-btn {
+  margin-top: auto;
+}
+
+.vs-helpDialog button:focus-visible {
+  outline: 2px solid var(--vs-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 620px) {
+  .vs-helpBackdrop { padding: 12px; }
+  .vs-helpDialog { max-height: 100%; }
+  .vs-helpLayout { grid-template-columns: minmax(110px, 36%) minmax(0, 1fr); }
+  .vs-helpHeader { padding: 18px; }
+  .vs-helpDetail { padding: 20px 16px; }
+}

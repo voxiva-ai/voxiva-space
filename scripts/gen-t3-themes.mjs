@@ -320,8 +320,8 @@ function buildCatalog(files) {
   });
   const voxivaLightTokens = {
     appearance: "light",
-    bg: "#f3f5f8",
-    bgRaised: "#f8fafc",
+    bg: "#ffffff",
+    bgRaised: "#f7f9fc",
     bgHover: "#e9eef4",
     surface: "#ffffff",
     border: "rgba(35,50,72,0.12)",
@@ -336,14 +336,14 @@ function buildCatalog(files) {
     attentionRing: "rgba(144,103,25,0.2)",
     ok: "#257452",
     danger: "#b33b4a",
-    termBg: "#f8fafc",
+    termBg: "#ffffff",
     termFg: "#1d2735",
     termCursor: "#356bb3",
     termSelection: "rgba(53,107,179,0.22)",
-    termChrome: "#edf1f5",
+    termChrome: "#f3f5f8",
     termChromeText: "#263448",
     termChromeMuted: "#667487",
-    preview: ["#f3f5f8", "#ffffff", "#356bb3", "#1d2735"],
+    preview: ["#ffffff", "#f7f9fc", "#356bb3", "#1d2735"],
   };
   entries.push({
     id: "voxiva-light",

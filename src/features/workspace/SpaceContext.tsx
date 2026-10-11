@@ -323,13 +323,6 @@ function hydrateShellPresets(raw: unknown): Workspace["shellPresets"] {
 export type { AgentRun } from "@/lib/types";
 
 type SpaceContextValue = {
-  /** Startup / preview welcome overlay — never wipes workspaces. */
-  welcomeVisible: boolean;
-  dismissWelcome: () => void;
-  showWelcomeScreen: () => void;
-  skipWelcome: boolean;
-  setSkipWelcome: (skip: boolean) => void;
-  onboarded: boolean;
   takePendingPaneSpawn: (paneId: string) => SpawnOptions | null;
   /** All pending spawns for a pane (multi-tab saved layouts). */
   takePendingPaneSpawnQueue: (paneId: string) => SpawnOptions[];
@@ -395,8 +388,6 @@ type SpaceContextValue = {
   setError: (msg: string) => void;
   isBusy: boolean;
   enterSpace: (opts: EnterSpaceOptions) => Promise<void>;
-  /** @deprecated Use showWelcomeScreen — kept for callers. */
-  resetOnboarding: () => void | Promise<void>;
   selectWorkspace: (id: string) => void;
   createWorkspace: (opts: CreateWorkspaceOptions) => Promise<void>;
   updateWorkspace: (
@@ -579,14 +570,7 @@ function hydrateLayout(raw: unknown, savedSessions: Record<string, unknown> = {}
 
 export function SpaceProvider({ children }: { children: ReactNode }) {
   const persisted = useMemo(() => loadPersisted(), []);
-  const [skipWelcome, setSkipWelcomeState] = useState(() => persisted?.skipWelcome === true);
-  // Welcome only when there is nothing to restore — existing spaces open instantly.
-  const [welcomeVisible, setWelcomeVisible] = useState(() => {
-    if (persisted?.skipWelcome === true) return false;
-    if (persisted?.workspaces?.length) return false;
-    return true;
-  });
-  const [onboarded, setOnboarded] = useState(() => Boolean(persisted?.onboarded));
+  const onboarded = true;
   const [view, setViewState] = useState<ViewId>("space");
   const viewRef = useRef<ViewId>("space");
   const viewTransitionRef = useRef(0);
@@ -704,9 +688,9 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<Locale>(() =>
     persisted?.locale === "en" || persisted?.locale === "ru" ? persisted.locale : "en",
   );
-  const [theme, setThemeState] = useState<ThemeId>(() =>
-    resolveThemeId(persisted?.theme),
-  );
+  const [theme, setThemeState] = useState<ThemeId>(() => resolveThemeId(
+    !persisted?.themeDefaultMigrated && persisted?.theme === "voxiva" ? "voxiva-light" : persisted?.theme,
+  ));
   const setTheme = useCallback((next: ThemeId) => setThemeState(resolveThemeId(next)), []);
   const t = useCallback((key: MsgKey) => translate(locale, key), [locale]);
 
@@ -764,22 +748,6 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     void syncWindowGlass(theme);
   }, [theme]);
 
-  const setSkipWelcome = useCallback((skip: boolean) => {
-    setSkipWelcomeState(skip);
-    if (skip) setWelcomeVisible(false);
-  }, []);
-
-  const dismissWelcome = useCallback(() => {
-    setWelcomeVisible(false);
-    setOnboarded(true);
-    setView("space");
-  }, [setView]);
-
-  const showWelcomeScreen = useCallback(() => {
-    setSkipWelcomeState(false);
-    setWelcomeVisible(true);
-  }, []);
-
   const persistReadyRef = useRef(false);
 
   useEffect(() => {
@@ -789,7 +757,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     }
     savePersisted({
       onboarded,
-      skipWelcome,
+      themeDefaultMigrated: true,
       workspaces: workspaces.map((w) => ({
         id: w.id,
         name: w.name,
@@ -823,7 +791,6 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     });
   }, [
     onboarded,
-    skipWelcome,
     workspaces,
     activeWorkspace?.id,
     browserUrl,
@@ -859,12 +826,11 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
 
   // Defer PATH scan until after terminals have room to start.
   useEffect(() => {
-    if (welcomeVisible) return;
     const id = window.setTimeout(() => {
       void refreshAgents();
     }, 5500);
     return () => window.clearTimeout(id);
-  }, [refreshAgents, welcomeVisible]);
+  }, [refreshAgents]);
 
   const patchWorkspace = useCallback((id: string, updater: (ws: Workspace) => Workspace) => {
     setWorkspaces((current) => {
@@ -1207,7 +1173,6 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       };
       setWorkspaces((current) => [...current, ws]);
       setActiveWorkspaceId(ws.id);
-      setOnboarded(true);
       setView("space");
       pushHistory({
         workspaceId: ws.id,
@@ -1937,8 +1902,6 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       const existing = findWorkspaceByIdentity(workspaces, spaceName, cwd);
       if (existing) {
         setActiveWorkspaceId(existing.id);
-        setOnboarded(true);
-        setWelcomeVisible(false);
         setView("space");
         setError("");
         pushHistory({
@@ -1975,8 +1938,6 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       };
       setWorkspaces((current) => (current.length === 0 ? [ws] : [...current, ws]));
       setActiveWorkspaceId(ws.id);
-      setOnboarded(true);
-      setWelcomeVisible(false);
       setView("space");
       setError("");
       pushHistory({
@@ -2317,8 +2278,6 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   const clearAgentRuns = useCallback(() => {
     setAgentRuns([]);
   }, []);
-
-  const resetOnboarding = showWelcomeScreen;
 
   const updateWorkspace = useCallback(
     async (
@@ -2773,7 +2732,6 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       };
       setWorkspaces((current) => [...current, ws]);
       setActiveWorkspaceId(ws.id);
-      setOnboarded(true);
       setView("space");
       pushHistory({
         workspaceId: ws.id,
@@ -3166,7 +3124,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (welcomeVisible || !activeWorkspace) return;
+    if (!activeWorkspace) return;
     const pending = collectSessionIds(activeWorkspace.layout).filter((id) =>
       restorePendingIdsRef.current.delete(id),
     );
@@ -3182,7 +3140,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     for (const id of ordered) {
       void restoreSession(id);
     }
-  }, [activeWorkspace, restoreSession, welcomeVisible]);
+  }, [activeWorkspace, restoreSession]);
 
   const clearAttention = useCallback((sessionId: string) => {
     clearAttentionNotifyState(sessionId);
@@ -3444,12 +3402,6 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
 
   const value: SpaceContextValue = useMemo(
     () => ({
-      welcomeVisible,
-      dismissWelcome,
-      showWelcomeScreen,
-      onboarded,
-      skipWelcome,
-      setSkipWelcome,
       takePendingPaneSpawn,
       takePendingPaneSpawnQueue,
       clearPendingPaneSpawn,
@@ -3501,7 +3453,6 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       setError,
       isBusy,
       enterSpace,
-      resetOnboarding,
       selectWorkspace,
       createWorkspace,
       updateWorkspace,
@@ -3560,12 +3511,6 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       clearAgentRuns,
     }),
     [
-      welcomeVisible,
-      dismissWelcome,
-      showWelcomeScreen,
-      onboarded,
-      skipWelcome,
-      setSkipWelcome,
       takePendingPaneSpawn,
       takePendingPaneSpawnQueue,
       clearPendingPaneSpawn,
@@ -3616,7 +3561,6 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       error,
       isBusy,
       enterSpace,
-      resetOnboarding,
       selectWorkspace,
       createWorkspace,
       updateWorkspace,

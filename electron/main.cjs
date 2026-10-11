@@ -4,7 +4,8 @@ const readline = require("node:readline");
 const http = require("node:http");
 const os = require("node:os");
 const { spawn } = require("node:child_process");
-const { app, BrowserWindow, WebContentsView, ipcMain, Menu, dialog, shell, protocol, net, session } = require("electron");
+const { app, BrowserWindow, WebContentsView, ipcMain, Menu, dialog, shell, protocol, net, session, powerSaveBlocker } = require("electron");
+const { readLimits, readPorts, createAwake } = require("./status.cjs");
 const { bounds } = require("./pilot-bounds.cjs");
 const { files, findComponentFiles } = require("./files.cjs");
 const { captureBeforeHide } = require("./view-visibility.cjs");
@@ -55,6 +56,8 @@ app.whenReady().then(() => {
   const event = (name, payload) => { if (!window.isDestroyed()) window.webContents.send("voxiva:event", name, payload); };
   const companion = createCompanion(event);
   const updates = createUpdates(app, autoUpdater);
+  const awake = createAwake(powerSaveBlocker);
+  window.webContents.on("render-process-gone", () => awake.stop());
   readline.createInterface({ input: backend.stdout }).on("line", (line) => {
     let message;
     try { message = JSON.parse(line); } catch { return; }
@@ -148,6 +151,9 @@ app.whenReady().then(() => {
   ipcMain.handle("voxiva:invoke", async (eventSource, command, args = {}) => {
     if (eventSource.sender !== window.webContents || typeof command !== "string" || !args || typeof args !== "object") throw new Error("Invalid app request");
     if (terminalCommands.has(command)) return native(command, args);
+    if (command === "status_snapshot") return { limits: await readLimits(), memoryMb: Math.round(app.getAppMetrics().reduce((sum, metric) => sum + metric.memory.workingSetSize, 0) / 1024) };
+    if (command === "status_ports") return readPorts();
+    if (command === "status_awake") return awake.set(args.mode, args.hasAgents);
     if (browserCommands.has(command)) return browser(command, args);
     if (fileCommands.has(command)) {
       const result = await files(command, args);
@@ -194,6 +200,7 @@ app.whenReady().then(() => {
   window.on("resize", () => event("window://resized", {}));
   window.once("ready-to-show", () => { if (!smoke) { window.show(); window.focus(); } });
   window.on("closed", () => {
+    awake.stop();
     ipcMain.removeHandler("voxiva:invoke");
     for (const label of [...views.keys()]) closeView(label);
     backend.stdin.end();
@@ -207,6 +214,38 @@ app.whenReady().then(() => {
       try {
         const result = await window.webContents.executeJavaScript("(async () => ({ mounted: document.getElementById('root')?.childElementCount, cwd: await window.voxiva.invoke('get_default_terminal_cwd') }))()");
         if (!result.mounted || !result.cwd) throw new Error(`App did not mount: ${JSON.stringify(result)}`);
+        const status = await window.webContents.executeJavaScript(`(async () => {
+          const snapshot = await window.voxiva.invoke('status_snapshot');
+          if (!Number.isFinite(snapshot.memoryMb)) throw new Error('Missing process memory');
+          for (const mode of ['on', 'agents', 'off']) {
+            const active = await window.voxiva.invoke('status_awake', { mode, hasAgents: false });
+            if (active !== (mode === 'on')) throw new Error('Incorrect awake state');
+          }
+          const bar = document.querySelector('.vs-statusBar');
+          if (!bar || Math.abs(bar.getBoundingClientRect().bottom - innerHeight) > 1) throw new Error('Status bar is not at the bottom');
+          for (const id of ['limits', 'awake', 'ports']) {
+            document.querySelector('button[popovertarget="status-' + id + '"]').click();
+            const popup = document.getElementById('status-' + id);
+            if (!popup.matches(':popover-open')) throw new Error('Status popup did not open: ' + id);
+            const rect = popup.getBoundingClientRect();
+            if (rect.left < 0 || rect.right > innerWidth || rect.bottom > bar.getBoundingClientRect().top) throw new Error('Status popup out of bounds');
+            popup.hidePopover();
+          }
+          return true;
+        })()`);
+        if (!status) throw new Error("Status bar smoke failed");
+        window.setSize(760, 600);
+        const fits = await window.webContents.executeJavaScript(`new Promise(resolve => requestAnimationFrame(() => {
+          const bar = document.querySelector('.vs-statusBar');
+          resolve(bar.scrollWidth <= bar.clientWidth);
+        }))`);
+        if (!fits) throw new Error("Status bar overflows at minimum window width");
+        window.setSize(1240, 780);
+        await window.webContents.executeJavaScript("document.getElementById('status-limits').showPopover()");
+        const statusPreview = path.join(os.tmpdir(), "voxiva-status-smoke.png");
+        await fs.writeFile(statusPreview, (await window.webContents.capturePage()).toPNG());
+        console.log(`Status bar preview: ${statusPreview}`);
+        await window.webContents.executeJavaScript("document.getElementById('status-limits').hidePopover()");
         const created = await native("create_terminal_session", { request: { cwd: result.cwd, shell: null, title: "Smoke", cols: 80, rows: 24 } });
         await native("kill_terminal_session", { request: { id: created.id } });
         const local = http.createServer((_request, response) => { response.setHeader("Content-Type", "text/html"); response.end("<!doctype html><title>Inspector smoke</title><button>Test</button>"); });

@@ -56,7 +56,7 @@ import {
 } from "@/features/browser/autoCookies";
 import { TerminalSettings } from "./TerminalSettings";
 
-type SectionId = "general" | "appearance" | "sounds" | "hotkeys" | "terminal" | "browser" | "mobile" | "welcome" | "about";
+type SectionId = "general" | "appearance" | "sounds" | "hotkeys" | "terminal" | "browser" | "mobile" | "about";
 
 function Toggle({
   on,
@@ -82,9 +82,6 @@ function Toggle({
 
 export function SettingsPage() {
   const {
-    showWelcomeScreen,
-    skipWelcome,
-    setSkipWelcome,
     locale,
     setLocale,
     theme,
@@ -269,7 +266,6 @@ export function SettingsPage() {
     { id: "terminal", title: t("settings.terminal") },
     { id: "browser", title: t("settings.browser") },
     { id: "mobile", title: t("settings.mobile") },
-    { id: "welcome", title: t("settings.welcome") },
     { id: "about", title: t("settings.about") },
   ];
 
@@ -706,36 +702,6 @@ export function SettingsPage() {
                 </ul>
               </div>
             ))}
-          </section>
-        )}
-
-        {section === "welcome" && (
-          <section className="vs-settingsPanelBody">
-            <h2>{t("settings.welcome")}</h2>
-            <p className="vs-settingsHint">{t("settings.welcomeHint")}</p>
-            <div className="vs-soundCard">
-              <div className="vs-soundRow">
-                <div>
-                  <strong>{t("settings.skipWelcome")}</strong>
-                  <small>{t("settings.skipWelcomeHint")}</small>
-                </div>
-                <Toggle
-                  on={skipWelcome}
-                  label={t("settings.skipWelcome")}
-                  onClick={() => setSkipWelcome(!skipWelcome)}
-                />
-              </div>
-            </div>
-            <div className="vs-settingsActions">
-              <button
-                type="button"
-                className="vs-btn vs-btnPrimary vs-settingsWelcomeBtn"
-                onClick={() => showWelcomeScreen()}
-              >
-                {t("settings.showWelcome")}
-              </button>
-              <p className="vs-settingsHint">{t("settings.showWelcomeHint")}</p>
-            </div>
           </section>
         )}
 

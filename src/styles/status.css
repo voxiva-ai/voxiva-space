@@ -1,0 +1,74 @@
+.vs-statusBar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border-top: 1px solid var(--vs-border);
+  background: var(--vs-bg-raised);
+  color: var(--vs-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.vs-statusLeft, .vs-statusRight, .vs-statusWindow, .vs-statusMemory { display: flex; align-items: center; gap: 8px; }
+.vs-statusLeft { min-width: 0; overflow: hidden; }
+.vs-statusRight { flex-shrink: 0; gap: 10px; }
+.vs-statusBar button { display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; min-height: 24px; padding: 3px 5px; border: 0; border-radius: 4px; background: transparent; color: inherit; font: inherit; cursor: pointer; white-space: nowrap; }
+.vs-statusBar button:hover, .vs-statusBar button[aria-expanded="true"] { background: var(--vs-bg-hover); color: var(--vs-text); }
+.vs-statusBar button:focus-visible { outline: 2px solid var(--vs-accent); outline-offset: -2px; }
+.vs-statusBar button:disabled { opacity: .45; cursor: default; }
+.vs-statusBar svg { flex-shrink: 0; }
+.vs-statusProvider, .vs-statusWindow { color: var(--vs-text); }
+.vs-statusSecondary { color: var(--vs-muted); }
+.vs-statusDivider { height: 12px; width: 1px; background: var(--vs-border); flex-shrink: 0; }
+.vs-statusMeter { display: block; width: 38px; height: 4px; overflow: hidden; background: var(--vs-border); border-radius: 4px; }
+.vs-statusMeter > span { display: block; height: 100%; background: var(--vs-accent); border-radius: inherit; }
+.vs-statusMeter[data-level="warning"] > span { background: var(--vs-attention); }
+.vs-statusMeter[data-level="danger"] > span { background: var(--vs-danger); }
+.vs-statusDot { width: 5px; height: 5px; border-radius: 50%; background: var(--vs-muted); opacity: .5; }
+.vs-statusDot.is-active { background: var(--vs-ok); opacity: 1; }
+.vs-statusPopup { position: fixed; inset: auto 12px 38px auto; margin: 0; padding: 0; width: min(340px, calc(100vw - 24px)); max-height: calc(100dvh - 80px); overflow: auto; color: var(--vs-text); background: var(--vs-bg-raised); border: 1px solid var(--vs-border-strong); border-radius: 12px; box-shadow: var(--vs-shadow); font: 12px/1.5 var(--vs-font); white-space: normal; }
+.vs-statusPopup::backdrop { background: transparent; }
+.vs-statusLimits { inset-inline: 12px auto; width: min(370px, calc(100vw - 24px)); }
+.vs-statusAwake { right: 100px; }
+.vs-statusPopup header { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border-bottom: 1px solid var(--vs-border); }
+.vs-statusPopup header strong { font-weight: 600; }
+.vs-statusPopup section { padding: 14px 16px; }
+.vs-statusPopup section + section { border-top: 1px solid var(--vs-border); }
+.vs-statusPopup p { color: var(--vs-muted); margin: 10px 0 0; line-height: 1.6; }
+.vs-statusSectionTitle { display: flex; align-items: center; gap: 8px; }
+.vs-statusSectionTitle > span:last-child { margin-left: auto; color: var(--vs-muted); font-size: 11px; }
+.vs-quotaDetail { margin-top: 14px; }
+.vs-quotaDetail > div { display: flex; justify-content: space-between; }
+.vs-quotaDetail meter { display: block; width: 100%; height: 7px; margin: 7px 0; border: 0; }
+.vs-quotaDetail meter::-webkit-meter-bar { background: var(--vs-border); border: 0; border-radius: 8px; }
+.vs-quotaDetail meter::-webkit-meter-optimum-value { background: var(--vs-accent); border-radius: 8px; }
+.vs-quotaDetail meter::-webkit-meter-suboptimum-value { background: var(--vs-attention); border-radius: 8px; }
+.vs-quotaDetail meter::-webkit-meter-even-less-good-value { background: var(--vs-danger); border-radius: 8px; }
+.vs-quotaDetail small, .vs-statusPopup small { color: var(--vs-muted); font-size: 11px; }
+.vs-statusTimestamp { font-size: 10px; }
+.vs-statusPopupFoot { padding: 10px 14px; border-top: 1px solid var(--vs-border); color: var(--vs-muted); font-size: 11px; }
+.vs-statusChoices { padding: 6px; }
+.vs-statusChoices button { width: 100%; text-align: left; padding: 10px; align-items: flex-start; gap: 10px; white-space: normal; border-radius: 7px; }
+.vs-statusChoices button > span:last-child { display: grid; gap: 2px; }
+.vs-statusChoices strong { font-weight: 500; }
+.vs-statusRadio { width: 10px; height: 10px; margin-top: 4px; border: 1px solid var(--vs-border-strong); border-radius: 50%; flex-shrink: 0; }
+.vs-statusRadio.is-selected { border: 3px solid var(--vs-accent); }
+.vs-statusPortList { max-height: 300px; overflow-y: auto; padding: 6px; }
+.vs-statusPortList > p { padding: 8px 10px 14px; }
+.vs-statusPortList button { width: 100%; padding: 10px; text-align: left; gap: 18px; border-radius: 6px; }
+.vs-statusPortList button > strong { min-width: 42px; font-family: var(--vs-mono); font-weight: 500; }
+.vs-statusPortList button > span:nth-child(2) { display: grid; }
+.vs-statusPortList button > span:last-child { margin-left: auto; }
+@media (max-width: 1000px) {
+  .vs-statusProvider, .vs-statusCursor, .vs-statusDivider { display: none !important; }
+  .vs-statusLeft, .vs-statusRight { gap: 4px; }
+}
+@media (max-width: 760px) {
+  .vs-statusWindow .vs-statusSecondary, .vs-statusMemory { display: none; }
+  .vs-statusBar { padding-inline: 5px; gap: 4px; }
+  .vs-statusAwake { right: 12px; }
+}

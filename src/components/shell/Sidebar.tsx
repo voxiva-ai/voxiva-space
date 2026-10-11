@@ -423,6 +423,19 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist }: SidebarProps
             >
               <IconSettings size={14} aria-hidden />
             </button>
+            <button
+              type="button"
+              className="vs-iconBtn vs-helpBtn"
+              title={t("help.title")}
+              aria-label={t("help.title")}
+              onClick={() => {
+                setPlusOpen(false);
+                setNotifyOpen(false);
+                window.dispatchEvent(new CustomEvent("voxiva-help-open"));
+              }}
+            >
+              <span aria-hidden>?</span>
+            </button>
             <div className="vs-plusWrap" ref={plusRef}>
               <button
                 type="button"

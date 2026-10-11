@@ -15,9 +15,8 @@ import { useWindowChrome } from "@/features/ui/useWindowChrome";
 import { applyAttentionPrefs } from "@/features/attention/prefs";
 import { CommandPalette } from "@/components/shell/CommandPalette";
 import { ensureAutoCookieImport } from "@/features/browser/autoCookies";
-import { WelcomePage } from "@/pages/welcome/WelcomePage";
-import { agentIdForSession } from "@/features/agents/sessionAgent";
-import { botDisplayName } from "@/features/agents/history";
+import { StatusBar } from "@/components/shell/StatusBar";
+import { HelpGuide } from "@/components/shell/HelpGuide";
 import type { ViewId } from "@/lib/types";
 
 const AgentsPage = lazy(() =>
@@ -66,8 +65,8 @@ function GlobalToast() {
 }
 
 function AppShell() {
-  const { welcomeVisible, setBrowserUrl, isVsCodeFocusActive, sessions, agentRuns } = useSpace();
-  const { view, setView } = useView();
+  const { setBrowserUrl, isVsCodeFocusActive } = useSpace();
+  const { view } = useView();
   useHotkeys();
   useWindowChrome();
   useEffect(() => {
@@ -105,11 +104,12 @@ function AppShell() {
   const [newSpaceOpen, setNewSpaceOpen] = useState(false);
   const [spaceSettingsId, setSpaceSettingsId] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   // Mount each view once, then keep it alive (hidden) so switches don't remount/lag.
   const [mountedViews, setMountedViews] = useState<Set<ViewId>>(() => new Set(["space"]));
 
   useEffect(() => {
-    const active = newSpaceOpen || Boolean(spaceSettingsId) || paletteOpen;
+    const active = newSpaceOpen || Boolean(spaceSettingsId) || paletteOpen || helpOpen;
     window.dispatchEvent(
       new CustomEvent("voxiva-native-overlay", {
         detail: { key: "app-overlay", active },
@@ -122,7 +122,13 @@ function AppShell() {
         }),
       );
     };
-  }, [newSpaceOpen, paletteOpen, spaceSettingsId]);
+  }, [helpOpen, newSpaceOpen, paletteOpen, spaceSettingsId]);
+
+  useEffect(() => {
+    const onHelp = () => setHelpOpen(true);
+    window.addEventListener("voxiva-help-open", onHelp);
+    return () => window.removeEventListener("voxiva-help-open", onHelp);
+  }, []);
 
   useEffect(() => {
     setMountedViews((prev) => {
@@ -163,12 +169,11 @@ function AppShell() {
   }, []);
 
   useEffect(() => {
-    if (welcomeVisible) return;
     const idle = window.setTimeout(() => {
       void ensureAutoCookieImport(false);
     }, 1200);
     return () => window.clearTimeout(idle);
-  }, [welcomeVisible]);
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -203,31 +208,14 @@ function AppShell() {
 
   // Prefetch agents after first paint so the view opens instantly.
   useEffect(() => {
-    if (welcomeVisible) return;
     const idle = window.setTimeout(() => {
       void import("@/pages/agents/AgentsPage");
     }, 400);
     return () => window.clearTimeout(idle);
-  }, [welcomeVisible]);
-
-  if (welcomeVisible) {
-    return (
-      <>
-        <WelcomePage />
-        <GlobalToast />
-      </>
-    );
-  }
+  }, []);
 
   const show = (id: ViewId) => view === id;
   const keep = (id: ViewId) => mountedViews.has(id);
-  const liveSessions = Object.values(sessions).filter((session) => session.status === "online");
-  const agentCounts = new Map<string, number>();
-  for (const session of liveSessions) {
-    const agentId = agentIdForSession(session, agentRuns);
-    if (agentId !== "shell") agentCounts.set(agentId, (agentCounts.get(agentId) ?? 0) + 1);
-  }
-  const activeAgents = [...agentCounts].map(([id, count]) => `${botDisplayName(id)} ${count}`);
 
   return (
     <div
@@ -305,19 +293,12 @@ function AppShell() {
             onPendingUrlConsumed={() => setPendingAssistUrl(null)}
           />
         </div>
-        <div className="vs-statusBar" role="status">
-          <button type="button" onClick={() => setView("agents")} title={activeAgents.join(" · ") || "No active agent sessions"}>
-            <span className="vs-statusLabel">Agents</span>
-            <span>{activeAgents.length ? activeAgents.join("  ·  ") : "None active"}</span>
-          </button>
-          <span title="Online terminal sessions">Sessions <b>{liveSessions.length}</b></span>
-          <span title="Recorded agent launches">Launches <b>{agentRuns.length}</b></span>
-          <span className="vs-statusUsage" title="Token and plan quotas are reported by each agent provider, not exposed by the connected terminal CLIs.">Usage <b>—</b></span>
-        </div>
       </main>
+      <StatusBar />
       <NewSpaceModal open={newSpaceOpen} onClose={() => setNewSpaceOpen(false)} />
       <SpaceSettingsModal workspaceId={spaceSettingsId} onClose={() => setSpaceSettingsId(null)} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <HelpGuide open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }
