@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import { useSpace, useView } from "@/features/workspace/SpaceContext";
-import { collectSessionIds } from "@/features/workspace/layout";
+import { collectSessionIds, findPaneForSession } from "@/features/workspace/layout";
 import { useFolderBrowse } from "@/features/workspace/useFolderBrowse";
 import {
   SPACE_COLOR_HEX,
@@ -16,6 +16,7 @@ import { savedLayoutPaneCount } from "@/features/workspace/savedLayouts";
 import { Pin01, Pin02 } from "@untitledui/icons";
 import logoUrl from "@/assets/brand/voxiva-space-mark.png";
 import { formatHotkey, loadHotkeys } from "@/features/hotkeys/bindings";
+import { getCurrentWindow } from "@/platform/desktop";
 
 function orderWorkspaces<T extends { pinned?: boolean }>(list: T[]) {
   return [...list].sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)));
@@ -134,6 +135,22 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
       document.removeEventListener("keydown", onKey);
     };
   }, [notifyOpen, plusOpen]);
+
+  useEffect(() => {
+    const onNotificationClick = (event: Event) => {
+      const { workspaceId, sessionId } = (event as CustomEvent<{ workspaceId?: string; sessionId?: string }>).detail ?? {};
+      if (!workspaceId || !sessionId) return;
+      const workspace = workspaces.find((item) => item.id === workspaceId);
+      const paneId = workspace && findPaneForSession(workspace.layout, sessionId);
+      if (paneId) {
+        void getCurrentWindow().unminimize().finally(() => {
+          focusAttention({ workspaceId, paneId, sessionId });
+        });
+      }
+    };
+    window.addEventListener("voxiva-open-attention", onNotificationClick);
+    return () => window.removeEventListener("voxiva-open-attention", onNotificationClick);
+  }, [focusAttention, workspaces]);
 
   type PlusItem = {
     id: string;
@@ -419,6 +436,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
           <div className="vs-toolGroup" aria-label={t("shell.tools.app")}>
             <button
               type="button"
+              data-view-trigger="settings"
               className={`vs-iconBtn${view === "settings" ? " is-active" : ""}`}
               title={t("nav.settings")}
               aria-label={t("nav.settings")}

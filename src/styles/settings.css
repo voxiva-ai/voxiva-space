@@ -45,6 +45,31 @@
   text-transform: uppercase;
 }
 
+.vs-settingsNavGroup + .vs-settingsNavGroup {
+  margin-top: 0.85rem;
+}
+
+.vs-settingsBack {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  margin: -0.25rem 0 1rem;
+  padding: 0.55rem 0.5rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--vs-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vs-settingsBack:hover {
+  background: var(--vs-bg-hover);
+  color: var(--vs-text);
+}
+
 .vs-settingsNavItem {
   width: 100%;
   padding: 0.68rem 0.8rem;
@@ -76,7 +101,8 @@
 }
 
 .vs-settingsPageHead {
-  max-width: 50rem;
+  max-width: 58rem;
+  width: 100%;
   margin: 0 auto 1.25rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid var(--vs-border);
@@ -90,12 +116,42 @@
 }
 
 .vs-settingsPanelBody {
-  max-width: 44rem;
+  max-width: 58rem;
   width: 100%;
+  margin-inline: auto;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 0;
+}
+
+.vs-settingsGeneral .vs-settingsBlock {
+  margin-top: 0.4rem !important;
+  padding: 1rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--vs-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.vs-settingsGeneral .vs-langRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.vs-settingsGeneral .vs-langChip {
+  min-width: 8.5rem;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 2rem 0.6rem 0.75rem;
+  border-radius: 8px;
+}
+
+.vs-settingsGeneral .vs-langChip small {
+  margin-left: auto;
 }
 
 .vs-settingsPanelBody h2 {

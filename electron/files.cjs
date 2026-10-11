@@ -5,6 +5,7 @@ const { randomUUID } = require("node:crypto");
 
 const MAX_TEXT = 2 * 1024 * 1024;
 const MAX_BINARY = 12 * 1024 * 1024;
+const MAX_DISK_SCAN_ENTRIES = 50_000;
 const hidden = new Set([".git", "node_modules", "target", "dist"]);
 const mime = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", pdf: "application/pdf",
@@ -30,6 +31,26 @@ async function workspacePath(args, creating = false) {
   const canonical = await fs.realpath(target);
   if (!inside(root, canonical)) throw new Error("Path escapes workspace through a link");
   return { root, target: canonical };
+}
+
+async function workspaceDiskUsage(args) {
+  const root = await fs.realpath(args.path);
+  if (!(await fs.stat(root)).isDirectory()) throw new Error("Workspace path is not a directory");
+  const pending = [root];
+  let bytes = 0;
+  let scannedEntries = 0;
+  while (pending.length) {
+    const directory = pending.pop();
+    for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+      if (scannedEntries >= MAX_DISK_SCAN_ENTRIES) return { path: root, bytes, scannedEntries, complete: false };
+      scannedEntries++;
+      if (hidden.has(entry.name) || entry.isSymbolicLink()) continue;
+      const target = path.join(directory, entry.name);
+      if (entry.isDirectory()) pending.push(target);
+      else if (entry.isFile()) bytes += (await fs.stat(target)).size;
+    }
+  }
+  return { path: root, bytes, scannedEntries, complete: true };
 }
 
 function fileInfo(root, target, size) {
@@ -127,4 +148,4 @@ async function findComponentFiles(args) {
   return matches.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path)).slice(0, 12).map((item) => item.path);
 }
 
-module.exports = { files, workspacePath, findComponentFiles };
+module.exports = { files, workspacePath, workspaceDiskUsage, findComponentFiles };

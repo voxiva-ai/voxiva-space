@@ -74,8 +74,7 @@ function sleep(ms) {
 /**
  * Kill orphans from a crashed dev session, then wait until the port is free.
  *
- * `killApp` stays off for the Vite side: Tauri starts `beforeDevCommand` alongside
- * `cargo run`, so once Rust is warm the app boots first and would kill itself here.
+ * `killApp` stays off for the Vite side so a running Electron app is not stopped.
  */
 export async function ensurePortFree(
   port,

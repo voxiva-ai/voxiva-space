@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
-const { files, findComponentFiles } = require("./files.cjs");
+const { files, findComponentFiles, workspaceDiskUsage } = require("./files.cjs");
 
 test("workspace files stay within their root", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "voxiva-files-test-"));
@@ -24,4 +24,23 @@ test("component search finds matching files without scanning ignored directories
     await fs.writeFile(path.join(root, "node_modules", "Wrong.tsx"), "Card card-shell Hello");
     assert.deepEqual(await findComponentFiles({ workspaceRoot: root, component: "Card", classes: ["card-shell"], text: "Hello" }), ["Card.tsx"]);
   } finally { await fs.rm(root, { recursive: true, force: true }); }
+});
+
+test("workspace disk usage counts files and skips generated folders and symlinks", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "voxiva-disk-test-"));
+  const outside = await fs.mkdtemp(path.join(os.tmpdir(), "voxiva-disk-outside-"));
+  try {
+    await fs.writeFile(path.join(root, "source.txt"), "12345");
+    await fs.mkdir(path.join(root, "node_modules"));
+    await fs.writeFile(path.join(root, "node_modules", "large.bin"), "ignored");
+    await fs.writeFile(path.join(outside, "secret.txt"), "outside");
+    await fs.symlink(outside, path.join(root, "linked"), "junction");
+    const result = await workspaceDiskUsage({ path: root });
+    assert.equal(result.bytes, 5);
+    assert.equal(result.complete, true);
+    await assert.rejects(workspaceDiskUsage({ path: path.join(root, "source.txt") }));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(outside, { recursive: true, force: true });
+  }
 });

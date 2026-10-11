@@ -689,7 +689,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
     persisted?.locale === "en" || persisted?.locale === "ru" ? persisted.locale : "en",
   );
   const [theme, setThemeState] = useState<ThemeId>(() => resolveThemeId(
-    !persisted?.themeDefaultMigrated && persisted?.theme === "voxiva" ? "voxiva-light" : persisted?.theme,
+    persisted?.theme === "voxiva" || persisted?.theme === "voxiva-light" ? "standard-light" : persisted?.theme,
   ));
   const setTheme = useCallback((next: ThemeId) => setThemeState(resolveThemeId(next)), []);
   const t = useCallback((key: MsgKey) => translate(locale, key), [locale]);

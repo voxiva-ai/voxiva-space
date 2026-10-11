@@ -62,7 +62,7 @@ export function notifyAttention(opts: AttentionNotifyOpts) {
         sessionId,
       });
       if (title) {
-        showAttentionToast(title, reason || "Needs attention");
+        if (workspaceId) showAttentionToast(title, reason || "Needs attention", { workspaceId, sessionId });
       }
     }
   }
@@ -85,7 +85,7 @@ export function notifySessionExit(opts: {
 
   playNotifySound("exit", { workspaceId, activeWorkspaceId, sessionId });
   if (title && loadAttentionPrefs().notifyEnabled) {
-    showAttentionToast(title, "Session finished");
+    if (workspaceId) showAttentionToast(title, "Session finished", { workspaceId, sessionId });
   }
 }
 

@@ -945,7 +945,7 @@ export function NativeBrowser({
         </div>
       )}
 
-      {/* Host is always mounted so WebView2 bounds exist before the first create. */}
+      {/* Host stays mounted so Chromium bounds exist before the first create. */}
       <div className="vs-browserViewport">
         <div
           className="vs-browserFrameWrap"

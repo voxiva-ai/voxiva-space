@@ -70,6 +70,21 @@ function parsePorts(text) {
   return [...ports.values()].sort((a, b) => a.port - b.port);
 }
 
+function formatResourceMetrics(metrics, totalBytes, freeBytes) {
+  const processes = metrics.map((metric) => ({
+    pid: metric.pid,
+    name: metric.type === "Tab" ? "Renderer" : metric.type,
+    cpu: Math.max(0, Math.round(metric.cpu.percentCPUUsage * 10) / 10),
+    memoryMb: Math.round(metric.memory.workingSetSize / 1024),
+  })).sort((a, b) => b.memoryMb - a.memoryMb);
+  return {
+    memoryMb: processes.reduce((sum, metric) => sum + metric.memoryMb, 0),
+    processes,
+    systemMemoryMb: Math.round(totalBytes / 1024 / 1024),
+    freeSystemMemoryMb: Math.round(freeBytes / 1024 / 1024),
+  };
+}
+
 async function readPorts() {
   if (process.platform !== "win32") return null;
   try {
@@ -92,4 +107,4 @@ function createAwake(blocker) {
   };
 }
 
-module.exports = { readLimits, readPorts, parseLimits, parsePorts, createAwake };
+module.exports = { readLimits, readPorts, parseLimits, parsePorts, formatResourceMetrics, createAwake };

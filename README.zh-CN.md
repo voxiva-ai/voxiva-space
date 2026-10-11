@@ -40,7 +40,7 @@ irm https://raw.githubusercontent.com/voxiva-ai/voxiva-space/main/scripts/tester
 
 如果希望先审阅脚本，请打开 [`scripts/tester-install.ps1`](scripts/tester-install.ps1)，下载后在本机运行。
 
-要求：Windows 10/11 与 Microsoft Edge WebView2。卸载路径：**设置 → 应用 → 已安装的应用 → Voxiva Space → 卸载**。
+要求：Windows 10/11。Electron 已内置 Chromium，无需单独安装 WebView2。卸载路径：**设置 → 应用 → 已安装的应用 → Voxiva Space → 卸载**。
 
 ## 快速开始
 
@@ -53,7 +53,7 @@ Voxiva Space 不会替你安装第三方 CLI 或登录。请从各工具的官�
 
 ## 从源码构建
 
-需要 Node.js 20+、Rust stable（MSVC）、Visual Studio Build Tools 与 WebView2。
+需要 Node.js 20+ 和 Rust stable。Windows 构建还需要 MSVC 与 Visual Studio Build Tools。
 
 ```powershell
 git clone https://github.com/voxiva-ai/voxiva-space.git
@@ -66,8 +66,8 @@ npm run dev
 
 ```powershell
 npm run build
-cargo test --manifest-path src-tauri/Cargo.toml
-npm run tauri:build
+npm run electron:check
+npm run electron:dist
 ```
 
 贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。

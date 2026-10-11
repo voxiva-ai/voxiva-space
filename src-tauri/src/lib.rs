@@ -50,7 +50,6 @@ struct AppMetadata {
 
 const MAX_TEXT_FILE_SIZE: u64 = 2 * 1024 * 1024;
 const HIDDEN_WORKSPACE_NAMES: [&str; 4] = [".git", "node_modules", "target", "dist"];
-
 #[derive(Serialize)]
 struct WorkspaceEntry {
     name: String,

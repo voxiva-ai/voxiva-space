@@ -62,7 +62,7 @@ export function themeIdForAppearance(
   return (
     family.byAppearance.dark ||
     family.byAppearance.light ||
-    ("voxiva" as ThemeId)
+    ("standard-light" as ThemeId)
   );
 }
 
@@ -75,7 +75,7 @@ export function previewForFamily(
 
 /** Primary swatch for a family card (independent of the globally active theme). */
 export function defaultAppearance(family: ThemeFamily): ThemeAppearance {
-  if (family.familyId === "voxiva" && family.appearances.includes("light")) return "light";
+  if (family.familyId === "standard" && family.appearances.includes("light")) return "light";
   if (family.appearances.includes("dark")) return "dark";
   return family.appearances[0] || "dark";
 }

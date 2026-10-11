@@ -13,6 +13,14 @@
   grid-template-columns: var(--vs-sidebar-rail) minmax(0, 1fr);
 }
 
+.vs-root.is-settingsView {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.vs-root.is-settingsView > .vs-sidebar {
+  display: none;
+}
+
 .vs-sidebar,
 .vs-main,
 .vs-mainBody,

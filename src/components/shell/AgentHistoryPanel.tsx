@@ -247,7 +247,7 @@ export function AgentHistoryPanel({
     try {
       target.setPointerCapture(pointerId);
     } catch {
-      // WebView2 may reject capture.
+      // Chromium may reject capture.
     }
 
     const startX = event.clientX;

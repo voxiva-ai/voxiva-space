@@ -5,7 +5,7 @@
 <h1 align="center">Voxiva Space</h1>
 
 <p align="center">
-  A Windows-first workspace for terminals, coding agents, files, and browser previews.
+  A desktop workspace for terminals, coding agents, files, and Chromium browser previews.
 </p>
 
 <p align="center">
@@ -17,7 +17,7 @@
 <p align="center">
   <a href="https://github.com/voxiva-ai/voxiva-space/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/voxiva-ai/voxiva-space/ci.yml?branch=main&style=flat-square&label=build&color=2aa8ff" /></a>
   <a href="https://github.com/voxiva-ai/voxiva-space/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/voxiva-ai/voxiva-space?include_prereleases&sort=semver&style=flat-square&color=ff9c1a" /></a>
-  <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-2446e8?style=flat-square" />
+  <img alt="Windows and macOS" src="https://img.shields.io/badge/Windows%20%7C%20macOS-supported-2446e8?style=flat-square" />
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-39d9ff?style=flat-square" /></a>
 </p>
 
@@ -53,7 +53,7 @@ irm https://raw.githubusercontent.com/voxiva-ai/voxiva-space/main/scripts/tester
 
 If you prefer to inspect scripts before running them, open [`scripts/tester-install.ps1`](scripts/tester-install.ps1), download it, and run it locally.
 
-Requirements: Windows 10/11 and Microsoft Edge WebView2. The installer can install for the current user without administrator access; managed PCs may still ask for elevation.
+Requirements: Windows 10/11 or macOS 13+. The installer uses the Chromium runtime bundled with Electron; it does not require WebView2. On Windows, installation is per-user; managed PCs may still ask for elevation.
 
 ### Uninstall
 
@@ -94,7 +94,7 @@ Prerequisites:
 - Node.js 20+
 - Rust stable with the MSVC toolchain
 - Visual Studio Build Tools with Desktop development with C++
-- Microsoft Edge WebView2
+- On macOS: Xcode Command Line Tools
 
 ```powershell
 git clone https://github.com/voxiva-ai/voxiva-space.git
@@ -103,22 +103,22 @@ npm ci
 npm run dev
 ```
 
-Checks and release bundle:
+Checks and Electron release bundle:
 
 ```powershell
-npm run build
-cargo test --manifest-path src-tauri/Cargo.toml
-npm run tauri:build
+npm run electron:check
+npm run electron:dist
 ```
 
-The Windows installer is written to `src-tauri/target/release/bundle/nsis/`.
+Installers are written to `release/`. `npm run dev` builds the React UI and Rust PTY backend, then launches the Electron app.
 
 ## Project map
 
 | Path | Purpose |
 | --- | --- |
 | `src/` | React UI, workspaces, agents, terminal, browser, themes |
-| `src-tauri/` | Tauri shell, ConPTY sessions, native browser and filesystem commands |
+| `electron/` | Electron main process, secure preload bridge, Chromium browser views, updates, and app status |
+| `native/` | Rust PTY and local-system backend used by Electron |
 | `scripts/` | Development, release, theme, and installer helpers |
 | `.github/workflows/` | CI and tagged release automation |
 

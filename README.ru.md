@@ -40,7 +40,7 @@ irm https://raw.githubusercontent.com/voxiva-ai/voxiva-space/main/scripts/tester
 
 Если хочешь сначала проверить скрипт, открой [`scripts/tester-install.ps1`](scripts/tester-install.ps1), скачай его и запусти локально.
 
-Нужны Windows 10/11 и Microsoft Edge WebView2. Для удаления: **Параметры → Приложения → Установленные приложения → Voxiva Space → Удалить**.
+Для работы требуется Windows 10/11; Chromium входит в Electron, WebView2 отдельно не нужен. Для удаления: **Параметры → Приложения → Установленные приложения → Voxiva Space → Удалить**.
 
 ## Быстрый старт
 
@@ -70,7 +70,7 @@ Voxiva Space не устанавливает сторонние CLI и не вы
 
 ## Сборка из исходников
 
-Нужны Node.js 20+, Rust stable с MSVC, Visual Studio Build Tools и WebView2.
+Нужны Node.js 20+ и Rust stable. Для Windows также нужны MSVC и Visual Studio Build Tools.
 
 ```powershell
 git clone https://github.com/voxiva-ai/voxiva-space.git
@@ -83,8 +83,8 @@ npm run dev
 
 ```powershell
 npm run build
-cargo test --manifest-path src-tauri/Cargo.toml
-npm run tauri:build
+npm run electron:check
+npm run electron:dist
 ```
 
 Подробнее о работе с проектом: [CONTRIBUTING.md](CONTRIBUTING.md).

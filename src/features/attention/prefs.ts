@@ -144,18 +144,30 @@ export function outputNeedsAttention(data: string): boolean {
   return false;
 }
 
-export function showAttentionToast(title: string, body: string) {
+export function showAttentionToast(
+  title: string,
+  body: string,
+  target?: { workspaceId: string; sessionId: string },
+) {
   const prefs = loadAttentionPrefs();
   if (!prefs.notifyEnabled) return;
   try {
     if (typeof Notification === "undefined") return;
+    const show = () => {
+      const notification = new Notification(title, { body, silent: true });
+      if (target) {
+        notification.onclick = () => {
+          window.dispatchEvent(new CustomEvent("voxiva-open-attention", { detail: target }));
+        };
+      }
+    };
     if (Notification.permission === "granted") {
-      new Notification(title, { body, silent: true });
+      show();
       return;
     }
     if (Notification.permission !== "denied") {
       void Notification.requestPermission().then((perm) => {
-        if (perm === "granted") new Notification(title, { body, silent: true });
+        if (perm === "granted") show();
       });
     }
   } catch {

@@ -4,20 +4,20 @@ Thanks for helping improve Voxiva Space. Keep changes focused, explain the user-
 
 ## Local setup
 
-Requirements: Windows 10/11, Node.js 20+, Rust stable with MSVC, Visual Studio Build Tools, and WebView2.
+Requirements: Windows 10/11 or macOS 13+, Node.js 20+, and Rust stable. Windows builds also need MSVC Build Tools; macOS builds need Xcode Command Line Tools.
 
 ```powershell
 npm ci
 npm run dev
 ```
 
-`npm run dev` opens the Tauri desktop window. The Vite URL alone cannot exercise native terminal, filesystem, or browser commands.
+`npm run dev` builds the Rust PTY sidecar and opens the Electron desktop app. The Vite URL alone cannot exercise native terminal, filesystem, or Chromium browser commands.
 
 ## Before opening a pull request
 
 ```powershell
 npm run build
-cargo test --manifest-path src-tauri/Cargo.toml
+npm run electron:check
 ```
 
 For terminal or layout changes, also verify at least one normal shell and one full-screen agent TUI while resizing and splitting panes.

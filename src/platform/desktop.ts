@@ -1,28 +1,40 @@
-import { invoke as tauriInvoke, convertFileSrc as tauriConvertFileSrc } from "@tauri-apps/api/core";
-import { listen as tauriListen } from "@tauri-apps/api/event";
-import { getCurrentWindow as tauriWindow } from "@tauri-apps/api/window";
-
 type ElectronBridge = {
   invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
   listen: (event: string, callback: (payload: unknown) => void) => () => void;
   getPathForFile: (file: File) => string;
 };
 
+type DesktopWindow = {
+  show: () => Promise<void>;
+  unminimize: () => Promise<void>;
+  setFocus: () => Promise<void>;
+  minimize: () => Promise<void>;
+  toggleMaximize: () => Promise<void>;
+  isMaximized: () => Promise<boolean>;
+  close: () => Promise<void>;
+  startDragging: () => Promise<void>;
+  isFullscreen: () => Promise<boolean>;
+  setFullscreen: (value: boolean) => Promise<void>;
+  setTitle: (value: string) => Promise<void>;
+  clearEffects: () => Promise<void>;
+  scaleFactor: () => Promise<number>;
+  onResized: (callback: () => void) => Promise<() => void>;
+};
+
 declare global { interface Window { voxiva?: ElectronBridge } }
 
 export function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  return window.voxiva ? window.voxiva.invoke(command, args) as Promise<T> : tauriInvoke<T>(command, args);
+  if (!window.voxiva) return Promise.reject(new Error("Voxiva Space desktop bridge is unavailable"));
+  return window.voxiva.invoke(command, args) as Promise<T>;
 }
 
 export function listen<T>(event: string, callback: (event: { payload: T }) => void): Promise<() => void> {
-  return window.voxiva
-    ? Promise.resolve(window.voxiva.listen(event, (payload) => callback({ payload: payload as T })))
-    : tauriListen<T>(event, callback);
+  if (!window.voxiva) return Promise.resolve(() => undefined);
+  return Promise.resolve(window.voxiva.listen(event, (payload) => callback({ payload: payload as T })));
 }
 
-export function getCurrentWindow(): ReturnType<typeof tauriWindow> {
-  if (!window.voxiva) return tauriWindow();
-  const call = (method: string, ...args: unknown[]) => window.voxiva!.invoke(`window_${method}`, { args });
+export function getCurrentWindow(): DesktopWindow {
+  const call = <T,>(method: string, ...args: unknown[]) => invoke<T>(`window_${method}`, { args });
   return {
     show: () => call("show"),
     unminimize: () => call("unminimize"),
@@ -33,17 +45,16 @@ export function getCurrentWindow(): ReturnType<typeof tauriWindow> {
     close: () => call("close"),
     startDragging: () => call("start_dragging"),
     isFullscreen: () => call("is_fullscreen"),
-    setFullscreen: (value: boolean) => call("set_fullscreen", value),
-    setTitle: (value: string) => call("set_title", value),
-    clearEffects: () => Promise.resolve(),
-    scaleFactor: () => Promise.resolve(window.devicePixelRatio || 1),
-    onResized: (callback: () => void) => listen("window://resized", callback),
-  } as ReturnType<typeof tauriWindow>;
+    setFullscreen: (value) => call("set_fullscreen", value),
+    setTitle: (value) => call("set_title", value),
+    clearEffects: async () => undefined,
+    scaleFactor: async () => window.devicePixelRatio || 1,
+    onResized: (callback) => listen("window://resized", callback),
+  };
 }
 
 export function convertFileSrc(path: string): string {
-  if (window.voxiva) return `voxiva-media://preview/${encodeURIComponent(path)}`;
-  return tauriConvertFileSrc(path);
+  return window.voxiva ? `voxiva-media://preview/${encodeURIComponent(path)}` : "";
 }
 
 export function getNativeFilePath(file: File): string {

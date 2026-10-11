@@ -5,9 +5,9 @@ const http = require("node:http");
 const os = require("node:os");
 const { spawn } = require("node:child_process");
 const { app, BrowserWindow, WebContentsView, ipcMain, Menu, dialog, shell, protocol, net, session, powerSaveBlocker } = require("electron");
-const { readLimits, readPorts, createAwake } = require("./status.cjs");
+const { readLimits, readPorts, formatResourceMetrics, createAwake } = require("./status.cjs");
 const { bounds } = require("./pilot-bounds.cjs");
-const { files, findComponentFiles } = require("./files.cjs");
+const { files, findComponentFiles, workspaceDiskUsage } = require("./files.cjs");
 const { captureBeforeHide } = require("./view-visibility.cjs");
 const vscode = require("./vscode.cjs");
 const vault = require("./vault.cjs");
@@ -151,7 +151,10 @@ app.whenReady().then(() => {
   ipcMain.handle("voxiva:invoke", async (eventSource, command, args = {}) => {
     if (eventSource.sender !== window.webContents || typeof command !== "string" || !args || typeof args !== "object") throw new Error("Invalid app request");
     if (terminalCommands.has(command)) return native(command, args);
-    if (command === "status_snapshot") return { limits: await readLimits(), memoryMb: Math.round(app.getAppMetrics().reduce((sum, metric) => sum + metric.memory.workingSetSize, 0) / 1024) };
+    if (command === "status_snapshot") {
+      return { limits: await readLimits(), ...formatResourceMetrics(app.getAppMetrics(), os.totalmem(), os.freemem()) };
+    }
+    if (command === "workspace_disk_usage") return workspaceDiskUsage(args);
     if (command === "status_ports") return readPorts();
     if (command === "status_awake") return awake.set(args.mode, args.hasAgents);
     if (browserCommands.has(command)) return browser(command, args);
@@ -223,7 +226,8 @@ app.whenReady().then(() => {
           }
           const bar = document.querySelector('.vs-statusBar');
           if (!bar || Math.abs(bar.getBoundingClientRect().bottom - innerHeight) > 1) throw new Error('Status bar is not at the bottom');
-          for (const id of ['limits', 'awake', 'ports']) {
+          if (!document.querySelector('.vs-statusMemory') || !document.querySelector('.vs-statusAgents')) throw new Error('Status actions are missing from the status bar');
+          for (const id of ['awake', 'ports', 'resources']) {
             document.querySelector('button[popovertarget="status-' + id + '"]').click();
             const popup = document.getElementById('status-' + id);
             if (!popup.matches(':popover-open')) throw new Error('Status popup did not open: ' + id);
@@ -231,9 +235,46 @@ app.whenReady().then(() => {
             if (rect.left < 0 || rect.right > innerWidth || rect.bottom > bar.getBoundingClientRect().top) throw new Error('Status popup out of bounds');
             popup.hidePopover();
           }
+          const settingsButton = document.querySelector('[data-view-trigger="settings"]');
+          if (!settingsButton) throw new Error('Settings button missing');
+          settingsButton.click();
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          if (!document.querySelector('.vs-root.is-settingsView') || getComputedStyle(document.querySelector('.vs-sidebar')).display !== 'none') throw new Error('Settings did not open as a full-screen view');
+          const settings = await new Promise((resolve, reject) => { const start = Date.now(); const poll = () => {
+            const page = document.querySelector('.vs-settingsLayout');
+            const back = document.querySelector('.vs-settingsBack');
+            const rect = page?.getBoundingClientRect();
+            if (page && back && rect?.width > 0 && rect.height > 0 && getComputedStyle(page).visibility !== 'hidden') resolve({ width: rect.width, height: rect.height });
+            else if (Date.now() - start > 5000) reject(new Error('Settings page is not visible: ' + JSON.stringify({ root: document.querySelector('.vs-root')?.className, page: Boolean(page), rect: rect && { width: rect.width, height: rect.height } })));
+            else setTimeout(poll, 25);
+          }; poll(); });
+          if (settings.width < 500 || settings.height < 300) throw new Error('Settings page did not fill the window: ' + JSON.stringify(settings));
+          const sections = [...document.querySelectorAll('.vs-settingsNavItem')];
+          if (sections.length !== 8) throw new Error('Expected 8 settings sections, found ' + sections.length);
+          for (const section of sections) {
+            section.click();
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            if (!section.classList.contains('is-active') || !document.querySelector('.vs-settingsPanel h1')?.textContent.trim() || !document.querySelector('.vs-settingsPanelBody')) throw new Error('Settings section failed to render: ' + section.textContent.trim());
+          }
+          document.querySelector('.vs-settingsBack').click();
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          if (document.querySelector('.vs-root.is-settingsView')) throw new Error('Settings did not return to the workspace');
           return true;
         })()`);
         if (!status) throw new Error("Status bar smoke failed");
+        await window.webContents.executeJavaScript("document.querySelector('button[popovertarget=\"status-resources\"]').click(); new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+        const resourceOpen = await window.webContents.executeJavaScript("document.getElementById('status-resources').matches(':popover-open')");
+        if (!resourceOpen) throw new Error("Resource manager did not stay open for capture");
+        const resourcePreview = path.join(os.tmpdir(), "voxiva-resource-smoke.png");
+        await fs.writeFile(resourcePreview, (await window.webContents.capturePage()).toPNG());
+        await window.webContents.executeJavaScript("document.getElementById('status-resources').hidePopover(); new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+        console.log(`Resource manager preview: ${resourcePreview}`);
+        await window.webContents.executeJavaScript(`document.querySelector('[data-view-trigger="settings"]').click()`);
+        const settingsFrame = await window.webContents.executeJavaScript("new Promise((resolve,reject)=>{const start=Date.now();const poll=()=>{const page=document.querySelector('.vs-settingsLayout');const r=page?.getBoundingClientRect();const active=document.querySelector('.vs-root.is-settingsView');const button=document.querySelector('[data-view-trigger=\\\"settings\\\"]');if(active&&page&&r?.width>0&&r.height>0&&button?.getAttribute('aria-pressed')==='true')requestAnimationFrame(()=>requestAnimationFrame(()=>resolve({width:r.width,height:r.height})));else if(Date.now()-start>5000)reject(new Error('Settings is not active/visible: '+JSON.stringify({active:!!active,rect:r&&[r.width,r.height],pressed:button?.getAttribute('aria-pressed')})));else setTimeout(poll,25)};poll()})");
+        if (settingsFrame.width < 500 || settingsFrame.height < 300) throw new Error(`Settings frame is too small: ${JSON.stringify(settingsFrame)}`);
+        const settingsPreview = path.join(os.tmpdir(), "voxiva-settings-smoke.png");
+        await fs.writeFile(settingsPreview, (await window.webContents.capturePage()).toPNG());
+        console.log(`Settings preview: ${settingsPreview}`);
         window.setSize(760, 600);
         const fits = await window.webContents.executeJavaScript(`new Promise(resolve => requestAnimationFrame(() => {
           const bar = document.querySelector('.vs-statusBar');
@@ -241,11 +282,9 @@ app.whenReady().then(() => {
         }))`);
         if (!fits) throw new Error("Status bar overflows at minimum window width");
         window.setSize(1240, 780);
-        await window.webContents.executeJavaScript("document.getElementById('status-limits').showPopover()");
         const statusPreview = path.join(os.tmpdir(), "voxiva-status-smoke.png");
         await fs.writeFile(statusPreview, (await window.webContents.capturePage()).toPNG());
         console.log(`Status bar preview: ${statusPreview}`);
-        await window.webContents.executeJavaScript("document.getElementById('status-limits').hidePopover()");
         const created = await native("create_terminal_session", { request: { cwd: result.cwd, shell: null, title: "Smoke", cols: 80, rows: 24 } });
         await native("kill_terminal_session", { request: { id: created.id } });
         const local = http.createServer((_request, response) => { response.setHeader("Content-Type", "text/html"); response.end("<!doctype html><title>Inspector smoke</title><button>Test</button>"); });

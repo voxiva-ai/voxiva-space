@@ -1,5 +1,5 @@
 /**
- * Terminal feature: PTY + xterm UI + Tauri invoke wrappers.
+ * Terminal feature: Rust PTY + xterm UI + Electron IPC.
  */
 export * from "./api";
 export * from "./types";

@@ -1,6 +1,6 @@
 #Requires -Version 5.1
 <#
-  Copies the newest NSIS setup.exe from src-tauri/target/release/bundle/nsis
+  Copies the newest Electron NSIS setup.exe from release/
   to Voxiva Web public/downloads as voxiva-space-windows-setup.exe.
 
   Then set on the server (e.g. Vercel):
@@ -10,7 +10,7 @@
 #>
 $ErrorActionPreference = "Stop"
 $spaceRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$nsisDir = Join-Path $spaceRoot "src-tauri\target\release\bundle\nsis"
+$nsisDir = Join-Path $spaceRoot "release"
 $destDir = Join-Path $spaceRoot "..\Voxiva Web\public\downloads"
 $destFile = Join-Path $destDir "voxiva-space-windows-setup.exe"
 

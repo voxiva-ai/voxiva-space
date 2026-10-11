@@ -212,7 +212,7 @@ export async function payloadFromClipboardSnapshot(
 
   if (snap.text) return snap.text;
 
-  // Fallback when paste event had no items (some WebView2 builds).
+  // Fallback when paste event had no items.
   try {
     const text = await navigator.clipboard?.readText?.();
     if (text) return text;

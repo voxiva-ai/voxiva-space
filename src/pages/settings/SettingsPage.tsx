@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Check } from "@untitledui/icons";
-import { useSpace } from "@/features/workspace/SpaceContext";
+import { useSpace, useView } from "@/features/workspace/SpaceContext";
 import type { Locale } from "@/i18n";
 import {
   appearanceForFamilyCard,
@@ -92,6 +92,7 @@ export function SettingsPage() {
     autoResumeAgents,
     setAutoResumeAgents,
   } = useSpace();
+  const { setView } = useView();
   const [hotkeys, setHotkeys] = useState<HotkeyMap>(() => loadHotkeys());
   const [listening, setListening] = useState<HotkeyAction | null>(null);
   const [section, setSection] = useState<SectionId>("general");
@@ -268,6 +269,11 @@ export function SettingsPage() {
     { id: "mobile", title: t("settings.mobile") },
     { id: "about", title: t("settings.about") },
   ];
+  const navGroups = [
+    { title: t("settings.groupInterface"), items: nav.slice(0, 4) },
+    { title: t("settings.groupWorkspace"), items: nav.slice(4, 7) },
+    { title: t("settings.groupApp"), items: nav.slice(7) },
+  ];
 
   const presets: Array<{ id: SoundPreset; label: string }> = [
     { id: "bell", label: t("settings.soundBell") },
@@ -279,16 +285,23 @@ export function SettingsPage() {
   return (
     <div className="vs-settingsLayout">
       <aside className="vs-settingsNav" aria-label={t("settings.title")}>
-        <div className="vs-settingsNavTitle">{t("settings.title")}</div>
-        {nav.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={`vs-settingsNavItem${section === item.id ? " is-active" : ""}`}
-            onClick={() => setSection(item.id)}
-          >
-            {item.title}
-          </button>
+        <button type="button" className="vs-settingsBack" onClick={() => setView("space")}>
+          <span aria-hidden="true">←</span>{t("settings.backToApp")}
+        </button>
+        {navGroups.map((group) => (
+          <div className="vs-settingsNavGroup" key={group.title}>
+            <div className="vs-settingsNavTitle">{group.title}</div>
+            {group.items.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`vs-settingsNavItem${section === item.id ? " is-active" : ""}`}
+                onClick={() => setSection(item.id)}
+              >
+                {item.title}
+              </button>
+            ))}
+          </div>
         ))}
       </aside>
 
@@ -297,7 +310,7 @@ export function SettingsPage() {
           <h1>{nav.find((item) => item.id === section)?.title}</h1>
         </header>
         {section === "general" && (
-          <section className="vs-settingsPanelBody">
+          <section className="vs-settingsPanelBody vs-settingsGeneral">
             <h2>{t("settings.language")}</h2>
             <p className="vs-settingsHint">{t("settings.languageHint")}</p>
             <div className="vs-langRow">

@@ -41,30 +41,6 @@ const SettingsPage = lazy(() =>
 const ASSIST_KEY = "voxiva-space-assist-open";
 const SIDEBAR_KEY = "voxiva-space-sidebar-collapsed";
 
-function GlobalToast() {
-  const { error, setError, suggestedLocalUrl, dismissSuggestedLocalUrl, t } = useSpace();
-
-  // Localhost preview opens in assist browser silently — no toast.
-  useEffect(() => {
-    if (suggestedLocalUrl) dismissSuggestedLocalUrl();
-  }, [dismissSuggestedLocalUrl, suggestedLocalUrl]);
-
-  if (!error) return null;
-
-  return (
-    <div className="vs-globalToastStack" role="status">
-      {error ? (
-        <div className="vs-globalToast" role="alert">
-          <span>{error}</span>
-          <button type="button" className="vs-btn vs-btnGhost" onClick={() => setError("")}>
-            {t("toast.ok")}
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function AppShell() {
   const { setBrowserUrl, isVsCodeFocusActive } = useSpace();
   const { view } = useView();
@@ -157,6 +133,10 @@ function AppShell() {
   }, [sidebarCollapsed]);
 
   useEffect(() => {
+    if (view === "settings") setAssistOpen(false);
+  }, [view]);
+
+  useEffect(() => {
     const onNewSpace = () => setNewSpaceOpen(true);
     const onSpaceSettings = (event: Event) => {
       const id = (event as CustomEvent<{ workspaceId?: string }>).detail?.workspaceId;
@@ -227,7 +207,7 @@ function AppShell() {
 
   return (
     <div
-      className={`vs-root${assistOpen ? " is-assistOpen" : ""}${sidebarCollapsed ? " is-sidebarCollapsed" : ""}${view === "space" ? " is-spaceView" : ""}`}
+      className={`vs-root${assistOpen ? " is-assistOpen" : ""}${sidebarCollapsed ? " is-sidebarCollapsed" : ""}${view === "space" ? " is-spaceView" : ""}${view === "settings" ? " is-settingsView" : ""}`}
     >
       <Sidebar
         onNewSpace={() => setNewSpaceOpen(true)}
@@ -238,7 +218,6 @@ function AppShell() {
       />
       <main className="vs-main">
         <Topbar />
-        <GlobalToast />
         <ZoomHud />
         <div className="vs-mainBody">
           <div

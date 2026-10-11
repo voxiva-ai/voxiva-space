@@ -30,7 +30,6 @@ import {
   resolveFileDropZone,
   syncFileDropPaint,
 } from "@/features/workspace/paneDropOverlay";
-import { useWorkspaceFileDrop } from "@/features/workspace/useWorkspaceFileDrop";
 import {
   bracketedFilePayload,
   isPanePreviewMime,
@@ -1224,13 +1223,7 @@ function SplitView({ node, maximizedPaneId }: { node: SplitNode; maximizedPaneId
 }
 
 export function SplitGrid({ layout }: { layout: SplitNode }) {
-  const { activeWorkspace, handleFileDropAt, maximizedPaneId, t } = useSpace();
-  useWorkspaceFileDrop({
-    cwd: activeWorkspace?.cwd || "",
-    t,
-    handleFileDropAt,
-  });
-
+  const { maximizedPaneId } = useSpace();
   const maximizedLeaf = maximizedPaneId ? findLeaf(layout, maximizedPaneId) : null;
 
   return (

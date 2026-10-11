@@ -14,7 +14,7 @@ export type AgentDragPayload = {
   runId?: string;
 };
 
-/** WebView2 often hides custom MIME in dragover `types` — track session drag in-process. */
+/** Chromium can hide custom MIME in dragover `types` — track session drag in-process. */
 let agentDragActive = false;
 
 export function beginAgentDragSession() {

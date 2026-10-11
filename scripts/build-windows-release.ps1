@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
-  Build Voxiva Space for Windows (NSIS installer .exe) via Tauri.
-  Prerequisites: Node.js, Rust + MSVC (Visual Studio Build Tools), WebView2.
+  Build Voxiva Space for Windows (NSIS installer .exe) via Electron.
+  Prerequisites: Node.js, Rust + MSVC (Visual Studio Build Tools).
 
   Usage:
     cd "Voxiva Space"
@@ -17,10 +17,10 @@ if (Test-Path "package-lock.json") { npm ci } else { npm install }
 Write-Host "==> Frontend build" -ForegroundColor Cyan
 npm run build
 
-Write-Host "==> Tauri bundle (Windows)" -ForegroundColor Cyan
-npm run tauri:build
+Write-Host "==> Electron bundle (Windows)" -ForegroundColor Cyan
+npm run electron:dist
 
-$nsisDir = Join-Path $root "src-tauri\target\release\bundle\nsis"
+$nsisDir = Join-Path $root "release"
 if (-not (Test-Path $nsisDir)) {
   Write-Warning "NSIS output folder not found: $nsisDir"
   exit 1

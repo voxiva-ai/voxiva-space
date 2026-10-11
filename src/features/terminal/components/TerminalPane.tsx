@@ -11,7 +11,6 @@ import { resizeTerminalSession, writeTerminalSession } from "../api";
 import {
   payloadFromDataTransfer,
   rawPathsFromDataTransfer,
-  registerTerminalOsDropTarget,
 } from "../drop";
 import {
   bracketedPaste,
@@ -113,7 +112,7 @@ function readCellMetrics(terminal: XTerm): CellMetrics | null {
   )._core;
   const cell = core?._renderService?.dimensions?.css?.cell;
   if (!cell?.width || !cell?.height) return null;
-  // Fractional CSS cells are the WebView2 clip source — ceil so we under-claim cols/rows.
+  // Fractional CSS cells can clip the last row/column — ceil so we under-claim cols/rows.
   return {
     width: Math.max(1, Math.ceil(cell.width * 1000) / 1000),
     height: Math.max(1, Math.ceil(cell.height * 1000) / 1000),
@@ -130,7 +129,7 @@ function fitHostToPty(
   fitAddon: FitAddon,
 ): { cols: number; rows: number; pixelWidth: number; pixelHeight: number; fontChanged: boolean } | null {
   const rect = host.getBoundingClientRect();
-  // Floor avail — subpixel host sizes still clip the last row/col on WebView2.
+  // Floor available cells to avoid clipping at subpixel host sizes.
   const availW = Math.max(0, Math.floor(rect.width));
   const availH = Math.max(0, Math.floor(rect.height));
   if (availW < 8 || availH < 8) return null;
@@ -288,30 +287,6 @@ export function TerminalPane({
       if (chunk) term.write(chunk);
     });
   };
-
-  useEffect(() => {
-    if (!isAgentSession || session.status !== "online") return;
-    const shell = shellRef.current;
-    if (!shell) return;
-    const id = `${paneId}:${session.id}`;
-    return registerTerminalOsDropTarget({
-      id,
-      el: shell,
-      setHighlight: (on) => {
-        if (isAgentSession) {
-          if (on) shell.classList.add("is-dropChat");
-          else shell.classList.remove("is-dropChat");
-        } else {
-          setDropping(on);
-        }
-      },
-      onPaths: (paths) => {
-        const attachment = formatAgentAttachment(agentId, paths);
-        if (attachment) pasteInto(attachment);
-      },
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAgentSession, session.id, session.status, agentId, paneId]);
 
   useEffect(() => {
     writeFailNotified.current = false;

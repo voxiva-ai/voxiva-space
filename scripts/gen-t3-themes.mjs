@@ -265,40 +265,40 @@ function cleanFamilyLabel(name, id) {
 
 function buildCatalog(files) {
   const entries = [];
-  const voxivaTokens = {
+  const standardDarkTokens = {
     appearance: "dark",
-    bg: "#06080d",
-    bgRaised: "#0b1018",
-    bgHover: "#151c28",
-    surface: "#101823",
-    border: "rgba(214,226,246,0.12)",
-    borderStrong: "rgba(214,226,246,0.24)",
-    text: "#eef4ff",
-    muted: "#8f9bb0",
-    accent: "#62b0ff",
-    onAccent: "#04111f",
-    accent2: "#6ee7d8",
-    accentSoft: "rgba(98,176,255,0.16)",
-    attention: "#f0c66f",
-    attentionRing: "rgba(240,198,111,0.34)",
+    bg: "#111111",
+    bgRaised: "#191919",
+    bgHover: "#242424",
+    surface: "#191919",
+    border: "rgba(255,255,255,0.12)",
+    borderStrong: "rgba(255,255,255,0.22)",
+    text: "#f5f5f5",
+    muted: "#a1a1a1",
+    accent: "#d6d6d6",
+    onAccent: "#111111",
+    accent2: "#bdbdbd",
+    accentSoft: "rgba(255,255,255,0.12)",
+    attention: "#e7c982",
+    attentionRing: "rgba(231,201,130,0.28)",
     ok: "#48d597",
     danger: "#ff747f",
-    termBg: "#090d13",
-    termFg: "#e9eef8",
-    termCursor: "#62b0ff",
-    termSelection: "#62b0ff42",
-    termChrome: "#0b1018",
-    termChromeText: "#eef4ff",
-    termChromeMuted: "#8f9bb0",
-    preview: ["#06080d", "#101823", "#62b0ff", "#eef4ff"],
+    termBg: "#080808",
+    termFg: "#f0f0f0",
+    termCursor: "#f0f0f0",
+    termSelection: "rgba(255,255,255,0.22)",
+    termChrome: "#191919",
+    termChromeText: "#f5f5f5",
+    termChromeMuted: "#a1a1a1",
+    preview: ["#111111", "#191919", "#d6d6d6", "#f5f5f5"],
   };
   entries.push({
-    id: "voxiva",
-    familyId: "voxiva",
-    label: "Voxiva",
+    id: "standard-dark",
+    familyId: "standard",
+    label: "Standard",
     official: true,
     appearance: "dark",
-    tokens: voxivaTokens,
+    tokens: standardDarkTokens,
     ansi: {
       black: "#090d13",
       red: "#ff747f",
@@ -318,40 +318,40 @@ function buildCatalog(files) {
       brightWhite: "#ffffff",
     },
   });
-  const voxivaLightTokens = {
+  const standardLightTokens = {
     appearance: "light",
     bg: "#ffffff",
-    bgRaised: "#f7f9fc",
-    bgHover: "#e9eef4",
+    bgRaised: "#f7f7f7",
+    bgHover: "#eeeeee",
     surface: "#ffffff",
-    border: "rgba(35,50,72,0.12)",
-    borderStrong: "rgba(35,50,72,0.22)",
-    text: "#1d2735",
-    muted: "#667487",
-    accent: "#356bb3",
+    border: "rgba(0,0,0,0.12)",
+    borderStrong: "rgba(0,0,0,0.22)",
+    text: "#171717",
+    muted: "#686868",
+    accent: "#333333",
     onAccent: "#ffffff",
-    accent2: "#bd8a32",
-    accentSoft: "rgba(53,107,179,0.12)",
+    accent2: "#555555",
+    accentSoft: "rgba(0,0,0,0.08)",
     attention: "#906719",
     attentionRing: "rgba(144,103,25,0.2)",
     ok: "#257452",
     danger: "#b33b4a",
     termBg: "#ffffff",
-    termFg: "#1d2735",
-    termCursor: "#356bb3",
-    termSelection: "rgba(53,107,179,0.22)",
-    termChrome: "#f3f5f8",
-    termChromeText: "#263448",
-    termChromeMuted: "#667487",
-    preview: ["#ffffff", "#f7f9fc", "#356bb3", "#1d2735"],
+    termFg: "#171717",
+    termCursor: "#333333",
+    termSelection: "rgba(0,0,0,0.18)",
+    termChrome: "#f3f3f3",
+    termChromeText: "#171717",
+    termChromeMuted: "#686868",
+    preview: ["#ffffff", "#f7f7f7", "#333333", "#171717"],
   };
   entries.push({
-    id: "voxiva-light",
-    familyId: "voxiva",
-    label: "Voxiva",
+    id: "standard-light",
+    familyId: "standard",
+    label: "Standard",
     official: true,
     appearance: "light",
-    tokens: voxivaLightTokens,
+    tokens: standardLightTokens,
     ansi: {
       black: "#263244",
       red: "#b33b4a",
@@ -477,14 +477,16 @@ export const THEME_IDS = THEME_CATALOG.map((t) => t.id);
 export type ThemeId = (typeof THEME_CATALOG)[number]["id"] | "default";
 
 export function getTheme(id: string): ThemeDefinition {
-  const key = id === "default" ? "voxiva-light" : id;
+  const key = id === "default" ? "standard-light" : id;
   return THEME_CATALOG.find((t) => t.id === key) ?? THEME_CATALOG[0];
 }
 
 /** Old Space theme ids → catalog. */
 const LEGACY: Record<string, string> = {
-  default: "voxiva-light",
-  glass: "voxiva",
+  default: "standard-light",
+  voxiva: "standard-dark",
+  "voxiva-light": "standard-light",
+  glass: "standard-dark",
   gruvbox: "espresso",
   cyber: "miami-nights",
   dark: "whirl",
@@ -492,9 +494,9 @@ const LEGACY: Record<string, string> = {
 };
 
 export function resolveThemeId(id: string | null | undefined): ThemeId {
-  if (!id) return "voxiva-light";
+  if (!id) return "standard-light";
   const mapped = LEGACY[id] ?? id;
-  return (THEME_IDS.includes(mapped) ? mapped : "voxiva-light") as ThemeId;
+  return (THEME_IDS.includes(mapped) ? mapped : "standard-light") as ThemeId;
 }
 `;
 

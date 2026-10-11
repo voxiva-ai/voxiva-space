@@ -21,17 +21,15 @@
     "test:electron-companion": "node electron/companion.test.cjs",
     "test:electron-cookies": "node electron/cookies.test.cjs",
     "test:electron-updates": "node electron/updates.test.cjs",
-    "dev": "node scripts/tauri-dev.mjs",
+    "dev": "npm run electron:app",
     "dev:kill": "node -e \"import('./scripts/dev-port.mjs').then(m=>{m.killStaleVoxiva();m.killPort(1422);console.log('[dev:kill] port 1422 cleared')})\"",
-    "dev:web": "node scripts/web-dev.mjs",
-    "web:dev": "node scripts/web-dev.mjs",
+    "dev:web": "vite --host 127.0.0.1 --port 1422",
+    "web:dev": "vite --host 127.0.0.1 --port 1422",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri",
-    "tauri:build": "tauri build"
+    "electron:check": "npm run build && cargo test --manifest-path native/Cargo.toml && node --test electron/*.test.cjs"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2",
     "@untitledui/icons": "^0.0.22",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
@@ -44,7 +42,6 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2",
     "@types/dompurify": "^3.0.5",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.1.8",
@@ -60,10 +57,44 @@
     "appId": "ai.voxiva.space",
     "electronDist": "node_modules/electron/dist",
     "artifactName": "Voxiva-Space-${version}-${os}-${arch}.${ext}",
-    "directories": { "output": "release" },
-    "files": ["dist/**/*", "electron/**/*", "src-tauri/src/inspector/inject.js", "package.json"],
-    "win": { "target": "nsis", "icon": "src-tauri/icons/icon.ico", "extraResources": [{ "from": "native/target/release/voxiva-backend.exe", "to": "voxiva-backend.exe" }] },
-    "mac": { "target": ["dmg", "zip"], "icon": "src-tauri/icons/icon.icns", "extraResources": [{ "from": "native/target/release/voxiva-backend", "to": "voxiva-backend" }] },
-    "publish": [{ "provider": "github", "owner": "voxiva-ai", "repo": "voxiva-space" }]
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "src-tauri/src/inspector/inject.js",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "src-tauri/icons/icon.ico",
+      "extraResources": [
+        {
+          "from": "native/target/release/voxiva-backend.exe",
+          "to": "voxiva-backend.exe"
+        }
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "src-tauri/icons/icon.icns",
+      "extraResources": [
+        {
+          "from": "native/target/release/voxiva-backend",
+          "to": "voxiva-backend"
+        }
+      ]
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "voxiva-ai",
+        "repo": "voxiva-space"
+      }
+    ]
   }
 }
