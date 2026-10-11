@@ -227,6 +227,24 @@ app.whenReady().then(() => {
           const bar = document.querySelector('.vs-statusBar');
           if (!bar || Math.abs(bar.getBoundingClientRect().bottom - innerHeight) > 1) throw new Error('Status bar is not at the bottom');
           if (!document.querySelector('.vs-statusMemory') || !document.querySelector('.vs-statusAgents')) throw new Error('Status actions are missing from the status bar');
+          const viewIds = ['space', 'projects', 'agents', 'board', 'history', 'browser', 'settings'];
+          for (const index of [1, 2, 3, 4, 5]) {
+            window.dispatchEvent(new Event('voxiva-help-open'));
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            document.querySelectorAll('.vs-helpNav button')[index].click();
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            document.querySelector('.vs-helpDetail .vs-btnPrimary').click();
+            await new Promise((resolve, reject) => {
+              const start = Date.now();
+              const poll = () => {
+                const slot = document.querySelector('.vs-viewSlot.is-active');
+                if (slot?.dataset.viewSlot === viewIds[index] && !slot.querySelector('.vs-pageLoading')) resolve();
+                else if (Date.now() - start > 10000) reject(new Error('View did not finish loading: ' + index));
+                else setTimeout(poll, 25);
+              };
+              poll();
+            });
+          }
           for (const id of ['awake', 'usage', 'ports', 'resources']) {
             document.querySelector('button[popovertarget="status-' + id + '"]').click();
             const popup = document.getElementById('status-' + id);
@@ -321,7 +339,7 @@ app.whenReady().then(() => {
       }
     });
   }
-  void window.loadFile(path.join(__dirname, "..", "dist", "index.html"));
+  void window.loadFile(path.join(__dirname, "..", "dist", "index.html"), smoke ? { query: { smoke: "1" } } : undefined);
 });
 
 app.on("window-all-closed", () => app.quit());

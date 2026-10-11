@@ -21,7 +21,7 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-39d9ff?style=flat-square" /></a>
 </p>
 
-> **Beta v0.2.4.** Voxiva Space is usable today, but the interface and session model are still evolving.
+> **Beta v0.2.5.** Voxiva Space is usable today, but the interface and session model are still evolving.
 
 ## One window for the whole agent workflow
 
@@ -41,9 +41,9 @@ Run Claude Code, Codex, OpenCode, Gemini CLI, Aider, Amp, Goose, Cursor Agent, o
 
 ## Install
 
-### Latest Windows build
+### Windows
 
-Download and run the newest `*-setup.exe` from [GitHub Releases](https://github.com/voxiva-ai/voxiva-space/releases).
+Download and run the newest `Voxiva-Space-*-win-x64.exe` from [GitHub Releases](https://github.com/voxiva-ai/voxiva-space/releases).
 
 Or install/update from PowerShell:
 
@@ -53,7 +53,11 @@ irm https://raw.githubusercontent.com/voxiva-ai/voxiva-space/main/scripts/tester
 
 If you prefer to inspect scripts before running them, open [`scripts/tester-install.ps1`](scripts/tester-install.ps1), download it, and run it locally.
 
-Requirements: Windows 10/11 or macOS 13+. The installer uses the Chromium runtime bundled with Electron; it does not require WebView2. On Windows, installation is per-user; managed PCs may still ask for elevation.
+### macOS
+
+Download the newest `.dmg` from [GitHub Releases](https://github.com/voxiva-ai/voxiva-space/releases) that matches your Mac (`mac-x64` for Intel or `mac-arm64` for Apple silicon), open it, and move Voxiva Space to Applications. Requires macOS 13+.
+
+Beta builds are not yet signed/notarized. Windows SmartScreen or macOS Gatekeeper may warn before first launch. Windows installation is per-user; managed PCs may still ask for elevation. Chromium is bundled with Electron, so WebView2 is not required.
 
 ### Uninstall
 

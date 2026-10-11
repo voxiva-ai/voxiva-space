@@ -13,6 +13,7 @@ test("Electron updates require packaged metadata before install", async () => {
   await assert.rejects(updates.install());
   assert.equal((await updates.check()).latestVersion, "0.2.5");
   assert.equal(updater.autoDownload, false);
+  assert.equal(updater.allowPrerelease, true);
   await updates.install();
   assert.equal(installed, true);
   assert.equal((await createUpdates({ isPackaged: false, getVersion: () => "0.2.4" }, updater).check()).updateAvailable, false);

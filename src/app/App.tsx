@@ -41,8 +41,12 @@ const SettingsPage = lazy(() =>
 const ASSIST_KEY = "voxiva-space-assist-open";
 const SIDEBAR_KEY = "voxiva-space-sidebar-collapsed";
 
+function PageLoading({ label }: { label: string }) {
+  return <div className="vs-pageLoading" role="status" aria-live="polite"><span aria-hidden />{label}</div>;
+}
+
 function AppShell() {
-  const { setBrowserUrl, isVsCodeFocusActive } = useSpace();
+  const { setBrowserUrl, isVsCodeFocusActive, t } = useSpace();
   const { view } = useView();
   useHotkeys();
   useWindowChrome();
@@ -157,6 +161,7 @@ function AppShell() {
   }, []);
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).has("smoke")) return;
     const idle = window.setTimeout(() => {
       void ensureAutoCookieImport(false);
     }, 1200);
@@ -194,11 +199,18 @@ function AppShell() {
     };
   }, [setBrowserUrl]);
 
-  // Prefetch agents after first paint so the view opens instantly.
+  // Warm small route chunks after first paint; keep their pages unmounted until opened.
   useEffect(() => {
     const idle = window.setTimeout(() => {
-      void import("@/pages/agents/AgentsPage");
-    }, 400);
+      void Promise.all([
+        import("@/pages/agents/AgentsPage"),
+        import("@/pages/browser/BrowserPage"),
+        import("@/pages/history/HistoryPage"),
+        import("@/pages/board/BoardPage"),
+        import("@/pages/projects/ProjectsPage"),
+        import("@/pages/settings/SettingsPage"),
+      ]);
+    }, 1200);
     return () => window.clearTimeout(idle);
   }, []);
 
@@ -227,47 +239,47 @@ function AppShell() {
                 : " is-scroll"
             }`}
           >
-            <div className={`vs-viewSlot${show("space") ? " is-active" : ""}`} hidden={!show("space")}>
+            <div data-view-slot="space" className={`vs-viewSlot${show("space") ? " is-active" : ""}`} hidden={!show("space")}>
               <SpacePage />
             </div>
             {keep("projects") ? (
-              <div className={`vs-viewSlot${show("projects") ? " is-active" : ""}`} hidden={!show("projects")}>
-                <Suspense fallback={null}>
+              <div data-view-slot="projects" className={`vs-viewSlot${show("projects") ? " is-active" : ""}`} hidden={!show("projects")}>
+                <Suspense fallback={<PageLoading label={t("app.loading")} />}>
                   <ProjectsPage />
                 </Suspense>
               </div>
             ) : null}
             {keep("agents") ? (
-              <div className={`vs-viewSlot${show("agents") ? " is-active" : ""}`} hidden={!show("agents")}>
-                <Suspense fallback={null}>
+              <div data-view-slot="agents" className={`vs-viewSlot${show("agents") ? " is-active" : ""}`} hidden={!show("agents")}>
+                <Suspense fallback={<PageLoading label={t("app.loading")} />}>
                   <AgentsPage />
                 </Suspense>
               </div>
             ) : null}
             {keep("board") ? (
-              <div className={`vs-viewSlot${show("board") ? " is-active" : ""}`} hidden={!show("board")}>
-                <Suspense fallback={null}>
+              <div data-view-slot="board" className={`vs-viewSlot${show("board") ? " is-active" : ""}`} hidden={!show("board")}>
+                <Suspense fallback={<PageLoading label={t("app.loading")} />}>
                   <BoardPage />
                 </Suspense>
               </div>
             ) : null}
             {keep("history") ? (
-              <div className={`vs-viewSlot${show("history") ? " is-active" : ""}`} hidden={!show("history")}>
-                <Suspense fallback={null}>
+              <div data-view-slot="history" className={`vs-viewSlot${show("history") ? " is-active" : ""}`} hidden={!show("history")}>
+                <Suspense fallback={<PageLoading label={t("app.loading")} />}>
                   <HistoryPage />
                 </Suspense>
               </div>
             ) : null}
             {keep("browser") ? (
-              <div className={`vs-viewSlot${show("browser") ? " is-active" : ""}`} hidden={!show("browser")}>
-                <Suspense fallback={null}>
+              <div data-view-slot="browser" className={`vs-viewSlot${show("browser") ? " is-active" : ""}`} hidden={!show("browser")}>
+                <Suspense fallback={<PageLoading label={t("app.loading")} />}>
                   <BrowserPage />
                 </Suspense>
               </div>
             ) : null}
             {keep("settings") ? (
-              <div className={`vs-viewSlot${show("settings") ? " is-active" : ""}`} hidden={!show("settings")}>
-                <Suspense fallback={null}>
+              <div data-view-slot="settings" className={`vs-viewSlot${show("settings") ? " is-active" : ""}`} hidden={!show("settings")}>
+                <Suspense fallback={<PageLoading label={t("app.loading")} />}>
                   <SettingsPage />
                 </Suspense>
               </div>

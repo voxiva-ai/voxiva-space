@@ -1793,6 +1793,34 @@ html[data-electron] .vs-titleDrag { -webkit-app-region: drag; }
   min-height: 0;
 }
 
+.vs-pageLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  height: 100%;
+  min-height: 8rem;
+  color: var(--vs-muted);
+  font-size: 0.82rem;
+}
+
+.vs-pageLoading > span {
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 2px solid var(--vs-border-strong);
+  border-top-color: var(--vs-accent);
+  border-radius: 50%;
+  animation: vs-pageLoadingSpin 0.8s linear infinite;
+}
+
+@keyframes vs-pageLoadingSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vs-pageLoading > span { animation: none; }
+}
+
 .vs-viewSlot[hidden] {
   display: none !important;
 }

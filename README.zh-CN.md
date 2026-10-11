@@ -12,7 +12,7 @@
   <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-> **Beta v0.2.4。** 当前版本已可日常使用，但界面与会话恢复机制仍在持续改进。
+> **Beta v0.2.5。** 当前版本已可日常使用，但界面与会话恢复机制仍在持续改进。
 
 ## 在一个窗口中完成智能体工作流
 
@@ -32,7 +32,7 @@ Voxiva Space 可运行 Claude Code、Codex、OpenCode、Gemini CLI、Aider、Amp
 
 ## 安装
 
-从 [GitHub Releases](https://github.com/voxiva-ai/voxiva-space/releases) 下载并运行最新的 `*-setup.exe`，或在 PowerShell 中执行：
+Windows：从 [GitHub Releases](https://github.com/voxiva-ai/voxiva-space/releases) 下载并运行最新的 `Voxiva-Space-*-win-x64.exe`，或在 PowerShell 中执行：
 
 ```powershell
 irm https://raw.githubusercontent.com/voxiva-ai/voxiva-space/main/scripts/tester-install.ps1 | iex
@@ -40,7 +40,7 @@ irm https://raw.githubusercontent.com/voxiva-ai/voxiva-space/main/scripts/tester
 
 如果希望先审阅脚本，请打开 [`scripts/tester-install.ps1`](scripts/tester-install.ps1)，下载后在本机运行。
 
-要求：Windows 10/11。Electron 已内置 Chromium，无需单独安装 WebView2。卸载路径：**设置 → 应用 → 已安装的应用 → Voxiva Space → 卸载**。
+macOS 13+：从 [GitHub Releases](https://github.com/voxiva-ai/voxiva-space/releases) 下载匹配芯片的 `.dmg`（Intel 选 `mac-x64`，Apple silicon 选 `mac-arm64`），打开并将应用拖入 Applications。Beta 安装包尚未签名，Windows SmartScreen 或 macOS Gatekeeper 首次启动时可能显示安全提示。Electron 已内置 Chromium，无需单独安装 WebView2。Windows 卸载路径：**设置 → 应用 → 已安装的应用 → Voxiva Space → 卸载**。
 
 ## 快速开始
 

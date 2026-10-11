@@ -46,9 +46,15 @@ if (-not $asset -and $AssetPattern -ne "*.msi") {
   $asset = $rel.assets | Where-Object { $_.name -like "*.msi" } | Select-Object -First 1
 }
 if (-not $asset) { throw "No installer in the newest published release." }
+if ($asset.digest -notmatch '^sha256:([a-fA-F0-9]{64})$') {
+  throw "GitHub did not provide a SHA-256 digest for the installer. Nothing was installed."
+}
+$expectedDigest = $Matches[1]
 
 $tmp = Join-Path $env:TEMP $asset.name
 Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tmp
+$actualDigest = (Get-FileHash -LiteralPath $tmp -Algorithm SHA256).Hash
+if ($actualDigest -ne $expectedDigest) { Remove-Item -LiteralPath $tmp -Force; throw "Installer checksum mismatch. Nothing was installed." }
 
 Write-Host "Installing..."
 $ext = [System.IO.Path]::GetExtension($tmp).ToLowerInvariant()

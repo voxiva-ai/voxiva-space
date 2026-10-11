@@ -12,7 +12,7 @@
   <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-> **Beta v0.2.4.** Приложением уже можно пользоваться, но интерфейс и модель восстановления сессий ещё развиваются.
+> **Beta v0.2.5.** Приложением уже можно пользоваться, но интерфейс и модель восстановления сессий ещё развиваются.
 
 ## Всё для работы с агентами — в одном окне
 
@@ -32,7 +32,7 @@
 
 ## Установка
 
-Скачай свежий `*-setup.exe` из [GitHub Releases](https://github.com/voxiva-ai/voxiva-space/releases) или выполни:
+Скачай свежий `Voxiva-Space-*-win-x64.exe` из [GitHub Releases](https://github.com/voxiva-ai/voxiva-space/releases) или выполни:
 
 ```powershell
 irm https://raw.githubusercontent.com/voxiva-ai/voxiva-space/main/scripts/tester-install.ps1 | iex
@@ -40,7 +40,7 @@ irm https://raw.githubusercontent.com/voxiva-ai/voxiva-space/main/scripts/tester
 
 Если хочешь сначала проверить скрипт, открой [`scripts/tester-install.ps1`](scripts/tester-install.ps1), скачай его и запусти локально.
 
-Для работы требуется Windows 10/11; Chromium входит в Electron, WebView2 отдельно не нужен. Для удаления: **Параметры → Приложения → Установленные приложения → Voxiva Space → Удалить**.
+На macOS 13+ скачай `.dmg` из [GitHub Releases](https://github.com/voxiva-ai/voxiva-space/releases): `mac-x64` — для Intel, `mac-arm64` — для Apple silicon. Открой образ и перенеси приложение в Applications. Бета-сборки пока не подписаны: Windows SmartScreen или macOS Gatekeeper могут показать предупреждение при первом запуске. В Windows установка выполняется только для текущего пользователя; Chromium уже входит в Electron, WebView2 отдельно не нужен. Удаление: **Параметры → Приложения → Установленные приложения → Voxiva Space → Удалить**.
 
 ## Быстрый старт
 

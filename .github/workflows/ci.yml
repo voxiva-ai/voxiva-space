@@ -23,8 +23,9 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "./src-tauri -> target"
+          workspaces: "./native -> target"
 
       - run: npm ci
-      - run: npm run build
-      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - run: npm run electron:check
+      - run: cargo build --manifest-path native/Cargo.toml
+      - run: npm run electron:app-smoke

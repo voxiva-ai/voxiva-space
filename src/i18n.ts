@@ -2,6 +2,7 @@ export type Locale = "ru" | "en";
 
 const dict = {
   ru: {
+    "app.loading": "Загружаю раздел…",
     "status.title": "Состояние приложения",
     "status.limits": "Лимиты использования",
     "status.noData": "Нет данных",
@@ -672,6 +673,7 @@ const dict = {
     "nav.reopenClosed": "Открыть закрытое",
   },
   en: {
+    "app.loading": "Loading section…",
     "status.title": "Application status",
     "status.limits": "Usage limits",
     "status.noData": "No data",

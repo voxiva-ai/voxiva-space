@@ -3,6 +3,7 @@ function createUpdates(app, updater) {
   let available = null;
   updater.autoDownload = false;
   updater.autoInstallOnAppQuit = false;
+  updater.allowPrerelease = true;
   const downloadsPage = "https://github.com/voxiva-ai/voxiva-space/releases";
 
   return {
