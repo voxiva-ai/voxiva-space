@@ -121,9 +121,59 @@ export const THEME_CATALOG: ThemeDefinition[] = [
     }
   },
 
-  /* ═══════════════════════════════════════════
-   * Apple Frost  ·  2 variants
-   * ═══════════════════════════════════════════ */
+  /* Voxiva light theme and bundled theme packs. */
+  {
+    "id": "voxiva-light",
+    "familyId": "voxiva",
+    "label": "Voxiva",
+    "official": true,
+    "appearance": "light",
+    "tokens": {
+      "appearance": "light",
+      "bg": "#f3f5f8",
+      "bgRaised": "#f8fafc",
+      "bgHover": "#e9eef4",
+      "surface": "#ffffff",
+      "border": "rgba(35,50,72,0.12)",
+      "borderStrong": "rgba(35,50,72,0.22)",
+      "text": "#1d2735",
+      "muted": "#667487",
+      "accent": "#356bb3",
+      "onAccent": "#ffffff",
+      "accent2": "#bd8a32",
+      "accentSoft": "rgba(53,107,179,0.12)",
+      "attention": "#906719",
+      "attentionRing": "rgba(144,103,25,0.2)",
+      "ok": "#257452",
+      "danger": "#b33b4a",
+      "termBg": "#f8fafc",
+      "termFg": "#1d2735",
+      "termCursor": "#356bb3",
+      "termSelection": "rgba(53,107,179,0.22)",
+      "termChrome": "#edf1f5",
+      "termChromeText": "#263448",
+      "termChromeMuted": "#667487",
+      "preview": ["#f3f5f8", "#ffffff", "#356bb3", "#1d2735"]
+    },
+    "ansi": {
+      "black": "#263244",
+      "red": "#b33b4a",
+      "green": "#257452",
+      "yellow": "#8c6514",
+      "blue": "#2f67b3",
+      "magenta": "#8054a2",
+      "cyan": "#14758d",
+      "white": "#f3f5f8",
+      "brightBlack": "#758195",
+      "brightRed": "#d14f5d",
+      "brightGreen": "#3d9866",
+      "brightYellow": "#ba8c2d",
+      "brightBlue": "#4a82cc",
+      "brightMagenta": "#9c72b9",
+      "brightCyan": "#3195ab",
+      "brightWhite": "#ffffff"
+    }
+  },
   {
     "id": "apple-frost",
     "familyId": "apple-frost",
@@ -1366,13 +1416,13 @@ export const THEME_IDS = THEME_CATALOG.map((t) => t.id);
 export type ThemeId = (typeof THEME_CATALOG)[number]["id"] | "default";
 
 export function getTheme(id: string): ThemeDefinition {
-  const key = id === "default" ? "voxiva" : id;
+  const key = id === "default" ? "voxiva-light" : id;
   return THEME_CATALOG.find((t) => t.id === key) ?? THEME_CATALOG[0];
 }
 
 /** Old Space theme ids → catalog. */
 const LEGACY: Record<string, string> = {
-  default: "voxiva",
+  default: "voxiva-light",
   glass: "voxiva",
   gruvbox: "espresso",
   cyber: "miami-nights",
@@ -1381,7 +1431,7 @@ const LEGACY: Record<string, string> = {
 };
 
 export function resolveThemeId(id: string | null | undefined): ThemeId {
-  if (!id) return "voxiva";
+  if (!id) return "voxiva-light";
   const mapped = LEGACY[id] ?? id;
-  return (THEME_IDS.includes(mapped) ? mapped : "voxiva") as ThemeId;
+  return (THEME_IDS.includes(mapped) ? mapped : "voxiva-light") as ThemeId;
 }

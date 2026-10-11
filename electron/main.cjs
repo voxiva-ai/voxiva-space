@@ -192,6 +192,7 @@ app.whenReady().then(() => {
     throw new Error(`Electron command not yet ported: ${command}`);
   });
   window.on("resize", () => event("window://resized", {}));
+  window.once("ready-to-show", () => { if (!smoke) { window.show(); window.focus(); } });
   window.on("closed", () => {
     ipcMain.removeHandler("voxiva:invoke");
     for (const label of [...views.keys()]) closeView(label);
