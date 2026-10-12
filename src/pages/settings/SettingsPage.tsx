@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, Brush, ChevronRight, ExternalLink, Globe, Info, Keyboard, RefreshCw, Search, Settings, Smartphone, SquareTerminal, Users, Volume2 } from "lucide-react";
+import { Bell, Brush, ChevronDown, ChevronRight, ExternalLink, Globe, Info, Keyboard, RefreshCw, Search, Settings, Smartphone, SquareTerminal, Users, Volume2 } from "lucide-react";
 import { useSpace, useView } from "@/features/workspace/SpaceContext";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import {
@@ -151,6 +151,7 @@ export function SettingsPage() {
   const [section, setSection] = useState<SectionId>("general");
   const [navFilter, setNavFilter] = useState("");
   const [agentPrefs, setAgentPrefs] = useState(() => loadAgentPrefs());
+  const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [sounds, setSounds] = useState<SoundPrefs>(() => loadSoundPrefs());
   const [attention, setAttention] = useState<AttentionPrefs>(() => loadAttentionPrefs());
   const [statusPrefs, setStatusPrefs] = useState<StatusBarPrefs>(() => loadStatusBarPrefs());
@@ -160,6 +161,20 @@ export function SettingsPage() {
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updateError, setUpdateError] = useState(false);
+
+  useEffect(() => {
+    const applyRequestedSection = (sectionId: string | null) => {
+      if (sectionId === "hotkeys" || sectionId === "about") setSection(sectionId);
+    };
+    const pending = sessionStorage.getItem("voxiva-open-settings-section");
+    if (pending) {
+      applyRequestedSection(pending);
+      sessionStorage.removeItem("voxiva-open-settings-section");
+    }
+    const onSection = (event: Event) => applyRequestedSection((event as CustomEvent<string>).detail);
+    window.addEventListener("voxiva-settings-section", onSection);
+    return () => window.removeEventListener("voxiva-settings-section", onSection);
+  }, []);
 
   useEffect(() => {
     setCapturingHotkey(Boolean(listening));
@@ -281,6 +296,10 @@ export function SettingsPage() {
       saveAgentPrefs(next);
       return next;
     });
+  }
+
+  function patchAgentOverride(id: string, patch: Partial<{ command: string; args: string }>) {
+    patchAgentPrefs({ overrides: { ...agentPrefs.overrides, [id]: { ...(agentPrefs.overrides[id] ?? { command: "", args: "" }), ...patch } } });
   }
 
   function patchStatusPrefs(patch: Partial<StatusBarPrefs>) {
@@ -440,6 +459,12 @@ export function SettingsPage() {
         {section === "agents" && (
           <section className="vs-settingsPanelBody vs-agentSettings">
             <p className="vs-settingsHint">{t("settings.agentsHint")}</p>
+            <div className="vs-agentPermission">
+              <div><strong>{t("settings.agentPermissions")}</strong><small>{t("settings.agentPermissionsHint")}</small></div>
+              <div className="vs-agentPermissionChoices" role="group" aria-label={t("settings.agentPermissions")}>
+                {(["yolo", "manual"] as const).map((mode) => <button key={mode} type="button" className={agentPrefs.permissionMode === mode ? "is-active" : ""} aria-pressed={agentPrefs.permissionMode === mode} onClick={() => patchAgentPrefs({ permissionMode: mode })}>{t(mode === "yolo" ? "settings.agentPermissionYolo" : "settings.agentPermissionManual")}</button>)}
+              </div>
+            </div>
             <div className="vs-settingsBlock">
               <div className="vs-settingsRow">
                 <div><h3>{t("settings.defaultAgent")}</h3><p className="vs-settingsHint">{t("settings.defaultAgentHint")}</p></div>
@@ -454,18 +479,50 @@ export function SettingsPage() {
               <button type="button" className="vs-btn" onClick={() => void refreshAgents()}><RefreshCw size={14} aria-hidden="true" />{t("settings.refreshAgents")}</button>
             </div>
             <div className="vs-agentSettingsList">
-              {agentBots.filter((bot) => bot.id !== "shell").map((bot) => {
-                const ready = isBotReady(bot, agentAvailability, agentsScanned);
+              <h3 className="vs-agentSettingsGroupTitle">{t("settings.agentInstalled")}</h3>
+              {agentBots.filter((bot) => bot.id !== "shell" && isBotReady(bot, agentAvailability, agentsScanned)).map((bot) => {
                 const enabled = agentPrefs.enabled.includes(bot.id);
-                return <div className={`vs-agentSettingsRow${ready ? " is-ready" : ""}`} key={bot.id}>
-                  <span className={`vs-agentIcon is-${bot.id}`}><AgentBrandIcon id={bot.id} size={22} /></span>
-                  <span className="vs-agentSettingsName"><strong>{bot.name}</strong><small>{bot.command}</small></span>
-                  <span className={`vs-agentSettingsStatus${ready ? " is-ready" : ""}`}>{!agentsScanned ? t("settings.agentNotScanned") : ready ? t("settings.agentDetected") : t("settings.agentNotInstalled")}</span>
-                  <div className="vs-agentSettingsActions">
-                    {ready && <button type="button" className={`vs-agentAvailability${enabled ? " is-enabled" : ""}`} aria-pressed={enabled} onClick={() => patchAgentPrefs({ enabled: enabled ? agentPrefs.enabled.filter((id) => id !== bot.id) : [...agentPrefs.enabled, bot.id], ...(enabled && agentPrefs.defaultId === bot.id ? { defaultId: "auto" } : {}) })}>{enabled ? t("settings.agentEnabled") : t("settings.agentDisabled")}</button>}
-                    <button type="button" className="vs-agentGuide" aria-label={ready ? t("settings.agentDocs") : t("settings.installGuide")} title={ready ? t("settings.agentDocs") : t("settings.installGuide")} onClick={() => void openUpdateUrl(AGENT_INSTALL_GUIDES[bot.id] ?? "https://github.com/search?q=" + encodeURIComponent(`${bot.name} CLI`))}><ExternalLink size={14} aria-hidden="true" /></button>
+                const expanded = expandedAgent === bot.id;
+                return <article className={`vs-agentSettingsRow${expanded ? " is-expanded" : ""}`} key={bot.id}>
+                  <div className="vs-agentSettingsRowHead">
+                    <span className={`vs-agentIcon is-${bot.id}`}><AgentBrandIcon id={bot.id} size={22} /></span>
+                    <button type="button" className="vs-agentSettingsDisclosure" aria-expanded={expanded} onClick={() => setExpandedAgent(expanded ? null : bot.id)}>
+                      <span className="vs-agentSettingsName"><strong>{bot.name}</strong><small>{agentPrefs.overrides[bot.id]?.command.trim() || bot.command}</small></span>
+                      <ChevronDown size={15} aria-hidden="true" />
+                    </button>
+                    <span className="vs-agentSettingsStatus is-ready">{t("settings.agentDetected")}</span>
+                    <div className="vs-agentSettingsActions">
+                      <button type="button" className={`vs-agentAvailability${enabled ? " is-enabled" : ""}`} aria-pressed={enabled} onClick={() => patchAgentPrefs({ enabled: enabled ? agentPrefs.enabled.filter((id) => id !== bot.id) : [...agentPrefs.enabled, bot.id], ...(enabled && agentPrefs.defaultId === bot.id ? { defaultId: "auto" } : {}) })}>{enabled ? t("settings.agentEnabled") : t("settings.agentDisabled")}</button>
+                      <button type="button" className={`vs-agentDefault${agentPrefs.defaultId === bot.id ? " is-default" : ""}`} disabled={agentPrefs.defaultId === bot.id} onClick={() => patchAgentPrefs({ enabled: enabled ? agentPrefs.enabled : [...agentPrefs.enabled, bot.id], defaultId: bot.id })}>{agentPrefs.defaultId === bot.id ? t("settings.agentIsDefault") : t("settings.agentSetDefault")}</button>
+                      <button type="button" className="vs-agentGuide" aria-label={t("settings.agentDocs")} title={t("settings.agentDocs")} onClick={() => void openUpdateUrl(AGENT_INSTALL_GUIDES[bot.id] ?? "https://github.com/search?q=" + encodeURIComponent(`${bot.name} CLI`))}><ExternalLink size={14} aria-hidden="true" /></button>
+                    </div>
                   </div>
-                </div>;
+                  {expanded && <div className="vs-agentSettingsDetails">
+                    <label><span>{t("settings.agentCommand")}</span><input value={agentPrefs.overrides[bot.id]?.command ?? bot.command ?? ""} onChange={(event) => patchAgentOverride(bot.id, { command: event.target.value })} /></label>
+                    <label><span>{t("settings.agentArguments")}</span><input value={agentPrefs.overrides[bot.id]?.args ?? ""} onChange={(event) => patchAgentOverride(bot.id, { args: event.target.value })} /></label>
+                    <p>{t("settings.agentCommandHint")}</p>
+                  </div>}
+                </article>;
+              })}
+              <h3 className="vs-agentSettingsGroupTitle is-available">{t("settings.agentAvailable")}</h3>
+              {agentBots.filter((bot) => bot.id !== "shell" && !isBotReady(bot, agentAvailability, agentsScanned)).map((bot) => {
+                const expanded = expandedAgent === bot.id;
+                return <article className={`vs-agentSettingsRow${expanded ? " is-expanded" : ""}`} key={bot.id}>
+                  <div className="vs-agentSettingsRowHead">
+                    <span className={`vs-agentIcon is-${bot.id}`}><AgentBrandIcon id={bot.id} size={22} /></span>
+                    <button type="button" className="vs-agentSettingsDisclosure" aria-expanded={expanded} onClick={() => setExpandedAgent(expanded ? null : bot.id)}>
+                      <span className="vs-agentSettingsName"><strong>{bot.name}</strong><small>{agentPrefs.overrides[bot.id]?.command.trim() || bot.command}</small></span>
+                      <ChevronDown size={15} aria-hidden="true" />
+                    </button>
+                    <span className="vs-agentSettingsStatus">{agentsScanned ? t("settings.agentNotInstalled") : t("settings.agentNotScanned")}</span>
+                    <button type="button" className="vs-agentGuide" aria-label={t("settings.installGuide")} title={t("settings.installGuide")} onClick={() => void openUpdateUrl(AGENT_INSTALL_GUIDES[bot.id] ?? "https://github.com/search?q=" + encodeURIComponent(`${bot.name} CLI`))}><ExternalLink size={14} aria-hidden="true" /></button>
+                  </div>
+                  {expanded && <div className="vs-agentSettingsDetails">
+                    <label><span>{t("settings.agentCommand")}</span><input value={agentPrefs.overrides[bot.id]?.command ?? bot.command ?? ""} onChange={(event) => patchAgentOverride(bot.id, { command: event.target.value })} /></label>
+                    <label><span>{t("settings.agentArguments")}</span><input value={agentPrefs.overrides[bot.id]?.args ?? ""} onChange={(event) => patchAgentOverride(bot.id, { args: event.target.value })} /></label>
+                    <p>{t("settings.agentCommandHint")}</p>
+                  </div>}
+                </article>;
               })}
             </div>
           </section>

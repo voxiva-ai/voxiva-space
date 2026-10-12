@@ -49,7 +49,7 @@ import { yieldToUi } from "@/features/terminal/spawnQueue";
 import { NativeBrowser, type BrowserTabMeta } from "@/features/browser/NativeBrowser";
 import { browserFaviconUrl, prettyBrowserLabel } from "@/features/browser/tabMeta";
 import { readAgentDrag, isAgentDrag, endAgentDragSession, type AgentDragPayload } from "@/features/agents/drag";
-import { agentBots, resolveBotCommand, resumeCommandFor } from "@/features/agents/bots";
+import { agentBots, resolveBotLaunchCommand, resumeCommandFor } from "@/features/agents/bots";
 import { PaneActions } from "@/features/workspace/PaneActions";
 import { PaneContextMenu, type PaneMenuState } from "@/features/workspace/PaneContextMenu";
 import { useSpace, useView } from "@/features/workspace/SpaceContext";
@@ -769,7 +769,7 @@ function PaneLeaf({
           const bot = agentBots.find((b) => b.id === agentPayload.agentId);
           const command =
             bot && !agentPayload.runId
-              ? resolveBotCommand(bot, agentAvailability) || agentPayload.command
+              ? resolveBotLaunchCommand(bot, agentAvailability) || agentPayload.command
               : resumeCommandFor(bot, agentPayload.command, agentAvailability) ??
                 agentPayload.command;
           void launchAgent({

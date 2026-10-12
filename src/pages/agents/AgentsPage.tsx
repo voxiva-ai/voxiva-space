@@ -1,4 +1,4 @@
-import { agentBots, isBotReady, resolveBotCommand } from "@/features/agents/bots";
+import { agentBots, isBotReady, resolveBotLaunchCommand } from "@/features/agents/bots";
 import { AgentBrandIcon } from "@/components/agents/AgentBrandIcon";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import type { AgentBot } from "@/lib/types";
@@ -10,7 +10,7 @@ function AgentCard({ bot }: { bot: AgentBot }) {
   const run = () =>
     void launchAgent({
       title: bot.name,
-      command: resolveBotCommand(bot, agentAvailability),
+      command: resolveBotLaunchCommand(bot, agentAvailability),
       shell: bot.shell,
       accent: bot.accent,
     });

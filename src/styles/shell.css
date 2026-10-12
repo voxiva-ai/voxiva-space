@@ -1375,6 +1375,41 @@ html[data-electron] .vs-titleDrag { -webkit-app-region: drag; }
   min-width: 228px;
 }
 
+.vs-chromeFlyout.vs-helpMenu {
+  width: min(244px, calc(100vw - 24px));
+  max-height: min(80vh, 520px);
+  overflow-y: auto;
+  transform: translateX(8px);
+}
+
+.vs-helpMenuHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 30px;
+  padding: 0 0.35rem 0 0.55rem;
+  color: var(--vs-text);
+  font-size: 0.76rem;
+}
+
+.vs-chromeFlyout.is-menu .vs-helpMenuHeader .vs-helpMenuClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 1px solid var(--vs-border);
+  border-radius: 6px;
+  color: var(--vs-muted);
+}
+
+.vs-helpMenuExternal { margin-left: auto; color: var(--vs-muted); }
+.vs-helpMenuUpdate { padding: 0.35rem 0.6rem; color: var(--vs-muted); font-size: 0.7rem; }
+.vs-helpMenuUpdate button { margin-top: 0.3rem; padding: 0.35rem 0; color: var(--vs-accent); font: inherit; }
+.vs-helpMenuSpin { animation: vs-help-menu-spin 1s linear infinite; }
+@keyframes vs-help-menu-spin { to { transform: rotate(360deg); } }
+
 .vs-chromeFlyout.is-menu .vs-chromeMenuLabel {
   display: flex;
   align-items: center;

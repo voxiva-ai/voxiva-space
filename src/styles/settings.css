@@ -821,16 +821,26 @@
 .vs-agentSettings .vs-settingsRow { align-items: center; }
 .vs-agentSettings .vs-settingsRow > div { min-width: 0; }
 .vs-agentSettings .vs-settingsRow select { min-width: 13rem; padding: 0.5rem 0.7rem; border: 1px solid var(--vs-border); border-radius: 8px; background: var(--vs-bg-raised); color: var(--vs-text); font: inherit; }
-.vs-agentSettingsList { border-top: 1px solid var(--vs-border); }
-.vs-agentSettingsRow { display: grid; grid-template-columns: 2rem minmax(8rem, 1fr) 6.5rem auto; align-items: center; gap: 0.7rem; min-height: 3.5rem; padding: 0.4rem 0.2rem; border-bottom: 1px solid var(--vs-settings-divider); }
-.vs-agentSettingsRow > .vs-agentIcon { width: 2rem; height: 2rem; }
+.vs-agentSettingsList { border-top: 1px solid var(--vs-settings-divider); }
+.vs-agentSettingsGroupTitle { margin: 1rem 0 0.25rem; padding: 0.35rem 0; color: var(--vs-text); font-size: 0.82rem; }
+.vs-agentSettingsGroupTitle.is-available { margin-top: 1.25rem; }
+.vs-agentSettingsRow { border-bottom: 1px solid var(--vs-settings-divider); }
+.vs-agentSettingsRowHead { display: grid; grid-template-columns: 2rem minmax(8rem, 1fr) auto auto; align-items: center; gap: 0.7rem; min-height: 3.6rem; padding: 0.4rem 0.2rem; }
+.vs-agentSettingsRow .vs-agentIcon { width: 2rem; height: 2rem; }
 .vs-agentSettingsRow .vs-agentIcon svg, .vs-agentSettingsRow .vs-agentIcon .vs-brandMark { width: 1.35rem; height: 1.35rem; }
+.vs-agentSettingsDisclosure { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--vs-text); text-align: left; cursor: pointer; }
+.vs-agentSettingsDisclosure > svg { flex: 0 0 auto; color: var(--vs-muted); transition: transform 140ms ease; }
+.vs-agentSettingsDisclosure[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.vs-agentSettingsDisclosure:focus-visible, .vs-agentDefault:focus-visible { outline: 2px solid var(--vs-accent); outline-offset: 3px; border-radius: 4px; }
 .vs-agentSettingsName { display: grid; min-width: 0; gap: 0.12rem; }
 .vs-agentSettingsName strong { overflow: hidden; color: var(--vs-text); font-size: 0.84rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .vs-agentSettingsName small { overflow: hidden; color: var(--vs-muted); font: 0.7rem var(--vs-mono); text-overflow: ellipsis; white-space: nowrap; }
 .vs-agentSettingsStatus { color: var(--vs-muted); font-size: 0.72rem; white-space: nowrap; }
 .vs-agentSettingsStatus.is-ready { color: var(--vs-ok); }
 .vs-agentSettingsActions { display: flex; align-items: center; justify-content: flex-end; gap: 0.4rem; }
+.vs-agentDefault { min-height: 1.9rem; padding: 0.3rem 0.55rem; border: 0; border-radius: 6px; background: transparent; color: var(--vs-text); font: inherit; font-size: 0.74rem; cursor: pointer; }
+.vs-agentDefault:hover:not(:disabled) { background: var(--vs-bg-hover); }
+.vs-agentDefault:disabled { color: var(--vs-muted); cursor: default; }
 .vs-agentAvailability { min-width: 5.25rem; min-height: 1.9rem; padding: 0.3rem 0.65rem; border: 1px solid var(--vs-settings-divider); border-radius: 6px; background: var(--vs-bg-raised); color: var(--vs-muted); font: inherit; font-size: 0.76rem; font-weight: 550; cursor: pointer; transition: background 120ms ease, color 120ms ease, border-color 120ms ease; }
 .vs-agentAvailability:hover { background: var(--vs-bg-hover); color: var(--vs-text); }
 .vs-agentAvailability.is-enabled { border-color: color-mix(in srgb, var(--vs-accent) 35%, var(--vs-settings-divider)); background: var(--vs-accent-soft); color: var(--vs-text); }
@@ -838,14 +848,29 @@
 .vs-agentGuide { display: inline-grid; width: 1.9rem; height: 1.9rem; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--vs-muted); cursor: pointer; transition: background 120ms ease, color 120ms ease; }
 .vs-agentGuide:hover { background: var(--vs-bg-hover); color: var(--vs-text); }
 .vs-agentSettingsCount { margin-left: 0.4rem; padding: 0.16rem 0.42rem; border: 1px solid var(--vs-border); border-radius: 999px; color: var(--vs-muted); font-size: 0.68rem; font-weight: 500; vertical-align: middle; }
+.vs-agentSettingsDetails { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; padding: 0.15rem 0.25rem 1rem 2.9rem; }
+.vs-agentSettingsDetails label { display: grid; gap: 0.35rem; color: var(--vs-muted); font-size: 0.73rem; }
+.vs-agentSettingsDetails input { width: 100%; min-width: 0; padding: 0.55rem 0.65rem; border: 1px solid var(--vs-border); border-radius: 7px; background: var(--vs-bg-raised); color: var(--vs-text); font: 0.8rem var(--vs-mono); }
+.vs-agentSettingsDetails input:focus-visible { outline: 2px solid var(--vs-accent); outline-offset: 1px; }
+.vs-agentSettingsDetails p { grid-column: 1 / -1; margin: 0; color: var(--vs-muted); font-size: 0.72rem; line-height: 1.45; }
+.vs-agentPermission { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.85rem 0; border-bottom: 1px solid var(--vs-settings-divider); }
+.vs-agentPermission > div:first-child { display: grid; gap: 0.25rem; }
+.vs-agentPermission strong { font-size: 0.84rem; }
+.vs-agentPermission small { color: var(--vs-muted); font-size: 0.74rem; line-height: 1.4; }
+.vs-agentPermissionChoices { display: flex; flex: 0 0 auto; gap: 0.15rem; padding: 0.2rem; border: 1px solid var(--vs-border); border-radius: 8px; background: var(--vs-bg-raised); }
+.vs-agentPermissionChoices button { min-height: 1.8rem; padding: 0.25rem 0.6rem; border: 0; border-radius: 6px; background: transparent; color: var(--vs-muted); font: inherit; font-size: 0.75rem; cursor: pointer; }
+.vs-agentPermissionChoices button.is-active { background: var(--vs-bg-hover); color: var(--vs-text); }
 .vs-agentBrandFallback { display: inline-grid; flex: 0 0 auto; place-items: center; border: 1px solid currentColor; border-radius: 8px; font-weight: 750; line-height: 1; }
 
 @media (max-width: 700px) {
-  .vs-agentSettingsRow { grid-template-columns: 2rem minmax(0, 1fr); gap: 0.45rem 0.5rem; }
+  .vs-agentSettingsRowHead { grid-template-columns: 2rem minmax(0, 1fr) auto; gap: 0.45rem; }
   .vs-agentSettingsStatus { display: none; }
-  .vs-agentSettingsActions { grid-column: 2; justify-content: flex-start; }
-  .vs-agentSettingsName { grid-column: 2; }
-  .vs-agentSettingsRow .vs-agentIcon { grid-row: 1 / span 2; }
+  .vs-agentSettingsDisclosure { grid-column: 2; grid-row: 1; }
+  .vs-agentSettingsActions { grid-column: 3; grid-row: 1; }
+  .vs-agentSettingsActions .vs-agentDefault { display: none; }
+  .vs-agentSettingsDetails { grid-template-columns: 1fr; padding-left: 2.45rem; }
+  .vs-agentSettingsDetails p { grid-column: 1; }
+  .vs-agentPermission { align-items: flex-start; flex-direction: column; }
 }
 
 .vs-settingsField {

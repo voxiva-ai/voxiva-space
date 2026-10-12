@@ -77,7 +77,7 @@ import {
   agentBots,
   commandKeysForBots,
   isBotReady,
-  resolveBotCommand,
+  resolveBotLaunchCommand,
   resumeCommandFor,
 } from "@/features/agents/bots";
 import {
@@ -281,7 +281,7 @@ function queuePaneSpawns(
   terminals.forEach((leaf, index) => {
     const bot = bots[index];
     if (bot) {
-      const command = resolveBotCommand(bot, availability);
+      const command = resolveBotLaunchCommand(bot, availability);
       target.set(leaf.paneId, {
         title: bot.name,
         command: command || undefined,
@@ -1723,7 +1723,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
         const bot =
           agentId && agentId !== "shell" ? agentBots.find((b) => b.id === agentId) : undefined;
         const cmd = bot
-          ? resolveBotCommand(bot, agentAvailability) || bot.command || command || undefined
+          ? resolveBotLaunchCommand(bot, agentAvailability) || bot.command || command || undefined
           : command || undefined;
         const wantTitle = title || bot?.name || "Shell";
 

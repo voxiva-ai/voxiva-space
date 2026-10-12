@@ -16,7 +16,9 @@ import { savedLayoutPaneCount } from "@/features/workspace/savedLayouts";
 import { Copy, FolderPlus, LayoutGrid, Pin, PinOff, Save } from "lucide-react";
 import logoUrl from "@/assets/brand/voxiva-space-mark.png";
 import { formatHotkey, loadHotkeys } from "@/features/hotkeys/bindings";
-import { getCurrentWindow } from "@/platform/desktop";
+import { BookOpen, Compass, ExternalLink, Flag, Github, Keyboard, MessageSquare, RotateCcw, ScrollText, RefreshCw } from "lucide-react";
+import { checkForUpdates, openUpdateUrl, type UpdateCheckResult } from "@/features/updates/api";
+import { getCurrentWindow, invoke } from "@/platform/desktop";
 
 function orderWorkspaces<T extends { pinned?: boolean }>(list: T[]) {
   return [...list].sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)));
@@ -71,6 +73,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
     focusAttention,
     listAttention,
     clearAllAttention,
+    locale,
     t,
   } = useSpace();
   const { view, setView } = useView();
@@ -79,8 +82,13 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
   const [saveOpen, setSaveOpen] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
+  const [helpMenuOpen, setHelpMenuOpen] = useState(false);
+  const [helpBusy, setHelpBusy] = useState(false);
+  const [helpUpdate, setHelpUpdate] = useState<UpdateCheckResult | null>(null);
+  const [helpUpdateMessage, setHelpUpdateMessage] = useState("");
   const plusRef = useRef<HTMLDivElement>(null);
   const notifyRef = useRef<HTMLDivElement>(null);
+  const helpRef = useRef<HTMLDivElement>(null);
   const canSaveLayout = view === "space" && Boolean(activeWorkspace);
 
   const ordered = useMemo(() => orderWorkspaces(workspaces), [workspaces]);
@@ -100,7 +108,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
   const notifyItems = useMemo(() => listAttention(), [listAttention, sessions, workspaces]);
 
   useEffect(() => {
-    const active = Boolean(menu || plusOpen || notifyOpen || saveOpen);
+    const active = Boolean(menu || plusOpen || notifyOpen || saveOpen || helpMenuOpen);
     window.dispatchEvent(
       new CustomEvent("voxiva-native-overlay", {
         detail: { key: "sidebar-menu", active },
@@ -113,19 +121,21 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
         }),
       );
     };
-  }, [menu, notifyOpen, plusOpen, saveOpen]);
+  }, [helpMenuOpen, menu, notifyOpen, plusOpen, saveOpen]);
 
   useEffect(() => {
-    if (!plusOpen && !notifyOpen) return;
+    if (!plusOpen && !notifyOpen && !helpMenuOpen) return;
     const onPointer = (event: PointerEvent) => {
       const target = event.target as Node;
       if (plusOpen && !plusRef.current?.contains(target)) setPlusOpen(false);
       if (notifyOpen && !notifyRef.current?.contains(target)) setNotifyOpen(false);
+      if (helpMenuOpen && !helpRef.current?.contains(target)) setHelpMenuOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setPlusOpen(false);
         setNotifyOpen(false);
+        setHelpMenuOpen(false);
       }
     };
     document.addEventListener("pointerdown", onPointer);
@@ -134,7 +144,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
       document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
     };
-  }, [notifyOpen, plusOpen]);
+  }, [helpMenuOpen, notifyOpen, plusOpen]);
 
   useEffect(() => {
     const onNotificationClick = (event: Event) => {
@@ -201,12 +211,40 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
 
   function onPlusClick() {
     setNotifyOpen(false);
+    setHelpMenuOpen(false);
     setPlusOpen((v) => !v);
   }
 
   function onNotifyClick() {
     setPlusOpen(false);
+    setHelpMenuOpen(false);
     setNotifyOpen((v) => !v);
+  }
+
+  async function runHelpUpdateCheck() {
+    setHelpBusy(true);
+    setHelpUpdateMessage("");
+    try {
+      const result = await checkForUpdates();
+      setHelpUpdate(result);
+      setHelpUpdateMessage(result.updateAvailable ? t("help.updateAvailable").replace("{version}", result.latestVersion) : t("help.updateCurrent"));
+    } catch (error) {
+      setHelpUpdate(null);
+      setHelpUpdateMessage(t("help.updateFailed"));
+      setError(String(error));
+    } finally { setHelpBusy(false); }
+  }
+
+  function openHelpLink(url: string) {
+    setHelpMenuOpen(false);
+    void invoke("open_url", { url }).catch((error) => setError(String(error)));
+  }
+
+  function openHelpSection(section: "hotkeys" | "about") {
+    setHelpMenuOpen(false);
+    sessionStorage.setItem("voxiva-open-settings-section", section);
+    window.dispatchEvent(new CustomEvent("voxiva-settings-section", { detail: section }));
+    setView("settings");
   }
 
   function formatAttentionAge(at: number) {
@@ -449,19 +487,25 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
             >
               <IconSettings size={14} aria-hidden />
             </button>
-            <button
-              type="button"
-              className="vs-iconBtn vs-helpBtn"
-              title={t("help.title")}
-              aria-label={t("help.title")}
-              onClick={() => {
-                setPlusOpen(false);
-                setNotifyOpen(false);
-                window.dispatchEvent(new CustomEvent("voxiva-help-open"));
-              }}
-            >
-              <span aria-hidden>?</span>
-            </button>
+            <div className="vs-plusWrap" ref={helpRef}>
+              <button type="button" className={`vs-iconBtn vs-helpBtn${helpMenuOpen ? " is-active" : ""}`} title={t("help.title")} aria-label={t("help.title")} aria-haspopup="menu" aria-expanded={helpMenuOpen} onClick={() => { setPlusOpen(false); setNotifyOpen(false); setHelpMenuOpen((open) => !open); }}>
+                <span aria-hidden>?</span>
+              </button>
+              {helpMenuOpen && <div className="vs-chromeFlyout is-menu is-wide vs-helpMenu" role="menu" aria-label={t("help.menuTitle")}>
+                <div className="vs-helpMenuHeader"><strong>{t("help.menuTitle")}</strong><button type="button" className="vs-helpMenuClose" aria-label={t("help.close")} title={t("help.close")} onClick={() => setHelpMenuOpen(false)}><IconX size={14} /></button></div>
+                <button type="button" role="menuitem" onClick={() => openHelpSection("hotkeys")}><Keyboard size={14} aria-hidden="true" />{t("help.keyboardShortcuts")}</button>
+                <button type="button" role="menuitem" onClick={() => openHelpLink("https://github.com/voxiva-ai/voxiva-space/issues/new")}><MessageSquare size={14} aria-hidden="true" />{t("help.sendFeedback")}<ExternalLink size={12} className="vs-helpMenuExternal" /></button>
+                <button type="button" role="menuitem" onClick={() => openHelpLink("https://github.com/voxiva-ai/voxiva-space/milestones")}><Flag size={14} aria-hidden="true" />{t("help.milestones")}<ExternalLink size={12} className="vs-helpMenuExternal" /></button>
+                <button type="button" role="menuitem" onClick={() => { setHelpMenuOpen(false); window.dispatchEvent(new CustomEvent("voxiva-help-open")); }}><Compass size={14} aria-hidden="true" />{t("help.onboarding")}</button>
+                <button type="button" role="menuitem" onClick={() => openHelpLink(locale === "ru" ? "https://github.com/voxiva-ai/voxiva-space/blob/main/README.ru.md" : "https://github.com/voxiva-ai/voxiva-space#readme")}><BookOpen size={14} aria-hidden="true" />{t("help.docs")}<ExternalLink size={12} className="vs-helpMenuExternal" /></button>
+                <button type="button" role="menuitem" onClick={() => openHelpLink("https://github.com/voxiva-ai/voxiva-space/releases")}><ScrollText size={14} aria-hidden="true" />{t("help.changelog")}<ExternalLink size={12} className="vs-helpMenuExternal" /></button>
+                <button type="button" role="menuitem" onClick={() => openHelpLink("https://github.com/voxiva-ai/voxiva-space")}><Github size={14} aria-hidden="true" />GitHub<ExternalLink size={12} className="vs-helpMenuExternal" /></button>
+                <div className="vs-chromeMenuSep" role="separator" />
+                <button type="button" role="menuitem" disabled={helpBusy} onClick={() => void runHelpUpdateCheck()}><RefreshCw size={14} aria-hidden="true" className={helpBusy ? "vs-helpMenuSpin" : ""} />{helpBusy ? t("help.checkingUpdates") : t("help.checkUpdates")}</button>
+                {helpUpdateMessage && <div className="vs-helpMenuUpdate" role="status">{helpUpdateMessage}{helpUpdate?.updateAvailable && <button type="button" onClick={() => void openUpdateUrl(helpUpdate.downloadUrl).catch((error) => setError(String(error)))}>{t("help.downloadUpdate")}</button>}</div>}
+                <button type="button" role="menuitem" onClick={() => { setHelpMenuOpen(false); void invoke("app_restart").catch((error) => setError(String(error))); }}><RotateCcw size={14} aria-hidden="true" />{t("help.restartApp")}</button>
+              </div>}
+            </div>
             <div className="vs-plusWrap" ref={plusRef}>
               <button
                 type="button"

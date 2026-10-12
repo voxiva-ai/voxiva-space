@@ -211,6 +211,7 @@ app.whenReady().then(() => {
     if (command === "read_legacy_state") return smoke ? null : native(command);
     if (command === "app_check_for_updates") return updates.check();
     if (command === "app_install_update") return updates.install();
+    if (command === "app_restart") { app.relaunch(); app.exit(0); return; }
     throw new Error(`Electron command not yet ported: ${command}`);
   });
   window.on("resize", () => event("window://resized", {}));
@@ -276,6 +277,11 @@ app.whenReady().then(() => {
             }
             popup.hidePopover();
           }
+          document.querySelector('.vs-helpBtn').click();
+          const helpMenu = document.querySelector('.vs-helpMenu');
+          if (!helpMenu || helpMenu.querySelectorAll('[role="menuitem"] svg').length < 8 || !helpMenu.querySelector('.vs-helpMenuClose')) throw new Error('Help menu actions or icons did not render');
+          helpMenu.querySelector('.vs-helpMenuClose').click();
+          if (document.querySelector('.vs-helpMenu')) throw new Error('Help menu did not close');
           const settingsButton = document.querySelector('[data-view-trigger="settings"]');
           if (!settingsButton) throw new Error('Settings button missing');
           settingsButton.click();

@@ -1,4 +1,5 @@
 import type { AgentAvailability, AgentBot } from "@/lib/types";
+import { loadAgentPrefs } from "./prefs";
 
 /** Agents / CLI tools detected via PATH scan. */
 export const agentBots: AgentBot[] = [
@@ -147,6 +148,25 @@ export function resolveBotCommand(bot: AgentBot, availability: AgentAvailability
   return names.find((name) => availability[name] === true) ?? bot.command ?? names[0];
 }
 
+const YOLO_FLAGS: Record<string, string> = {
+  claude: "--dangerously-skip-permissions",
+  codex: "--dangerously-bypass-approvals-and-sandbox",
+  gemini: "--yolo",
+  "cursor-agent": "--yolo",
+};
+
+/** Applies saved per-agent command/args and the explicit permission mode to new launches. */
+export function resolveBotLaunchCommand(bot: AgentBot, availability: AgentAvailability) {
+  const prefs = loadAgentPrefs();
+  const override = prefs.overrides[bot.id];
+  const command = override?.command.trim() || resolveBotCommand(bot, availability) || "";
+  const args = override?.args.trim() || "";
+  const yoloFlag = prefs.permissionMode === "yolo" ? YOLO_FLAGS[bot.id] : "";
+  return [command, args, yoloFlag && !args.includes(yoloFlag) ? yoloFlag : ""]
+    .filter(Boolean)
+    .join(" ");
+}
+
 /**
  * Rebuild the launch command so the agent resumes its last session where possible.
  * Falls back to the raw command when the bot is unknown or has no resume flag.
@@ -160,29 +180,32 @@ export function resumeCommandFor(
     const raw = rawCommand?.trim();
     return raw || undefined;
   }
-  const resolved = resolveBotCommand(bot, availability);
-  const base = (resolved || rawCommand || bot.command || "").trim().split(/\s+/)[0];
+  const resolved = resolveBotLaunchCommand(bot, availability) || rawCommand || bot.command || "";
+  const token = resolved.match(/^"[^"]+"|'[^']+'|\S+/)?.[0];
+  const base = token ?? "";
+  const configuredArgs = resolved.slice(base.length).trim();
   if (!base) return undefined;
+  const args = (tail: string) => [configuredArgs, tail].filter(Boolean).join(" ");
   switch (bot.id) {
     case "opencode":
-      return `${base} --continue`;
+      return `${base} ${args("--continue")}`;
     case "claude":
       // Prefer --continue (latest). Specific `--resume <id>` is attached from the vault when known.
-      return `${base} --continue`;
+      return `${base} ${args("--continue")}`;
     case "codex":
-      return `${base} resume --last`;
+      return `${base} ${args("resume --last")}`;
     case "gemini":
-      return `${base} --resume`;
+      return `${base} ${args("--resume")}`;
     case "aider":
-      return `${base} --restore-chat-history`;
+      return `${base} ${args("--restore-chat-history")}`;
     case "goose":
-      return `${base} session --resume`;
+      return `${base} ${args("session --resume")}`;
     case "cursor-agent":
-      return `${base} --resume`;
+      return `${base} ${args("--resume")}`;
     case "amp":
-      return "amp threads continue";
+      return `${base} ${args("threads continue")}`;
     case "voxiva":
-      return `${base} chat`;
+      return `${base} ${args("chat")}`;
     default:
       return resolved || rawCommand || base;
   }

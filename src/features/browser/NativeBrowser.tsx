@@ -22,7 +22,7 @@ import {
   IconRefresh,
   IconSearch,
 } from "@/components/icons";
-import { agentBots, isBotReady, resolveBotCommand } from "@/features/agents/bots";
+import { agentBots, isBotReady, resolveBotLaunchCommand } from "@/features/agents/bots";
 import { useSpace } from "@/features/workspace/SpaceContext";
 import { clientError } from "@/lib/errors";
 import { openUrl, writeTerminalSession, isVsCodeServeWebUrl } from "@/features/terminal/api";
@@ -738,7 +738,7 @@ export function NativeBrowser({
     }
     const sessionId = await launchAgent({
       title: bot.name,
-      command: resolveBotCommand(bot, agentAvailability),
+      command: resolveBotLaunchCommand(bot, agentAvailability),
       accent: bot.accent,
     });
     if (!sessionId) {
