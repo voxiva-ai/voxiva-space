@@ -8,6 +8,7 @@ import { agentIdForSession } from "@/features/agents/sessionAgent";
 import { invoke } from "@/platform/desktop";
 import { collectSessionIds } from "@/features/workspace/layout";
 import { agentBots, isBotReady } from "@/features/agents/bots";
+import { loadStatusBarPrefs, subscribeStatusBarPrefs } from "@/features/ui/statusPrefs";
 
 type Quota = { used: number; minutes: number; resetsAt: number };
 type Snapshot = {
@@ -43,6 +44,7 @@ export function StatusBar() {
   const diskScanBusy = useRef(false);
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [cleanupId, setCleanupId] = useState<string | null>(null);
+  const [statusPrefs, setStatusPrefs] = useState(() => loadStatusBarPrefs());
   const confirmedMode = useRef<AwakeMode>("off");
   const portsPanel = useRef<HTMLDivElement>(null);
   const resourcesPanel = useRef<HTMLDivElement>(null);
@@ -63,6 +65,8 @@ export function StatusBar() {
     const timer = window.setInterval(() => void refresh(), 30_000);
     return () => window.clearInterval(timer);
   }, [refresh]);
+
+  useEffect(() => subscribeStatusBarPrefs(setStatusPrefs), []);
 
   useEffect(() => {
     if (!desktop) return;
@@ -138,7 +142,7 @@ export function StatusBar() {
   const overallUsage = quotas.length ? Math.round(quotas.reduce((sum, quota) => sum + quota.used, 0) / quotas.length) : null;
 
   return <footer className="vs-statusBar" aria-label={t("status.title")}>
-    <div className="vs-statusUsageModels" aria-label={t("status.usage")}>
+    {statusPrefs.usage && <div className="vs-statusUsageModels" aria-label={t("status.usage")}>
       <button type="button" className="vs-statusUsageSummary" popoverTarget="status-usage" aria-expanded={panel === "usage"} title={t("status.usage")}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M4 19V5m0 14h17M8 15l4-4 3 2 5-6" /></svg>
         {overallUsage === null ? <span>{t("status.usage")}</span> : <><i className="vs-statusUsageMiniMeter"><b style={{ width: `${overallUsage}%` }} /></i><strong>{overallUsage}%</strong><small>{remaining(Math.min(...quotas.map((quota) => quota.resetsAt)))}</small></>}
@@ -146,13 +150,13 @@ export function StatusBar() {
       {quotas.map((quota) => <button type="button" className="vs-statusQuotaShortcut" key={quota.minutes} popoverTarget="status-usage" aria-expanded={panel === "usage"} title={`${quotaWindow(quota.minutes)} · ${Math.round(quota.used)}% · ${remaining(quota.resetsAt)}`}>
         <small>{quotaWindow(quota.minutes)}</small><i className="vs-statusUsageMiniMeter"><b style={{ width: `${quota.used}%` }} /></i><strong>{Math.round(quota.used)}%</strong>
       </button>)}
-    </div>
+    </div>}
     <div className="vs-statusRight">
-      <button type="button" popoverTarget="status-awake" aria-expanded={panel === "awake"} title={t("status.awake")}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M4 8h12v7a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8ZM16 9h2a3 3 0 0 1 0 6h-2M7 2v3M12 2v3" /></svg><span>{t(`status.${mode}`)}</span><i className={`vs-statusDot${awake ? " is-active" : ""}`} /></button>
-      <button type="button" className="vs-statusMemory" popoverTarget="status-resources" aria-expanded={panel === "resources"} title={t("status.resources")}><Cpu size={13} aria-hidden="true" /><span>{snapshot && !failed ? `${snapshot.memoryMb} MB` : "—"}</span></button>
-      <button type="button" onClick={() => setView("space")} title={t("status.sessions")} aria-label={`${t("status.sessions")}: ${live.length}`}><IconTerminal size={13} /><span>{live.length}</span></button>
-      <button type="button" className="vs-statusAgents" onClick={() => setView("agents")} title={t("nav.agents")} aria-label={t("nav.agents")}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2" /><path d="M3 19v-1a6 6 0 0 1 12 0v1m1-5a4 4 0 0 1 5 4v1" /></svg></button>
-      <button type="button" popoverTarget="status-ports" aria-expanded={panel === "ports"} title={t("status.ports")}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M8 2v6m8-6v6M6 8h12v4a6 6 0 0 1-12 0V8Zm6 10v4" /></svg><span>{t("status.ports")}</span></button>
+      {statusPrefs.awake && <button type="button" popoverTarget="status-awake" aria-expanded={panel === "awake"} title={t("status.awake")}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M4 8h12v7a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8ZM16 9h2a3 3 0 0 1 0 6h-2M7 2v3M12 2v3" /></svg><span>{t(`status.${mode}`)}</span><i className={`vs-statusDot${awake ? " is-active" : ""}`} /></button>}
+      {statusPrefs.resources && <button type="button" className="vs-statusMemory" popoverTarget="status-resources" aria-expanded={panel === "resources"} title={t("status.resources")}><Cpu size={13} aria-hidden="true" /><span>{snapshot && !failed ? `${snapshot.memoryMb} MB` : "—"}</span></button>}
+      {statusPrefs.sessions && <button type="button" onClick={() => setView("space")} title={t("status.sessions")} aria-label={`${t("status.sessions")}: ${live.length}`}><IconTerminal size={13} /><span>{live.length}</span></button>}
+      {statusPrefs.agents && <button type="button" className="vs-statusAgents" onClick={() => setView("agents")} title={t("nav.agents")} aria-label={t("nav.agents")}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2" /><path d="M3 19v-1a6 6 0 0 1 12 0v1m1-5a4 4 0 0 1 5 4v1" /></svg></button>}
+      {statusPrefs.ports && <button type="button" popoverTarget="status-ports" aria-expanded={panel === "ports"} title={t("status.ports")}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M8 2v6m8-6v6M6 8h12v4a6 6 0 0 1-12 0V8Zm6 10v4" /></svg><span>{t("status.ports")}</span></button>}
     </div>
 
     <div id="status-awake" className="vs-statusPopup vs-statusAwake" popover="auto" role="dialog" aria-labelledby="awake-title" onToggle={(event) => setPanel((prev) => event.newState === "open" ? "awake" : prev === "awake" ? null : prev)}>

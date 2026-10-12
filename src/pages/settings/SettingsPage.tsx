@@ -57,6 +57,7 @@ import { TerminalSettings } from "./TerminalSettings";
 import { agentBots, isBotReady } from "@/features/agents/bots";
 import { AgentBrandIcon } from "@/components/agents/AgentBrandIcon";
 import { loadAgentPrefs, saveAgentPrefs } from "@/features/agents/prefs";
+import { DEFAULT_STATUS_BAR_PREFS, loadStatusBarPrefs, saveStatusBarPrefs, type StatusBarPrefs } from "@/features/ui/statusPrefs";
 
 type SectionId = "general" | "agents" | "appearance" | "notifications" | "sounds" | "hotkeys" | "terminal" | "browser" | "mobile" | "about";
 
@@ -152,6 +153,7 @@ export function SettingsPage() {
   const [agentPrefs, setAgentPrefs] = useState(() => loadAgentPrefs());
   const [sounds, setSounds] = useState<SoundPrefs>(() => loadSoundPrefs());
   const [attention, setAttention] = useState<AttentionPrefs>(() => loadAttentionPrefs());
+  const [statusPrefs, setStatusPrefs] = useState<StatusBarPrefs>(() => loadStatusBarPrefs());
   const fileRef = useRef<HTMLInputElement>(null);
   const navSearchRef = useRef<HTMLInputElement>(null);
   const [appVersion, setAppVersion] = useState("…");
@@ -281,6 +283,14 @@ export function SettingsPage() {
     });
   }
 
+  function patchStatusPrefs(patch: Partial<StatusBarPrefs>) {
+    setStatusPrefs((current) => {
+      const next = { ...current, ...patch };
+      saveStatusBarPrefs(next);
+      return next;
+    });
+  }
+
   const themeFamilies = useMemo(() => listThemeFamilies(), []);
   const activeFamily = familyOf(theme);
   const activeAppearance = getTheme(theme).appearance;
@@ -345,6 +355,18 @@ export function SettingsPage() {
     { id: "mobile", title: t("settings.mobile") },
     { id: "about", title: t("settings.about") },
   ];
+  const searchTerms: Record<SectionId, string> = {
+    general: "resume запуск при старте запуск агента",
+    agents: "agent агент cli install установка detected installed installed enable enabled catalog docs provider codex claude opencode gemini",
+    appearance: "theme тема светлая тёмная dark light color цвет zoom масштаб language язык font шрифт ui interface интерфейс sidebar боковая панель status bar строка состояния usage ресурсы memory ports порты",
+    notifications: "notification уведомления attention внимание ring подсветка цвет color",
+    sounds: "sound звук звуки audio аудио bell звонок chime сигнал volume громкость",
+    hotkeys: "hotkey shortcut keyboard клавиатура сочетания клавиш reset сброс",
+    terminal: "terminal терминал shell оболочка powershell cmd bash font шрифт rendering рендер gpu scroll прокрутка copy paste вставка session сессия",
+    browser: "browser браузер cookies cookie passkeys импорт сессии login авторизация",
+    mobile: "mobile телефон phone companion qr мобильный",
+    about: "about версия version update обновление install скачать github readme",
+  };
   const navGroups = [
     { title: t("settings.groupInterface"), items: [nav[0], ...nav.slice(2, 6)] },
     { title: t("settings.groupWorkspace"), items: [nav[1], ...nav.slice(6, 9)] },
@@ -352,7 +374,12 @@ export function SettingsPage() {
   ];
   const filteredNavGroups = navGroups.map((group) => ({
     ...group,
-    items: group.items.filter((item) => item.title.toLowerCase().includes(navFilter.trim().toLowerCase())),
+    items: group.items.filter((item) => {
+      const query = navFilter.trim().toLocaleLowerCase();
+      if (!query) return true;
+      const terms = `${item.title} ${searchTerms[item.id]}`.toLocaleLowerCase();
+      return query.split(/\s+/).every((word) => terms.includes(word));
+    }),
   })).filter((group) => group.items.length > 0);
   const navIcons = { general: Settings, agents: Users, appearance: Brush, notifications: Bell, sounds: Volume2, hotkeys: Keyboard, terminal: SquareTerminal, browser: Globe, mobile: Smartphone, about: Info };
 
@@ -394,10 +421,6 @@ export function SettingsPage() {
         </header>
         {section === "general" && (
           <section className="vs-settingsPanelBody vs-settingsGeneral">
-            <h2>{t("settings.language")}</h2>
-            <p className="vs-settingsHint">{t("settings.languageHint")}</p>
-            <LanguageSwitcher />
-
             <div className="vs-settingsBlock" style={{ marginTop: "1.25rem" }}>
               <div className="vs-settingsRow">
                 <div>
@@ -450,8 +473,6 @@ export function SettingsPage() {
 
         {section === "appearance" && (
           <section className="vs-settingsPanelBody vs-appearanceSettings">
-            <h2>{t("settings.appearance")}</h2>
-            <p className="vs-settingsHint">{t("settings.appearanceHint")}</p>
             <details className="vs-appearanceGroup" open>
               <summary><span className="vs-appearanceGroupIcon"><Brush size={16} /></span><strong>{t("settings.appearanceInterface")}</strong></summary>
               <div className="vs-appearanceGroupBody">
@@ -469,12 +490,35 @@ export function SettingsPage() {
                   </div> : <span className="vs-appearanceValue">{t(activeAppearance === "light" ? "settings.themeLight" : "settings.themeDark")}</span>}
                 </div>
                 <div className="vs-appearanceZoom"><div><strong>{t("settings.zoom")}</strong><small>{t("settings.zoomHint")}</small></div><ZoomControls showRange /></div>
+                <label className="vs-appearanceRow">
+                  <span><strong>{t("settings.language")}</strong><small>{t("settings.languageHint")}</small></span>
+                  <LanguageSwitcher />
+                </label>
               </div>
             </details>
             <details className="vs-appearanceGroup">
               <summary><span className="vs-appearanceGroupIcon"><SquareTerminal size={16} /></span><strong>{t("settings.appearanceTerminal")}</strong></summary>
               <div className="vs-appearanceGroupBody">
                 <div className="vs-appearanceRow"><span><strong>{t("settings.appearanceTerminalHint")}</strong><small>{t("settings.appearanceTerminalDescription")}</small></span><button type="button" className="vs-appearanceAction" onClick={() => setSection("terminal")}>{t("settings.openTerminalSettings")}<ChevronRight size={15} /></button></div>
+              </div>
+            </details>
+            <details className="vs-appearanceGroup" open>
+              <summary><span className="vs-appearanceGroupIcon"><Settings size={16} /></span><strong>{t("settings.appearanceWindow")}</strong></summary>
+              <div className="vs-appearanceGroupBody">
+                {([
+                  ["usage", "status.usage"],
+                  ["awake", "status.awake"],
+                  ["resources", "status.resources"],
+                  ["sessions", "status.sessions"],
+                  ["agents", "nav.agents"],
+                  ["ports", "status.ports"],
+                ] as const).map(([key, label]) => (
+                  <div className="vs-appearanceRow" key={key}>
+                    <span><strong>{t(label)}</strong></span>
+                    <Toggle on={statusPrefs[key]} label={t(label)} onClick={() => patchStatusPrefs({ [key]: !statusPrefs[key] })} />
+                  </div>
+                ))}
+                <button type="button" className="vs-btn vs-btnGhost" onClick={() => { saveStatusBarPrefs(DEFAULT_STATUS_BAR_PREFS); setStatusPrefs({ ...DEFAULT_STATUS_BAR_PREFS }); }}>{t("settings.hk.reset")}</button>
               </div>
             </details>
           </section>
