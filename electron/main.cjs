@@ -324,6 +324,9 @@ app.whenReady().then(() => {
             if (rect.left < 8 || rect.top < 8 || rect.right > innerWidth - 8 || rect.bottom > innerHeight - 8) {
               throw new Error('Theme picker escaped the window: ' + JSON.stringify({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: innerWidth, height: innerHeight }));
             }
+            if (Math.abs(rect.left - Math.max(12, Math.min(trigger.getBoundingClientRect().left, innerWidth - rect.width - 12))) > 2) throw new Error('Theme picker is not aligned with its control');
+            const options = menu.querySelector('.vs-themePickerOptions');
+            if (!options || options.clientHeight < 80 || options.scrollHeight <= options.clientHeight) throw new Error('Theme list is clipped instead of scrolling');
             menu.querySelector('.vs-themePickerOption.is-active')?.click();
             await waitForThemePicker(() => !menu.matches(':popover-open'), 'popover close');
           }

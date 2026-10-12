@@ -342,20 +342,17 @@ export function SettingsPage() {
       const margin = 12;
       const gap = 7;
       const width = Math.max(0, Math.min(368, window.innerWidth - margin * 2));
-      const left = Math.max(margin, Math.min(rect.right - width, window.innerWidth - width - margin));
+      const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
       menu.style.width = `${width}px`;
       menu.style.left = `${left}px`;
-      menu.style.maxHeight = `${Math.max(120, Math.min(432, window.innerHeight - margin * 2))}px`;
-      menu.style.top = `${Math.min(window.innerHeight - margin, rect.bottom + gap)}px`;
-      const height = menu.getBoundingClientRect().height;
-      const below = window.innerHeight - rect.bottom - gap - margin;
-      const above = rect.top - gap - margin;
-      if (height > below && above > below) {
-        menu.style.top = `${Math.max(margin, rect.top - gap - height)}px`;
-        menu.style.maxHeight = `${Math.max(120, Math.min(432, above))}px`;
-      } else if (height > below) {
-        menu.style.maxHeight = `${Math.max(120, below)}px`;
-      }
+      const below = Math.max(0, window.innerHeight - rect.bottom - gap - margin);
+      const above = Math.max(0, rect.top - gap - margin);
+      const openAbove = below < Math.min(360, menu.scrollHeight) && above > below;
+      const available = openAbove ? above : below;
+      const height = Math.min(432, menu.scrollHeight, available);
+      menu.style.height = `${height}px`;
+      menu.style.maxHeight = `${height}px`;
+      menu.style.top = `${openAbove ? rect.top - gap - height : rect.bottom + gap}px`;
     };
     positionMenu();
     window.addEventListener("resize", positionMenu);
