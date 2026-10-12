@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Bell, Brush, Check, ExternalLink, Globe, Info, Keyboard, RefreshCw, Search, Settings, Smartphone, SquareTerminal, Users, Volume2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Bell, Brush, ChevronRight, ExternalLink, Globe, Info, Keyboard, RefreshCw, Search, Settings, Smartphone, SquareTerminal, Users, Volume2 } from "lucide-react";
 import { useSpace, useView } from "@/features/workspace/SpaceContext";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import {
@@ -8,7 +8,6 @@ import {
   getTheme,
   loadFamilyAppearancePrefs,
   listThemeFamilies,
-  previewForFamily,
   saveFamilyAppearancePrefs,
   themeIdForAppearance,
   type FamilyAppearancePrefs,
@@ -450,110 +449,34 @@ export function SettingsPage() {
         )}
 
         {section === "appearance" && (
-          <section className="vs-settingsPanelBody">
-            <h2>{t("settings.theme")}</h2>
-            <p className="vs-settingsHint">{t("settings.themeHint")}</p>
-            <div className="vs-themeRow">
-              {themeFamilies.map((family) => {
-                const dual = family.appearances.length > 1;
-                const active = activeFamily.familyId === family.familyId;
-                const cardAppearance = appearanceForFamilyCard(
-                  family,
-                  familyPrefs,
-                  activeFamily.familyId,
-                  activeAppearance,
-                );
-                const def = previewForFamily(family, cardAppearance);
-                const { tokens } = def;
-                const [canvas, surface, accent, text] = tokens.preview;
-                return (
-                  <article
-                    key={family.familyId}
-                    className={`vs-themeChip${active ? " is-active" : ""}${dual ? " has-modes" : ""}`}
-                    data-appearance={cardAppearance}
-                    style={
-                      {
-                        "--chip-canvas": canvas,
-                        "--chip-surface": surface,
-                        "--chip-accent": accent,
-                        "--chip-text": text,
-                        "--chip-muted": tokens.muted,
-                        "--chip-on-accent": tokens.onAccent,
-                        "--chip-border": tokens.border,
-                      } as CSSProperties
-                    }
-                  >
-                    <button
-                      type="button"
-                      className="vs-themeChipHit"
-                      onClick={() => selectFamily(family.familyId)}
-                      aria-pressed={active}
-                      aria-label={family.label}
-                    >
-                      <span className="vs-themeChipPreview" aria-hidden>
-                        <span className="vs-themeChipPreviewDots">•••</span>
-                        <span className="vs-themeChipPreviewBars">
-                          <i />
-                          <i />
-                        </span>
-                        <span className="vs-themeChipPreviewAccent" />
-                      </span>
-
-                      <span className="vs-themeChipMeta">
-                        <strong className="vs-themeChipName">{family.label}</strong>
-                        {active ? (
-                          <span className="vs-themeChipCheck" aria-hidden>
-                            <Check size={12} />
-                          </span>
-                        ) : (
-                          <span className="vs-themeChipCheckSpacer" aria-hidden />
-                        )}
-                      </span>
-                    </button>
-
-                    {dual ? (
-                      <div className="vs-themeChipModes" role="group" aria-label={t("settings.themeMode")}>
-                        {family.appearances.includes("light") ? (
-                          <button
-                            type="button"
-                            className={
-                              active && activeAppearance === "light" ? "is-active" : undefined
-                            }
-                            aria-pressed={active && activeAppearance === "light"}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              selectFamilyAppearance(family.familyId, "light");
-                            }}
-                          >
-                            {t("settings.themeLight")}
-                          </button>
-                        ) : null}
-                        {family.appearances.includes("dark") ? (
-                          <button
-                            type="button"
-                            className={
-                              active && activeAppearance === "dark" ? "is-active" : undefined
-                            }
-                            aria-pressed={active && activeAppearance === "dark"}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              selectFamilyAppearance(family.familyId, "dark");
-                            }}
-                          >
-                            {t("settings.themeDark")}
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </article>
-                );
-              })}
-            </div>
-            <h2 style={{ marginTop: "2rem" }}>{t("settings.zoom")}</h2>
-            <p className="vs-settingsHint">{t("settings.zoomHint")}</p>
-            <ZoomControls showRange />
+          <section className="vs-settingsPanelBody vs-appearanceSettings">
+            <h2>{t("settings.appearance")}</h2>
+            <p className="vs-settingsHint">{t("settings.appearanceHint")}</p>
+            <details className="vs-appearanceGroup" open>
+              <summary><span className="vs-appearanceGroupIcon"><Brush size={16} /></span><strong>{t("settings.appearanceInterface")}</strong></summary>
+              <div className="vs-appearanceGroupBody">
+                <label className="vs-appearanceRow">
+                  <span><strong>{t("settings.theme")}</strong><small>{t("settings.themeHint")}</small></span>
+                  <select value={activeFamily.familyId} aria-label={t("settings.theme")} onChange={(event) => selectFamily(event.target.value)}>
+                    <optgroup label={t("settings.themeBuiltIn")}>{themeFamilies.filter((family) => family.official).map((family) => <option key={family.familyId} value={family.familyId}>{family.label}</option>)}</optgroup>
+                    <optgroup label={t("settings.themeCommunity")}>{themeFamilies.filter((family) => !family.official).map((family) => <option key={family.familyId} value={family.familyId}>{family.label}</option>)}</optgroup>
+                  </select>
+                </label>
+                <div className="vs-appearanceRow">
+                  <span><strong>{t("settings.themeMode")}</strong><small>{t("settings.themeModeHint")}</small></span>
+                  {activeFamily.appearances.length > 1 ? <div className="vs-appearanceMode" role="group" aria-label={t("settings.themeMode")}>
+                    {(["light", "dark"] as const).map((appearance) => <button key={appearance} type="button" className={activeAppearance === appearance ? "is-active" : ""} aria-pressed={activeAppearance === appearance} onClick={() => selectFamilyAppearance(activeFamily.familyId, appearance)}>{t(appearance === "light" ? "settings.themeLight" : "settings.themeDark")}</button>)}
+                  </div> : <span className="vs-appearanceValue">{t(activeAppearance === "light" ? "settings.themeLight" : "settings.themeDark")}</span>}
+                </div>
+                <div className="vs-appearanceZoom"><div><strong>{t("settings.zoom")}</strong><small>{t("settings.zoomHint")}</small></div><ZoomControls showRange /></div>
+              </div>
+            </details>
+            <details className="vs-appearanceGroup">
+              <summary><span className="vs-appearanceGroupIcon"><SquareTerminal size={16} /></span><strong>{t("settings.appearanceTerminal")}</strong></summary>
+              <div className="vs-appearanceGroupBody">
+                <div className="vs-appearanceRow"><span><strong>{t("settings.appearanceTerminalHint")}</strong><small>{t("settings.appearanceTerminalDescription")}</small></span><button type="button" className="vs-appearanceAction" onClick={() => setSection("terminal")}>{t("settings.openTerminalSettings")}<ChevronRight size={15} /></button></div>
+              </div>
+            </details>
           </section>
         )}
 
