@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, Brush, ChevronDown, ChevronRight, ExternalLink, Globe, Info, Keyboard, RefreshCw, Search, Settings, Smartphone, SquareTerminal, Users, Volume2 } from "lucide-react";
+import { Bell, Brush, Check, ChevronDown, ChevronRight, ExternalLink, Globe, Info, Keyboard, RefreshCw, Search, Settings, Smartphone, SquareTerminal, Users, Volume2 } from "lucide-react";
 import { useSpace, useView } from "@/features/workspace/SpaceContext";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import {
@@ -311,11 +311,36 @@ export function SettingsPage() {
   }
 
   const themeFamilies = useMemo(() => listThemeFamilies(), []);
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const [themeSearch, setThemeSearch] = useState("");
+  const themePickerRef = useRef<HTMLDetailsElement>(null);
+  const themeSearchRef = useRef<HTMLInputElement>(null);
+  const visibleThemeFamilies = useMemo(() => {
+    const query = themeSearch.trim().toLocaleLowerCase();
+    return query ? themeFamilies.filter((family) => family.label.toLocaleLowerCase().includes(query)) : themeFamilies;
+  }, [themeFamilies, themeSearch]);
   const activeFamily = familyOf(theme);
   const activeAppearance = getTheme(theme).appearance;
   const [familyPrefs, setFamilyPrefs] = useState<FamilyAppearancePrefs>(() =>
     loadFamilyAppearancePrefs(),
   );
+
+  useEffect(() => {
+    if (!themePickerOpen) return;
+    themeSearchRef.current?.focus();
+    const onPointerDown = (event: PointerEvent) => {
+      if (!themePickerRef.current?.contains(event.target as Node)) setThemePickerOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setThemePickerOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [themePickerOpen]);
 
   useEffect(() => {
     // Keep memory in sync when theme is applied (incl. Light/Dark of this pack).
@@ -533,13 +558,38 @@ export function SettingsPage() {
             <details className="vs-appearanceGroup" open>
               <summary><span className="vs-appearanceGroupIcon"><Brush size={16} /></span><strong>{t("settings.appearanceInterface")}</strong></summary>
               <div className="vs-appearanceGroupBody">
-                <label className="vs-appearanceRow">
+                <div className="vs-appearanceRow vs-themePickerRow">
                   <span><strong>{t("settings.theme")}</strong><small>{t("settings.themeHint")}</small></span>
-                  <select value={activeFamily.familyId} aria-label={t("settings.theme")} onChange={(event) => selectFamily(event.target.value)}>
-                    <optgroup label={t("settings.themeBuiltIn")}>{themeFamilies.filter((family) => family.official).map((family) => <option key={family.familyId} value={family.familyId}>{family.label}</option>)}</optgroup>
-                    <optgroup label={t("settings.themeCommunity")}>{themeFamilies.filter((family) => !family.official).map((family) => <option key={family.familyId} value={family.familyId}>{family.label}</option>)}</optgroup>
-                  </select>
-                </label>
+                  <details ref={themePickerRef} className="vs-themePicker" open={themePickerOpen} onToggle={(event) => setThemePickerOpen(event.currentTarget.open)}>
+                    <summary aria-label={t("settings.theme")}>
+                      <span className="vs-themePickerSwatches" aria-hidden="true">{getTheme(theme).tokens.preview.slice(0, 4).map((color, index) => <i key={index} style={{ background: color }} />)}</span>
+                      <span>{activeFamily.label}</span><ChevronDown size={15} aria-hidden="true" />
+                    </summary>
+                    <div className="vs-themePickerMenu">
+                      <label className="vs-themePickerSearch"><Search size={14} aria-hidden="true" /><input ref={themeSearchRef} aria-label={t("settings.themeSearch")} value={themeSearch} onChange={(event) => setThemeSearch(event.target.value)} placeholder={t("settings.themeSearch")} /></label>
+                      <div className="vs-themePickerCount">{t("settings.themeShowing")} {visibleThemeFamilies.length} / {themeFamilies.length}</div>
+                      <div className="vs-themePickerOptions" role="group" aria-label={t("settings.theme")}>
+                        {([true, false] as const).map((official) => {
+                          const group = visibleThemeFamilies.filter((family) => family.official === official);
+                          if (!group.length) return null;
+                          return <div className="vs-themePickerGroup" key={String(official)}>
+                            <div className="vs-themePickerGroupTitle">{t(official ? "settings.themeBuiltIn" : "settings.themeCommunity")}</div>
+                            {group.map((family) => {
+                              const previewAppearance = family.appearances.includes(activeAppearance) ? activeAppearance : family.appearances[0];
+                              const preview = getTheme(themeIdForAppearance(family, previewAppearance)).tokens.preview;
+                              const selected = family.familyId === activeFamily.familyId;
+                              return <button type="button" aria-pressed={selected} className={`vs-themePickerOption${selected ? " is-active" : ""}`} key={family.familyId} onClick={() => { selectFamily(family.familyId); setThemeSearch(""); setThemePickerOpen(false); }}>
+                                <span className="vs-themePickerSwatches" aria-hidden="true">{preview.slice(0, 4).map((color, index) => <i key={index} style={{ background: color }} />)}</span>
+                                <span>{family.label}</span>{selected && <Check size={14} aria-hidden="true" />}
+                              </button>;
+                            })}
+                          </div>;
+                        })}
+                        {!visibleThemeFamilies.length && <div className="vs-themePickerEmpty">{t("settings.themeNoResults")}</div>}
+                      </div>
+                    </div>
+                  </details>
+                </div>
                 <div className="vs-appearanceRow">
                   <span><strong>{t("settings.themeMode")}</strong><small>{t("settings.themeModeHint")}</small></span>
                   {activeFamily.appearances.length > 1 ? <div className="vs-appearanceMode" role="group" aria-label={t("settings.themeMode")}>

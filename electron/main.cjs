@@ -278,10 +278,10 @@ app.whenReady().then(() => {
             popup.hidePopover();
           }
           document.querySelector('.vs-helpBtn').click();
-          const helpMenu = document.querySelector('.vs-helpMenu');
-          if (!helpMenu || helpMenu.querySelectorAll('[role="menuitem"] svg').length < 8 || !helpMenu.querySelector('.vs-helpMenuClose')) throw new Error('Help menu actions or icons did not render');
+          const helpMenu = await waitFor(() => document.querySelector('.vs-helpMenu'), 'help menu');
+          if (helpMenu.querySelectorAll('[role="menuitem"] svg').length < 8 || !helpMenu.querySelector('.vs-helpMenuClose')) throw new Error('Help menu actions or icons did not render');
           helpMenu.querySelector('.vs-helpMenuClose').click();
-          if (document.querySelector('.vs-helpMenu')) throw new Error('Help menu did not close');
+          await waitFor(() => !document.querySelector('.vs-helpMenu'), 'help menu close');
           const settingsButton = document.querySelector('[data-view-trigger="settings"]');
           if (!settingsButton) throw new Error('Settings button missing');
           settingsButton.click();

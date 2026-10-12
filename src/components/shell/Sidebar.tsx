@@ -10,13 +10,13 @@ import {
 } from "@/lib/types";
 import type { MsgKey } from "@/i18n";
 import { IconAssistPanel, IconBell, IconMore, IconPlusStroke, IconSettings, IconSidebar, IconX } from "@/components/icons";
-import { PromptDialog } from "@/components/PromptDialog";
+import { ConfirmDialog, PromptDialog } from "@/components/PromptDialog";
 import { clientError } from "@/lib/errors";
 import { savedLayoutPaneCount } from "@/features/workspace/savedLayouts";
 import { Copy, FolderPlus, LayoutGrid, Pin, PinOff, Save } from "lucide-react";
 import logoUrl from "@/assets/brand/voxiva-space-mark.png";
 import { formatHotkey, loadHotkeys } from "@/features/hotkeys/bindings";
-import { BookOpen, Compass, ExternalLink, Flag, Github, Keyboard, MessageSquare, RotateCcw, ScrollText, RefreshCw } from "lucide-react";
+import { BookOpen, CircleHelp, Compass, ExternalLink, Flag, Github, Keyboard, MessageSquare, RotateCcw, ScrollText, RefreshCw } from "lucide-react";
 import { checkForUpdates, openUpdateUrl, type UpdateCheckResult } from "@/features/updates/api";
 import { getCurrentWindow, invoke } from "@/platform/desktop";
 
@@ -86,6 +86,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
   const [helpBusy, setHelpBusy] = useState(false);
   const [helpUpdate, setHelpUpdate] = useState<UpdateCheckResult | null>(null);
   const [helpUpdateMessage, setHelpUpdateMessage] = useState("");
+  const [restartConfirm, setRestartConfirm] = useState(false);
   const plusRef = useRef<HTMLDivElement>(null);
   const notifyRef = useRef<HTMLDivElement>(null);
   const helpRef = useRef<HTMLDivElement>(null);
@@ -489,7 +490,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
             </button>
             <div className="vs-plusWrap" ref={helpRef}>
               <button type="button" className={`vs-iconBtn vs-helpBtn${helpMenuOpen ? " is-active" : ""}`} title={t("help.title")} aria-label={t("help.title")} aria-haspopup="menu" aria-expanded={helpMenuOpen} onClick={() => { setPlusOpen(false); setNotifyOpen(false); setHelpMenuOpen((open) => !open); }}>
-                <span aria-hidden>?</span>
+                <CircleHelp size={15} aria-hidden="true" />
               </button>
               {helpMenuOpen && <div className="vs-chromeFlyout is-menu is-wide vs-helpMenu" role="menu" aria-label={t("help.menuTitle")}>
                 <div className="vs-helpMenuHeader"><strong>{t("help.menuTitle")}</strong><button type="button" className="vs-helpMenuClose" aria-label={t("help.close")} title={t("help.close")} onClick={() => setHelpMenuOpen(false)}><IconX size={14} /></button></div>
@@ -499,11 +500,11 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
                 <button type="button" role="menuitem" onClick={() => { setHelpMenuOpen(false); window.dispatchEvent(new CustomEvent("voxiva-help-open")); }}><Compass size={14} aria-hidden="true" />{t("help.onboarding")}</button>
                 <button type="button" role="menuitem" onClick={() => openHelpLink(locale === "ru" ? "https://github.com/voxiva-ai/voxiva-space/blob/main/README.ru.md" : "https://github.com/voxiva-ai/voxiva-space#readme")}><BookOpen size={14} aria-hidden="true" />{t("help.docs")}<ExternalLink size={12} className="vs-helpMenuExternal" /></button>
                 <button type="button" role="menuitem" onClick={() => openHelpLink("https://github.com/voxiva-ai/voxiva-space/releases")}><ScrollText size={14} aria-hidden="true" />{t("help.changelog")}<ExternalLink size={12} className="vs-helpMenuExternal" /></button>
-                <button type="button" role="menuitem" onClick={() => openHelpLink("https://github.com/voxiva-ai/voxiva-space")}><Github size={14} aria-hidden="true" />GitHub<ExternalLink size={12} className="vs-helpMenuExternal" /></button>
+                <button type="button" role="menuitem" onClick={() => openHelpLink("https://github.com/voxiva-ai/voxiva-space")}><Github size={14} aria-hidden="true" />{t("help.github")}<ExternalLink size={12} className="vs-helpMenuExternal" /></button>
                 <div className="vs-chromeMenuSep" role="separator" />
                 <button type="button" role="menuitem" disabled={helpBusy} onClick={() => void runHelpUpdateCheck()}><RefreshCw size={14} aria-hidden="true" className={helpBusy ? "vs-helpMenuSpin" : ""} />{helpBusy ? t("help.checkingUpdates") : t("help.checkUpdates")}</button>
                 {helpUpdateMessage && <div className="vs-helpMenuUpdate" role="status">{helpUpdateMessage}{helpUpdate?.updateAvailable && <button type="button" onClick={() => void openUpdateUrl(helpUpdate.downloadUrl).catch((error) => setError(String(error)))}>{t("help.downloadUpdate")}</button>}</div>}
-                <button type="button" role="menuitem" onClick={() => { setHelpMenuOpen(false); void invoke("app_restart").catch((error) => setError(String(error))); }}><RotateCcw size={14} aria-hidden="true" />{t("help.restartApp")}</button>
+                <button type="button" role="menuitem" onClick={() => { setHelpMenuOpen(false); setRestartConfirm(true); }}><RotateCcw size={14} aria-hidden="true" />{t("help.restartApp")}</button>
               </div>}
             </div>
             <div className="vs-plusWrap" ref={plusRef}>
@@ -663,6 +664,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
           saveCurrentLayoutAs(value);
         }}
       />
+      <ConfirmDialog open={restartConfirm} title={t("help.restartTitle")} body={t("help.restartHint")} confirmLabel={t("help.restartApp")} cancelLabel={t("projects.cancel")} onCancel={() => setRestartConfirm(false)} onConfirm={() => { setRestartConfirm(false); void invoke("app_restart").catch((error) => setError(String(error))); }} />
     </aside>
   );
 }

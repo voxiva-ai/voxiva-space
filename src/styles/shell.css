@@ -1379,7 +1379,6 @@ html[data-electron] .vs-titleDrag { -webkit-app-region: drag; }
   width: min(244px, calc(100vw - 24px));
   max-height: min(80vh, 520px);
   overflow-y: auto;
-  transform: translateX(8px);
 }
 
 .vs-helpMenuHeader {

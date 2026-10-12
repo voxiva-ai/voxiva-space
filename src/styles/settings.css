@@ -731,6 +731,30 @@
 .vs-appearanceRow small, .vs-appearanceZoom small { color: var(--vs-muted); font-size: 0.76rem; line-height: 1.4; }
 .vs-appearanceRow select { width: min(18rem, 48%); min-width: 11rem; min-height: 2.35rem; padding: 0 0.7rem; border: 1px solid var(--vs-settings-divider); border-radius: 8px; background: var(--vs-bg-raised); color: var(--vs-text); font: inherit; }
 .vs-appearanceRow select:focus-visible, .vs-appearanceMode button:focus-visible, .vs-appearanceAction:focus-visible { outline: 2px solid var(--vs-accent); outline-offset: 2px; }
+.vs-appearanceGroup:has(.vs-themePicker[open]) { position: relative; z-index: 5; overflow: visible; }
+.vs-themePickerRow { overflow: visible; }
+.vs-themePicker { position: relative; width: min(19rem, 55%); min-width: 12rem; flex: 0 1 auto; }
+.vs-themePicker > summary { display: flex; align-items: center; gap: 0.65rem; min-height: 2.45rem; padding: 0 0.7rem; border: 1px solid var(--vs-settings-divider); border-radius: 8px; background: var(--vs-bg-raised); color: var(--vs-text); cursor: pointer; list-style: none; }
+.vs-themePicker > summary::-webkit-details-marker { display: none; }
+.vs-themePicker > summary:focus-visible { outline: 2px solid var(--vs-accent); outline-offset: 2px; }
+.vs-themePicker > summary > span:nth-child(2) { overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; }
+.vs-themePicker > summary > svg { flex: 0 0 auto; color: var(--vs-muted); transition: transform 140ms ease; }
+.vs-themePicker[open] > summary > svg { transform: rotate(180deg); }
+.vs-themePickerSwatches { display: inline-flex; flex: 0 0 auto; overflow: hidden; width: 2rem; height: 1.1rem; border: 1px solid var(--vs-settings-divider); border-radius: 4px; }
+.vs-themePickerSwatches i { flex: 1; }
+.vs-themePickerMenu { position: absolute; z-index: 20; top: calc(100% + 0.35rem); right: 0; display: grid; width: min(23rem, calc(100vw - 3rem)); max-height: min(27rem, 65vh); grid-template-rows: auto auto minmax(0, 1fr); overflow: hidden; border: 1px solid var(--vs-settings-divider); border-radius: 10px; background: var(--vs-bg-raised); box-shadow: 0 12px 32px color-mix(in srgb, var(--vs-text) 16%, transparent); animation: vs-settingsReveal 130ms ease-out; }
+.vs-themePickerSearch { display: flex; align-items: center; gap: 0.5rem; margin: 0.6rem; padding: 0 0.65rem; border: 1px solid var(--vs-settings-divider); border-radius: 7px; color: var(--vs-muted); }
+.vs-themePickerSearch:focus-within { border-color: var(--vs-accent); }
+.vs-themePickerSearch input { width: 100%; min-width: 0; height: 2.1rem; border: 0; outline: 0; background: transparent; color: var(--vs-text); font: inherit; font-size: 0.8rem; }
+.vs-themePickerCount { padding: 0 0.8rem 0.5rem; color: var(--vs-muted); font-size: 0.68rem; }
+.vs-themePickerOptions { overflow: auto; padding: 0 0.4rem 0.45rem; overscroll-behavior: contain; }
+.vs-themePickerGroupTitle { padding: 0.5rem 0.4rem 0.25rem; color: var(--vs-muted); font-size: 0.66rem; font-weight: 650; letter-spacing: 0.07em; text-transform: uppercase; }
+.vs-themePickerOption { display: flex; align-items: center; gap: 0.6rem; width: 100%; min-height: 2.3rem; padding: 0.35rem 0.5rem; border: 0; border-radius: 6px; background: transparent; color: var(--vs-text); text-align: left; font: inherit; font-size: 0.8rem; cursor: pointer; }
+.vs-themePickerOption:hover, .vs-themePickerOption:focus-visible { outline: 0; background: var(--vs-bg-hover); }
+.vs-themePickerOption.is-active { background: var(--vs-accent-soft); }
+.vs-themePickerOption > span:nth-child(2) { flex: 1; }
+.vs-themePickerOption > svg { color: var(--vs-accent); }
+.vs-themePickerEmpty { padding: 1rem 0.5rem; color: var(--vs-muted); font-size: 0.8rem; text-align: center; }
 .vs-appearanceMode { display: flex; flex: 0 0 auto; gap: 0.15rem; padding: 0.2rem; border: 1px solid var(--vs-settings-divider); border-radius: 8px; background: var(--vs-bg); }
 .vs-appearanceMode button { min-height: 1.9rem; padding: 0 0.8rem; border: 0; border-radius: 6px; background: transparent; color: var(--vs-muted); font: inherit; font-size: 0.8rem; cursor: pointer; }
 .vs-appearanceMode button:hover { color: var(--vs-text); }
@@ -764,6 +788,8 @@
   .vs-appearanceGroupBody { padding-right: 0.75rem; padding-left: 0.75rem; }
   .vs-appearanceRow { align-items: flex-start; flex-wrap: wrap; }
   .vs-appearanceRow select { width: 100%; min-width: 0; }
+  .vs-themePicker { width: 100%; min-width: 0; }
+  .vs-themePickerMenu { right: auto; left: 0; width: min(23rem, calc(100vw - 2.5rem)); }
   .vs-appearanceZoom { align-items: flex-start; flex-direction: column; }
 }
 
