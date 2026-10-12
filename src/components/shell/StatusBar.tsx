@@ -33,7 +33,8 @@ export function StatusBar() {
   const [portsLoading, setPortsLoading] = useState(false);
   const [panel, setPanel] = useState<string | null>(null);
   const [usageMode, setUsageMode] = useState<"detailed" | "compact">("detailed");
-  const [selectedUsageAgent, setSelectedUsageAgent] = useState("codex");
+  const [selectedUsageAgent, setSelectedUsageAgent] = useState("");
+  const [usageDetailTop, setUsageDetailTop] = useState(0);
   const [mode, setMode] = useState<AwakeMode>("off");
   const [awake, setAwake] = useState(false);
   const [awakePending, setAwakePending] = useState(false);
@@ -118,7 +119,12 @@ export function StatusBar() {
   const usageAgents = detectedAgents.some((bot) => bot.id === "codex") || quotas.length
     ? [agentBots.find((bot) => bot.id === "codex")!, ...detectedAgents.filter((bot) => bot.id !== "codex")]
     : detectedAgents;
-  const selectedUsageBot = usageAgents.find((bot) => bot.id === selectedUsageAgent) ?? usageAgents[0];
+  const selectedUsageBot = usageAgents.find((bot) => bot.id === selectedUsageAgent);
+  const selectUsageAgent = (id: string, target: HTMLElement) => {
+    setSelectedUsageAgent(id);
+    const workspace = target.closest(".vs-usageWorkspace");
+    if (workspace) setUsageDetailTop(Math.max(0, target.getBoundingClientRect().top - workspace.getBoundingClientRect().top));
+  };
   const selectedQuotas = selectedUsageBot?.id === "codex" ? quotas : [];
   const remaining = (at: number) => {
     const minutes = Math.max(0, Math.ceil((at - Date.now()) / 60_000));
@@ -173,8 +179,8 @@ export function StatusBar() {
       <div className="vs-usageProviders">
         {usageAgents.map((bot) => {
           const metrics = bot.id === "codex" ? quotas : [];
-          return <button type="button" className={`vs-usageProvider${selectedUsageBot?.id === bot.id ? " is-selected" : ""}`} key={bot.id} aria-pressed={selectedUsageBot?.id === bot.id} onMouseEnter={() => setSelectedUsageAgent(bot.id)} onFocus={() => setSelectedUsageAgent(bot.id)} onClick={() => setSelectedUsageAgent(bot.id)}>
-            <span className="vs-usageProviderHead">{bot.id === "codex" ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M4 19V5m0 14h17M8 15l4-4 3 2 5-6" /></svg> : <AgentBrandIcon id={bot.id} size={16} />}<strong>{bot.name}</strong>{metrics.length > 0 && <small>{t("status.usageResetsIn")} {remaining(Math.min(...metrics.map((quota) => quota.resetsAt)))}</small>}<span aria-hidden="true">›</span></span>
+          return <button type="button" className={`vs-usageProvider${selectedUsageBot?.id === bot.id ? " is-selected" : ""}`} key={bot.id} aria-pressed={selectedUsageBot?.id === bot.id} onMouseEnter={(event) => selectUsageAgent(bot.id, event.currentTarget)} onFocus={(event) => selectUsageAgent(bot.id, event.currentTarget)} onClick={(event) => selectUsageAgent(bot.id, event.currentTarget)}>
+            <span className="vs-usageProviderHead"><AgentBrandIcon id={bot.id} size={16} /><strong>{bot.name}</strong>{metrics.length > 0 && <small>{t("status.usageResetsIn")} {remaining(Math.min(...metrics.map((quota) => quota.resetsAt)))}</small>}<span aria-hidden="true">›</span></span>
             {metrics.length ? <span className="vs-usageProviderMeters">{metrics.map((quota) => <span className="vs-usageProviderMeter" key={quota.minutes}>
               <span className="vs-usageRowHead"><strong>{quotaWindow(quota.minutes)}</strong><span>{Math.round(quota.used)}%</span></span>
               <span className="vs-usageMeter" data-level={quota.used >= 90 ? "danger" : quota.used >= 70 ? "warning" : "normal"}><i style={{ width: `${quota.used}%` }} /></span>
@@ -183,8 +189,8 @@ export function StatusBar() {
         })}
         {!usageAgents.length && <p className="vs-usageEmpty">{t(agentsScanned ? "status.usageUnavailable" : "status.usageScanning")}</p>}
       </div>
-      {selectedUsageBot && <section className="vs-usageDetail" aria-label={selectedUsageBot.name}>
-        <header><span>{selectedUsageBot.id === "codex" ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M4 19V5m0 14h17M8 15l4-4 3 2 5-6" /></svg> : <AgentBrandIcon id={selectedUsageBot.id} size={16} />}<strong>{selectedUsageBot.name}</strong></span><small>{snapshot?.limits?.at ? `${t("status.usageUpdated")} ${new Date(snapshot.limits.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : t("status.usageUnavailable")}</small></header>
+      {selectedUsageBot && <section className="vs-usageDetail" style={{ top: usageDetailTop }} aria-label={selectedUsageBot.name}>
+        <header><span><AgentBrandIcon id={selectedUsageBot.id} size={16} /><strong>{selectedUsageBot.name}</strong></span><small>{snapshot?.limits?.at ? `${t("status.usageUpdated")} ${new Date(snapshot.limits.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : t("status.usageUnavailable")}</small></header>
         {selectedQuotas.length ? <div className="vs-usageDetailLimits">{selectedQuotas.map((quota, index) => <div className="vs-usageDetailLimit" key={quota.minutes}>
           <strong>{t(index === 0 ? "status.usageSession" : "status.usageWeekly")}</strong>
           <div className="vs-usageMeter" data-level={quota.used >= 90 ? "danger" : quota.used >= 70 ? "warning" : "normal"}><i style={{ width: `${quota.used}%` }} /></div>

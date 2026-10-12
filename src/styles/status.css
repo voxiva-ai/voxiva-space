@@ -24,7 +24,7 @@
 .vs-statusUsageSummary strong, .vs-statusQuotaShortcut strong { font-size: 10px; font-weight: 500; }
 .vs-statusUsageSummary small, .vs-statusQuotaShortcut small { color: var(--vs-muted); font-size: 9px; }
 .vs-statusQuotaShortcut { border-left: 1px solid var(--vs-border) !important; border-radius: 0 !important; }
-.vs-statusUsage { inset: auto auto 38px 8px; width: min(660px, calc(100vw - 16px)); max-height: calc(100dvh - 52px); }
+.vs-statusUsage { inset: auto auto 38px 8px; width: min(360px, calc(100vw - 16px)); max-height: calc(100dvh - 52px); overflow: visible; }
 .vs-statusAgents { min-width: 30px; justify-content: center; }
 .vs-usageToolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 38px; padding: 6px 12px; border-bottom: 1px solid var(--vs-border); }
 .vs-usageToolbar > span { display: inline-flex; align-items: center; gap: 7px; color: var(--vs-text); font-weight: 600; }
@@ -32,8 +32,8 @@
 .vs-usageToolbar [role="group"] button { min-height: 22px; padding: 2px 10px; color: var(--vs-muted); font-size: 10px; }
 .vs-usageToolbar [role="group"] button[aria-pressed="true"] { background: var(--vs-bg-raised); color: var(--vs-text); box-shadow: 0 1px 2px color-mix(in srgb, var(--vs-text) 10%, transparent); }
 .vs-usageRows { display: grid; gap: 12px; padding: 12px 14px; }
-.vs-usageWorkspace { display: grid; grid-template-columns: minmax(300px, 1.2fr) minmax(260px, 1fr); min-height: 180px; }
-.vs-usageProviders { display: grid; align-content: start; padding: 0; border-right: 1px solid var(--vs-border); }
+.vs-usageWorkspace { position: relative; min-height: 0; }
+.vs-usageProviders { display: grid; align-content: start; max-height: min(45vh, 320px); overflow: auto; padding: 0; }
 .vs-usageProvider { display: grid !important; width: 100%; min-width: 0; grid-template-columns: 1fr; gap: 5px; padding: 8px 12px !important; border: 0 !important; border-bottom: 1px solid var(--vs-border) !important; border-radius: 0 !important; text-align: left; }
 .vs-usageProvider.is-selected { background: var(--vs-bg-hover) !important; }
 .vs-usageProviderHead { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--vs-text); }
@@ -47,9 +47,9 @@
 .vs-usageProviderMeter .vs-usageRowHead span { grid-column: 3; grid-row: 1; text-align: right; }
 .vs-usageProviderMeter .vs-usageMeter { grid-column: 2; grid-row: 1; height: 5px; }
 .vs-usageProviderMeter > small { grid-column: 2 / -1; grid-row: 2; }
-.vs-usageUnavailable { grid-column: 2; margin: 0 !important; padding: 3px 0 !important; color: var(--vs-muted); font-size: 10px; }
+.vs-usageUnavailable { margin: 0 !important; padding: 3px 0 !important; color: var(--vs-muted); font-size: 10px; }
 .vs-usageAgentUnknown { padding-left: 24px; color: var(--vs-muted); font-size: 10px; }
-.vs-usageDetail { min-width: 0; padding: 0 !important; }
+.vs-usageDetail { position: absolute; z-index: 3; left: calc(100% + 6px); width: 300px; max-height: min(52vh, 360px); min-width: 0; padding: 0 !important; overflow: auto; border: 1px solid var(--vs-border); border-radius: 10px; background: var(--vs-bg-raised); box-shadow: var(--vs-shadow); }
 .vs-usageDetail > header { display: flex; align-items: center; gap: 10px; min-height: 43px; padding: 7px 11px; border-bottom: 1px solid var(--vs-border); }
 .vs-usageDetail > header > span { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .vs-usageDetail > header strong { font-weight: 550; }
@@ -164,11 +164,9 @@
 @media (max-width: 760px) {
   .vs-statusUsageSummary small, .vs-statusQuotaShortcut small { display: none; }
   .vs-statusUsageMiniMeter { width: 20px; }
-  .vs-statusPopup.vs-statusUsage { inset-inline: 8px auto; width: min(400px, calc(100vw - 16px)); }
-  .vs-usageWorkspace { grid-template-columns: minmax(0, 1fr); }
+  .vs-statusPopup.vs-statusUsage { inset-inline: 8px auto; width: min(360px, calc(100vw - 16px)); }
+  .vs-usageDetail { position: static; width: auto; min-height: 0; border: 0; border-top: 1px solid var(--vs-border); border-radius: 0; box-shadow: none; }
   .vs-usageProviders { border-right: 0; }
-  .vs-usageDetail { border-top: 1px solid var(--vs-border); }
-  .vs-usageUnavailable { grid-column: 1; }
   .vs-statusBar { padding-inline: 5px; gap: 4px; }
   .vs-statusAwake { right: 12px; }
 }

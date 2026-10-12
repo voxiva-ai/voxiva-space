@@ -15,7 +15,7 @@ function Switch({ checked, label, onChange }: { checked: boolean; label: string;
 
 function Choices<T extends string>({ value, options, onChange }: {
   value: T;
-  options: { value: T; label: string }[];
+  options: readonly { value: T; label: string }[];
   onChange: (value: T) => void;
 }) {
   return <div className="vs-terminalRangeChoices">{options.map((option) => (
@@ -48,11 +48,10 @@ export function TerminalSettings() {
       {isWindows ? <div className="vs-terminalSettingsGroup">
         <h3>{t("settings.termWindowsShell")}</h3>
         <p className="vs-settingsHint">{t("settings.termWindowsShellHint")}</p>
-        <label className="vs-terminalSettingField"><span>{t("settings.termDefaultShell")}</span>
-          <select value={preferredShell} onChange={(event) => setPreferredShell(event.target.value)}>
-            {TERMINAL_OPTIONS.map((option) => <option key={option.value || "auto"} value={option.value}>{option.label}</option>)}
-          </select>
-        </label>
+        <div className="vs-terminalSettingRow">
+          <span><strong>{t("settings.termDefaultShell")}</strong><small>{t("settings.termDefaultShellHint")}</small></span>
+          <Choices value={TERMINAL_OPTIONS.some((option) => option.value === preferredShell) ? preferredShell as typeof TERMINAL_OPTIONS[number]["value"] : "powershell.exe"} options={TERMINAL_OPTIONS} onChange={setPreferredShell} />
+        </div>
       </div> : null}
 
       <div className="vs-terminalSettingsGroup">

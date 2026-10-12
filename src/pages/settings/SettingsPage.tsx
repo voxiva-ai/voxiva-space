@@ -848,6 +848,7 @@ export function SettingsPage() {
                 </button>
               )}
             </div>
+            <p className="vs-settingsHint" style={{ marginTop: "0.75rem" }}>{t("settings.updateBehavior")}</p>
             <p className="vs-settingsHint" style={{ marginTop: "0.5rem" }}>{t("settings.installAppHint")}</p>
             {updateInfo?.updateAvailable ? (
               <p className="vs-settingsHint" style={{ marginTop: "0.75rem" }}>

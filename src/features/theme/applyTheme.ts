@@ -63,10 +63,9 @@ export function applyTheme(themeId: ThemeId | string) {
   root.setAttribute("data-appearance", theme.appearance);
   root.style.colorScheme = theme.appearance;
 
-  const light = theme.appearance === "light";
   const tokens = { ...theme.tokens };
-  tokens.border = ensureBorderAlpha(tokens.border, light ? 0.34 : 0.16);
-  tokens.borderStrong = ensureBorderAlpha(tokens.borderStrong, light ? 0.52 : 0.28);
+  tokens.border = ensureBorderAlpha(tokens.border, 0.16);
+  tokens.borderStrong = ensureBorderAlpha(tokens.borderStrong, 0.28);
 
   for (const [key, cssVar] of VAR_MAP) {
     const value = tokens[key];

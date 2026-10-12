@@ -98,6 +98,24 @@ fn enriched_path() -> std::ffi::OsString {
     std::env::join_paths(paths).unwrap_or_else(|_| std::env::var_os("PATH").unwrap_or_default())
 }
 
+fn resolve_git_bash() -> Option<String> {
+    let mut candidates = Vec::new();
+    for key in ["ProgramFiles", "ProgramFiles(x86)"] {
+        if let Some(root) = std::env::var_os(key) {
+            let root = std::path::PathBuf::from(root).join("Git");
+            candidates.extend([root.join("bin/bash.exe"), root.join("usr/bin/bash.exe")]);
+        }
+    }
+    if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+        candidates.push(std::path::PathBuf::from(local).join("Programs/Git/bin/bash.exe"));
+    }
+    candidates
+        .into_iter()
+        .find(|path| path.is_file())
+        .map(|path| path.to_string_lossy().into_owned())
+        .or_else(|| command_exists("bash.exe").then(|| "bash.exe".to_owned()))
+}
+
 fn command_exists(name: &str) -> bool {
     if name.is_empty() || name.contains(['/', '\\']) {
         return std::path::Path::new(name).is_file();
@@ -115,20 +133,20 @@ fn command_exists(name: &str) -> bool {
 }
 
 fn create(state: &Arc<State>, args: &Value) -> Result<Value, String> {
-    let shell = args
+    let requested_shell = args
         .get("shell")
         .and_then(Value::as_str)
-        .filter(|s| !s.trim().is_empty())
-        .map(str::to_owned)
-        .or_else(|| std::env::var("SHELL").ok().filter(|s| !s.is_empty()))
-        .unwrap_or_else(|| {
-            if cfg!(windows) {
-                "powershell.exe"
-            } else {
-                "sh"
-            }
-            .to_owned()
-        });
+        .filter(|shell| !shell.trim().is_empty());
+    let shell = match requested_shell {
+        Some("git-bash") => resolve_git_bash().ok_or_else(|| {
+            "Git Bash was not found. Install Git for Windows, then restart Voxiva Space.".to_owned()
+        })?,
+        Some(shell) => shell.to_owned(),
+        None => std::env::var("SHELL")
+            .ok()
+            .filter(|shell| !shell.is_empty())
+            .unwrap_or_else(|| if cfg!(windows) { "powershell.exe" } else { "sh" }.to_owned()),
+    };
     let cwd = args
         .get("cwd")
         .and_then(Value::as_str)
