@@ -314,6 +314,7 @@ export function SettingsPage() {
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [themeSearch, setThemeSearch] = useState("");
   const themePickerRef = useRef<HTMLDetailsElement>(null);
+  const themeMenuRef = useRef<HTMLDivElement>(null);
   const themeSearchRef = useRef<HTMLInputElement>(null);
   const visibleThemeFamilies = useMemo(() => {
     const query = themeSearch.trim().toLocaleLowerCase();
@@ -326,19 +327,42 @@ export function SettingsPage() {
   );
 
   useEffect(() => {
-    if (!themePickerOpen) return;
+    const menu = themeMenuRef.current;
+    if (!menu) return;
+    if (!themePickerOpen) {
+      if (menu.matches(":popover-open")) menu.hidePopover();
+      return;
+    }
+    if (!menu.matches(":popover-open")) menu.showPopover();
     themeSearchRef.current?.focus();
-    const onPointerDown = (event: PointerEvent) => {
-      if (!themePickerRef.current?.contains(event.target as Node)) setThemePickerOpen(false);
+    const positionMenu = () => {
+      const anchor = themePickerRef.current?.querySelector("summary");
+      if (!anchor || !menu.matches(":popover-open")) return;
+      const rect = anchor.getBoundingClientRect();
+      const margin = 12;
+      const gap = 7;
+      const width = Math.max(0, Math.min(368, window.innerWidth - margin * 2));
+      const left = Math.max(margin, Math.min(rect.right - width, window.innerWidth - width - margin));
+      menu.style.width = `${width}px`;
+      menu.style.left = `${left}px`;
+      menu.style.maxHeight = `${Math.max(120, Math.min(432, window.innerHeight - margin * 2))}px`;
+      menu.style.top = `${Math.min(window.innerHeight - margin, rect.bottom + gap)}px`;
+      const height = menu.getBoundingClientRect().height;
+      const below = window.innerHeight - rect.bottom - gap - margin;
+      const above = rect.top - gap - margin;
+      if (height > below && above > below) {
+        menu.style.top = `${Math.max(margin, rect.top - gap - height)}px`;
+        menu.style.maxHeight = `${Math.max(120, Math.min(432, above))}px`;
+      } else if (height > below) {
+        menu.style.maxHeight = `${Math.max(120, below)}px`;
+      }
     };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setThemePickerOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
+    positionMenu();
+    window.addEventListener("resize", positionMenu);
+    document.addEventListener("scroll", positionMenu, true);
     return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", positionMenu);
+      document.removeEventListener("scroll", positionMenu, true);
     };
   }, [themePickerOpen]);
 
@@ -450,7 +474,7 @@ export function SettingsPage() {
             <div className="vs-settingsNavTitle">{group.title}</div>
             {group.items.map((item) => {
               const Icon = navIcons[item.id];
-              return <button key={item.id} type="button" aria-current={section === item.id ? "page" : undefined} className={`vs-settingsNavItem${section === item.id ? " is-active" : ""}`} onClick={() => setSection(item.id)}>
+              return <button key={item.id} type="button" data-settings-section={item.id} aria-current={section === item.id ? "page" : undefined} className={`vs-settingsNavItem${section === item.id ? " is-active" : ""}`} onClick={() => setSection(item.id)}>
                 <Icon size={15} aria-hidden="true" />{item.title}
               </button>;
             })}
@@ -565,7 +589,7 @@ export function SettingsPage() {
                       <span className="vs-themePickerSwatches" aria-hidden="true">{getTheme(theme).tokens.preview.slice(0, 4).map((color, index) => <i key={index} style={{ background: color }} />)}</span>
                       <span>{activeFamily.label}</span><ChevronDown size={15} aria-hidden="true" />
                     </summary>
-                    <div className="vs-themePickerMenu">
+                    <div ref={themeMenuRef} className="vs-themePickerMenu" popover="auto" onToggle={(event) => { if (!event.currentTarget.matches(":popover-open")) setThemePickerOpen(false); }}>
                       <label className="vs-themePickerSearch"><Search size={14} aria-hidden="true" /><input ref={themeSearchRef} aria-label={t("settings.themeSearch")} value={themeSearch} onChange={(event) => setThemeSearch(event.target.value)} placeholder={t("settings.themeSearch")} /></label>
                       <div className="vs-themePickerCount">{t("settings.themeShowing")} {visibleThemeFamilies.length} / {themeFamilies.length}</div>
                       <div className="vs-themePickerOptions" role="group" aria-label={t("settings.theme")}>

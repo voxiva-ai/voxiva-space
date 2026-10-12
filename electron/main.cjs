@@ -296,6 +296,37 @@ app.whenReady().then(() => {
             else setTimeout(poll, 25);
           }; poll(); });
           if (settings.width < 500 || settings.height < 300) throw new Error('Settings page did not fill the window: ' + JSON.stringify(settings));
+          {
+            const waitForThemePicker = (check, label) => new Promise((resolve, reject) => {
+              const start = Date.now();
+              const poll = () => {
+                const value = check();
+                if (value) resolve(value);
+                else if (Date.now() - start > 5000) reject(new Error('Theme picker timed out waiting for ' + label));
+                else setTimeout(poll, 25);
+              };
+              poll();
+            });
+            const nav = document.querySelector('[data-settings-section="appearance"]');
+            if (!nav) throw new Error('Appearance settings are missing');
+            nav.click();
+            const picker = await waitForThemePicker(() => document.querySelector('.vs-themePicker'), 'picker control');
+            const panel = document.querySelector('.vs-settingsPanel');
+            const trigger = picker.querySelector('summary');
+            panel.scrollTop += trigger.getBoundingClientRect().top - innerHeight + 140;
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            trigger.click();
+            const menu = await waitForThemePicker(() => {
+              const element = document.querySelector('.vs-themePickerMenu');
+              return element?.matches(':popover-open') ? element : null;
+            }, 'popover open');
+            const rect = menu.getBoundingClientRect();
+            if (rect.left < 8 || rect.top < 8 || rect.right > innerWidth - 8 || rect.bottom > innerHeight - 8) {
+              throw new Error('Theme picker escaped the window: ' + JSON.stringify({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: innerWidth, height: innerHeight }));
+            }
+            menu.querySelector('.vs-themePickerOption.is-active')?.click();
+            await waitForThemePicker(() => !menu.matches(':popover-open'), 'popover close');
+          }
           const sections = [...document.querySelectorAll('.vs-settingsNavItem')];
           if (sections.length !== 10) throw new Error('Expected 10 settings sections, found ' + sections.length);
           for (const section of sections) {
