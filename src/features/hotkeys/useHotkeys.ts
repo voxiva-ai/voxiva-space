@@ -7,6 +7,7 @@ import {
   isCapturingHotkey,
   isModalOpen,
   loadHotkeys,
+  loadHotkeyPriority,
   type HotkeyBinding,
   type HotkeyMap,
 } from "./bindings";
@@ -60,9 +61,10 @@ export function useHotkeys() {
   } = useSpace();
   const { setView } = useView();
   const [bindings, setBindings] = useState<HotkeyMap>(() => loadHotkeys());
+  const [priority, setPriority] = useState(() => loadHotkeyPriority());
 
   useEffect(() => {
-    const sync = () => setBindings(loadHotkeys());
+    const sync = () => { setBindings(loadHotkeys()); setPriority(loadHotkeyPriority()); };
     window.addEventListener("voxiva-hotkeys-changed", sync);
     window.addEventListener("storage", sync);
     return () => {
@@ -79,7 +81,7 @@ export function useHotkeys() {
         return;
       }
 
-      const go = (binding: HotkeyBinding) => match(event, binding, true);
+      const go = (binding: HotkeyBinding) => (priority !== "terminal" || !inTerminalFocus(event.target)) && match(event, binding, true);
 
       if (go(bindings.browserFocusMode)) {
         event.preventDefault();
@@ -268,6 +270,7 @@ export function useHotkeys() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [
     bindings,
+    priority,
     setView,
     spawnInFocused,
     openBrowserInFocused,

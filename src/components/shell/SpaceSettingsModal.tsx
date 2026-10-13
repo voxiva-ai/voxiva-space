@@ -116,7 +116,7 @@ export function SpaceSettingsModal({ workspaceId, onClose }: SpaceSettingsModalP
               <strong>{t("space.settings.title")}</strong>
               <p>{t("space.settings.lead")}</p>
             </div>
-            <button type="button" className="vs-iconBtn" aria-label={t("space.close")} onClick={onClose}>
+            <button type="button" className="vs-iconBtn vs-closeIconButton" aria-label={t("space.close")} onClick={onClose}>
               <IconX size={14} />
             </button>
           </header>

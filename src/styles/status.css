@@ -8,28 +8,41 @@
   height: 30px;
   padding: 0 10px;
   border-top: 1px solid var(--vs-border);
-  background: var(--vs-bg-raised);
+  background: var(--vs-chrome-bg);
   color: var(--vs-muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
-.vs-statusRight { display: flex; align-items: center; flex-shrink: 0; gap: 4px; height: 100%; }
+.vs-statusHelpWrap { position: relative; display: flex; align-items: center; flex: 0 0 auto; }
+.vs-statusHelpButton { width: 28px; min-width: 28px; height: 28px; min-height: 28px !important; padding: 0 !important; color: var(--vs-muted); }
+.vs-statusHelpButton:hover, .vs-statusHelpButton[aria-expanded="true"] { color: var(--vs-text); }
+.vs-chromeFlyout.vs-statusHelpMenu:not(:popover-open) { display: none; }
+.vs-statusHelpMenu:popover-open { position: fixed; inset: auto; z-index: 1000; box-sizing: border-box; margin: 0; transform-origin: bottom left; animation: vs-help-pop-in 150ms ease-out both; }
+.vs-statusHelpMenu::backdrop { background: transparent; }
+@keyframes vs-help-pop-in { from { opacity: 0; transform: translateY(7px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .vs-statusHelpMenu:popover-open { animation: none; } }
+.vs-statusRight { display: flex; align-items: center; flex-shrink: 0; gap: 2px; height: 100%; }
+.vs-statusRight > button + button { position: relative; margin-left: 3px; }
+.vs-statusRight > button + button::before { position: absolute; top: 7px; left: -4px; width: 1px; height: 14px; background: color-mix(in srgb, var(--vs-text) 9%, transparent); content: ""; }
 .vs-statusUsageTrigger { gap: 8px !important; color: var(--vs-text) !important; font-variant-numeric: tabular-nums; }
 .vs-statusQuotaChip { display: inline-flex; align-items: center; gap: 5px; color: var(--vs-text); font-size: 10px; }
 .vs-statusQuotaChip small { color: var(--vs-muted); font-size: 9px; }
 .vs-statusUsageMiniMeter { display: inline-block; width: 27px; height: 4px; overflow: hidden; border-radius: 4px; background: var(--vs-border-strong); }
-.vs-statusUsageMiniMeter b { display: block; height: 100%; border-radius: inherit; background: var(--vs-accent); }
-.vs-statusUsageModels { display: flex; align-items: center; min-width: 0; overflow: hidden; }
+.vs-statusUsageMiniMeter b { display: block; height: 100%; border-radius: inherit; background: var(--vs-muted); }
+.vs-statusUsageModels { display: flex; align-items: center; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.vs-statusUsageModels::-webkit-scrollbar { display: none; }
+.vs-statusAgentQuota { display: inline-flex; align-items: center; gap: 4px; }
+.vs-statusUsageSummary + .vs-statusUsageSummary { margin-left: 6px; }
+.vs-statusUsageRefresh { color: var(--vs-muted); }
 .vs-statusUsageSummary, .vs-statusQuotaShortcut { display: inline-flex; align-items: center; gap: 6px !important; min-height: 24px !important; padding-inline: 5px !important; color: var(--vs-text) !important; font-variant-numeric: tabular-nums; }
 .vs-statusUsageSummary strong, .vs-statusQuotaShortcut strong { font-size: 10px; font-weight: 500; }
 .vs-statusUsageSummary small, .vs-statusQuotaShortcut small { color: var(--vs-muted); font-size: 9px; }
 .vs-statusQuotaShortcut { border-left: 1px solid var(--vs-border) !important; border-radius: 0 !important; }
 .vs-statusUsage { inset: auto auto 38px 8px; width: min(360px, calc(100vw - 16px)); max-height: calc(100dvh - 52px); overflow: visible; }
-.vs-statusAgents { min-width: 30px; justify-content: center; }
 .vs-usageToolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 38px; padding: 6px 12px; border-bottom: 1px solid var(--vs-border); }
-.vs-usageToolbar > span { display: inline-flex; align-items: center; gap: 7px; color: var(--vs-text); font-weight: 600; }
-.vs-usageToolbar [role="group"] { display: flex; gap: 2px; padding: 2px; border-radius: 7px; background: var(--vs-bg-hover); }
-.vs-usageToolbar [role="group"] button { min-height: 22px; padding: 2px 10px; color: var(--vs-muted); font-size: 10px; }
+.vs-usageScope { align-self: center; margin-right: 4px; color: var(--vs-muted); font-size: 10px; }
+.vs-usageToolbar [role="group"] { display: flex; width: 100%; gap: 2px; padding: 2px; border: 1px solid var(--vs-border); border-radius: 7px; background: var(--vs-bg-hover); }
+.vs-usageToolbar [role="group"] button { flex: 1; min-height: 22px; padding: 2px 10px; color: var(--vs-muted); font-size: 10px; }
 .vs-usageToolbar [role="group"] button[aria-pressed="true"] { background: var(--vs-bg-raised); color: var(--vs-text); box-shadow: 0 1px 2px color-mix(in srgb, var(--vs-text) 10%, transparent); }
 .vs-usageRows { display: grid; gap: 12px; padding: 12px 14px; }
 .vs-usageWorkspace { position: relative; min-height: 0; }
@@ -38,10 +51,12 @@
 .vs-usageProvider.is-selected { background: var(--vs-bg-hover) !important; }
 .vs-usageProviderHead { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--vs-text); }
 .vs-usageProviderHead strong { overflow: hidden; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
-.vs-usageProviderHead > small { margin-left: auto; white-space: nowrap; }
-.vs-usageProviderHead > span:last-child { color: var(--vs-muted); }
-.vs-usageProviderMeters { display: grid; gap: 7px; }
-.vs-usageProviderMeter { display: grid; grid-template-columns: 28px minmax(28px, 1fr) 30px; align-items: center; gap: 6px; }
+.vs-usagePlan { color: var(--vs-muted); font-weight: 400; }
+.vs-usageProviderHead > small { min-width: 0; color: var(--vs-muted); font-size: 10px; white-space: normal; }
+.vs-usageProviderHead > small b { margin-left: 6px; color: var(--vs-text); font-weight: 400; }
+.vs-usageProviderHead > span:last-child { margin-left: auto; color: var(--vs-muted); }
+.vs-usageProviderMeters { display: flex; flex-wrap: wrap; gap: 12px; padding-left: 24px; }
+.vs-usageProviderMeter { display: grid; grid-template-columns: auto 26px auto; align-items: center; gap: 5px; }
 .vs-usageProviderMeter .vs-usageRowHead { display: contents; }
 .vs-usageProviderMeter .vs-usageRowHead strong { color: var(--vs-muted); font-size: 10px; font-weight: 500; }
 .vs-usageProviderMeter .vs-usageRowHead span { grid-column: 3; grid-row: 1; text-align: right; }
@@ -49,7 +64,7 @@
 .vs-usageProviderMeter > small { grid-column: 2 / -1; grid-row: 2; }
 .vs-usageUnavailable { margin: 0 !important; padding: 3px 0 !important; color: var(--vs-muted); font-size: 10px; }
 .vs-usageAgentUnknown { padding-left: 24px; color: var(--vs-muted); font-size: 10px; }
-.vs-usageDetail { position: absolute; z-index: 3; left: calc(100% + 6px); width: 300px; max-height: min(52vh, 360px); min-width: 0; padding: 0 !important; overflow: auto; border: 1px solid var(--vs-border); border-radius: 10px; background: var(--vs-bg-raised); box-shadow: var(--vs-shadow); }
+.vs-usageDetail { position: absolute; z-index: 3; left: calc(100% + 6px); width: 300px; box-sizing: border-box; max-height: min(360px, calc(100dvh - 54px)); min-width: 0; padding: 0 !important; overflow: auto; border: 1px solid var(--vs-border-strong); border-radius: 10px; background: var(--vs-bg-raised); box-shadow: var(--vs-shadow); }
 .vs-usageDetail > header { display: flex; align-items: center; gap: 10px; min-height: 43px; padding: 7px 11px; border-bottom: 1px solid var(--vs-border); }
 .vs-usageDetail > header > span { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .vs-usageDetail > header strong { font-weight: 550; }
@@ -65,16 +80,20 @@
 .vs-usageRowHead { display: flex; align-items: center; justify-content: space-between; color: var(--vs-text); font-variant-numeric: tabular-nums; }
 .vs-usageRowHead strong { font-size: 11px; font-weight: 500; }
 .vs-usageMeter { height: 6px; overflow: hidden; border-radius: 8px; background: var(--vs-border); }
-.vs-usageMeter i { display: block; height: 100%; border-radius: inherit; background: var(--vs-accent); }
+.vs-usageMeter i { display: block; height: 100%; border-radius: inherit; background: var(--vs-muted); }
 .vs-usageMeter[data-level="warning"] i { background: var(--vs-attention); }
 .vs-usageMeter[data-level="danger"] i { background: var(--vs-danger); }
 .vs-usageRow small { color: var(--vs-muted); font-size: 10px; }
 .vs-statusUsage.is-compact .vs-usageRows { gap: 7px; padding-block: 9px; }
 .vs-statusUsage.is-compact .vs-usageRow { grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
 .vs-statusUsage.is-compact .vs-usageMeter { grid-column: 1 / -1; height: 3px; }
+.vs-statusUsage.is-compact .vs-usageProviderMeter .vs-usageMeter { grid-column: 2; grid-row: 1; }
+.vs-statusUsage.is-compact .vs-usageProvider { min-height: 42px; padding-block: 10px !important; }
+.vs-statusUsage.is-compact .vs-usageProviderHead > small { margin-left: auto; white-space: nowrap; }
+.vs-statusUsage.is-compact .vs-usageProviderHead > span:last-child { margin-left: 4px; }
 .vs-usageEmpty { padding: 14px; text-align: left; }
-.vs-usageDetailsLink { display: flex !important; justify-content: space-between !important; width: 100%; min-height: 32px !important; padding: 6px 13px !important; border-top: 1px solid var(--vs-border) !important; border-radius: 0 !important; color: var(--vs-text) !important; text-align: left; }
-.vs-usageDetailsLink span { color: var(--vs-muted); }
+.vs-usageManageLink { display: flex !important; justify-content: space-between !important; width: 100%; min-height: 32px !important; padding: 6px 13px !important; border-top: 1px solid var(--vs-border) !important; border-radius: 0 !important; color: var(--vs-text) !important; text-align: left; }
+.vs-usageManageLink span { color: var(--vs-muted); }
 .vs-usageFoot { padding: 6px 13px; border-top: 1px solid var(--vs-border); color: var(--vs-muted); font-size: 10px; }
 .vs-usageDetected { border-top: 1px solid var(--vs-border); }
 .vs-usageDetected summary { display: flex; align-items: center; gap: 6px; padding: 9px 12px; color: var(--vs-text); cursor: pointer; list-style: none; }
@@ -94,7 +113,14 @@
 .vs-statusDot { width: 5px; height: 5px; border-radius: 50%; background: var(--vs-muted); opacity: .5; }
 .vs-statusDot.is-active { background: var(--vs-ok); opacity: 1; }
 .vs-statusPopup { position: fixed; inset: auto 12px 38px auto; margin: 0; padding: 0; width: min(340px, calc(100vw - 24px)); max-height: calc(100dvh - 80px); overflow: auto; color: var(--vs-text); background: var(--vs-bg-raised); border: 1px solid var(--vs-border-strong); border-radius: 12px; box-shadow: var(--vs-shadow); font: 12px/1.5 var(--vs-font); white-space: normal; }
-.vs-statusPopup.vs-statusUsage { inset: auto auto 38px 8px; width: min(660px, calc(100vw - 16px)); }
+.vs-statusPopup.vs-statusUsage { --vs-border: color-mix(in srgb, var(--vs-text) 8%, transparent); --vs-border-strong: color-mix(in srgb, var(--vs-text) 15%, transparent); --vs-bg-hover: color-mix(in srgb, var(--vs-text) 4%, var(--vs-chrome-bg)); inset: auto auto 38px 8px; width: min(360px, calc(100vw - 16px)); overflow: visible; background: var(--vs-chrome-bg); }
+.vs-statusUsage > header { padding-block: 8px; border-bottom: 0; }
+.vs-statusUsage .vs-usageToolbar { padding-top: 0; padding-bottom: 10px; }
+.vs-statusUsage .vs-usageProvider { padding-block: 12px !important; border-bottom: 0 !important; }
+.vs-statusUsage .vs-usageManageLink { min-height: 36px !important; }
+.vs-statusUsage .vs-usageToolbar [role="group"] { background: var(--vs-chrome-bg); }
+.vs-statusUsage .vs-usageToolbar button[aria-pressed="true"] { background: var(--vs-bg-hover); box-shadow: none; }
+.vs-statusUsage .vs-usageDetail { background: var(--vs-chrome-bg); }
 .vs-statusPopup::backdrop { background: transparent; }
 .vs-statusLimits { inset-inline: 12px auto; width: min(370px, calc(100vw - 24px)); }
 .vs-statusAwake { right: 100px; }
@@ -164,7 +190,7 @@
 @media (max-width: 760px) {
   .vs-statusUsageSummary small, .vs-statusQuotaShortcut small { display: none; }
   .vs-statusUsageMiniMeter { width: 20px; }
-  .vs-statusPopup.vs-statusUsage { inset-inline: 8px auto; width: min(360px, calc(100vw - 16px)); }
+  .vs-statusPopup.vs-statusUsage { inset-inline: 8px auto; width: min(360px, calc(100vw - 16px)); overflow: auto; }
   .vs-usageDetail { position: static; width: auto; min-height: 0; border: 0; border-top: 1px solid var(--vs-border); border-radius: 0; box-shadow: none; }
   .vs-usageProviders { border-right: 0; }
   .vs-statusBar { padding-inline: 5px; gap: 4px; }

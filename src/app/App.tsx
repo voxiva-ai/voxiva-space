@@ -31,6 +31,9 @@ const HistoryPage = lazy(() =>
 const BoardPage = lazy(() =>
   import("@/pages/board/BoardPage").then((module) => ({ default: module.BoardPage })),
 );
+const WorkspaceBoardPage = lazy(() =>
+  import("@/pages/board/WorkspaceBoardPage").then((module) => ({ default: module.WorkspaceBoardPage })),
+);
 const ProjectsPage = lazy(() =>
   import("@/pages/projects/ProjectsPage").then((module) => ({ default: module.ProjectsPage })),
 );
@@ -39,7 +42,6 @@ const SettingsPage = lazy(() =>
 );
 
 const ASSIST_KEY = "voxiva-space-assist-open";
-const SIDEBAR_KEY = "voxiva-space-sidebar-collapsed";
 
 function PageLoading({ label }: { label: string }) {
   return <div className="vs-pageLoading" role="status" aria-live="polite"><span aria-hidden />{label}</div>;
@@ -80,9 +82,6 @@ function AppShell() {
     return () => window.cancelAnimationFrame(id);
   }, []);
   const [assistOpen, setAssistOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    try { return localStorage.getItem(SIDEBAR_KEY) === "1"; } catch { return false; }
-  });
   const [assistTab, setAssistTab] = useState<AssistTab>("browser");
   const [pendingAssistUrl, setPendingAssistUrl] = useState<string | null>(null);
   const [newSpaceOpen, setNewSpaceOpen] = useState(false);
@@ -133,10 +132,6 @@ function AppShell() {
   }, [assistOpen]);
 
   useEffect(() => {
-    try { localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? "1" : "0"); } catch { /* ignore */ }
-  }, [sidebarCollapsed]);
-
-  useEffect(() => {
     if (view === "settings") setAssistOpen(false);
   }, [view]);
 
@@ -166,6 +161,12 @@ function AppShell() {
       void ensureAutoCookieImport(false);
     }, 1200);
     return () => window.clearTimeout(idle);
+  }, []);
+
+  useEffect(() => {
+    const onOpen = () => setPaletteOpen(true);
+    window.addEventListener("voxiva-command-palette-open", onOpen);
+    return () => window.removeEventListener("voxiva-command-palette-open", onOpen);
   }, []);
 
   useEffect(() => {
@@ -219,14 +220,12 @@ function AppShell() {
 
   return (
     <div
-      className={`vs-root${assistOpen ? " is-assistOpen" : ""}${sidebarCollapsed ? " is-sidebarCollapsed" : ""}${view === "space" ? " is-spaceView" : ""}${view === "settings" ? " is-settingsView" : ""}`}
+      className={`vs-root${assistOpen ? " is-assistOpen" : ""}${view === "space" ? " is-spaceView" : ""}${view === "settings" ? " is-settingsView" : ""}`}
     >
       <Sidebar
         onNewSpace={() => setNewSpaceOpen(true)}
         assistOpen={assistOpen}
         onToggleAssist={() => setAssistOpen((v) => !v)}
-        collapsed={sidebarCollapsed}
-        onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
       />
       <main className="vs-main">
         <Topbar />
@@ -234,7 +233,7 @@ function AppShell() {
         <div className="vs-mainBody">
           <div
             className={`vs-content${
-              view === "space" || view === "browser" || view === "board" || view === "settings"
+              view === "space" || view === "browser" || view === "board" || view === "workspace-board" || view === "settings"
                 ? ""
                 : " is-scroll"
             }`}
@@ -260,6 +259,13 @@ function AppShell() {
               <div data-view-slot="board" className={`vs-viewSlot${show("board") ? " is-active" : ""}`} hidden={!show("board")}>
                 <Suspense fallback={<PageLoading label={t("app.loading")} />}>
                   <BoardPage />
+                </Suspense>
+              </div>
+            ) : null}
+            {keep("workspace-board") ? (
+              <div data-view-slot="workspace-board" className={`vs-viewSlot${show("workspace-board") ? " is-active" : ""}`} hidden={!show("workspace-board")}>
+                <Suspense fallback={<PageLoading label={t("app.loading")} />}>
+                  <WorkspaceBoardPage />
                 </Suspense>
               </div>
             ) : null}

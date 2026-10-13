@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@/platform/desktop";
 import { useSpace, useView } from "@/features/workspace/SpaceContext";
 import type { ViewId } from "@/lib/types";
 import type { MsgKey } from "@/i18n";
+import logoUrl from "@/assets/brand/voxiva-space-mark.png";
 import { WindowControls } from "@/components/shell/WindowControls";
 import { beginWindowDrag, toggleMaximize } from "@/features/ui/windowDrag";
 import {
@@ -17,13 +18,14 @@ const TITLE_KEY: Record<ViewId, MsgKey> = {
   projects: "nav.projects",
   agents: "nav.agents",
   board: "nav.board",
+  "workspace-board": "nav.workspaceBoard",
   history: "nav.history",
   browser: "nav.browser",
   settings: "nav.settings",
 };
 
 const APP_VIEWS = new Set<ViewId>(["agents", "history", "projects", "board"]);
-const HIDE_TOPBAR_TITLE = new Set<ViewId>(["settings", "space"]);
+const HIDE_TOPBAR_TITLE = new Set<ViewId>(["settings", "space", "workspace-board"]);
 
 export function Topbar() {
   const {
@@ -40,7 +42,7 @@ export function Topbar() {
     reopenClosed,
     canReopenClosed,
   } = useSpace();
-  const { view } = useView();
+  const { view, setView } = useView();
   const [editing, setEditing] = useState(false);
   const [update, setUpdate] = useState<UpdateCheckResult | null>(null);
   const [nameDraft, setNameDraft] = useState(activeWorkspace?.name ?? "");
@@ -103,7 +105,7 @@ export function Topbar() {
   return (
     <header className="vs-topbar">
       <div className="vs-topbarLeft" data-no-drag>
-        <div className="vs-topbarNav">
+        {view === "settings" ? <button type="button" className="vs-topbarSettingsLogo" title={t("settings.backToApp")} aria-label={`Voxiva Space · ${t("settings.backToApp")}`} onClick={() => setView("space")}><img src={logoUrl} alt="" /></button> : <div className="vs-topbarNav">
           <button
             type="button"
             className="vs-iconBtn"
@@ -134,7 +136,7 @@ export function Topbar() {
           >
             <IconReopen size={15} />
           </button>
-        </div>
+        </div>}
         {editing ? (
           <input
             className="vs-topbarNameInput"

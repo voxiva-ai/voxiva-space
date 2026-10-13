@@ -121,7 +121,7 @@ export function NewSpaceModal({ open, onClose }: NewSpaceModalProps) {
           <strong>{t("projects.setupTitle")}</strong>
           <button
             type="button"
-            className="vs-iconBtn"
+            className="vs-iconBtn vs-closeIconButton"
             onClick={onClose}
             aria-label={t("space.close")}
             title={t("space.close")}

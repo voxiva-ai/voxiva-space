@@ -15,6 +15,7 @@ body,
 body {
   overflow: hidden;
   font-family: var(--vs-font);
+  font-size: var(--vs-ui-text);
   background: var(--vs-bg);
   color: var(--vs-text);
   -webkit-font-smoothing: antialiased;

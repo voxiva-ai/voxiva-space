@@ -5,6 +5,22 @@ const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
 const exec = promisify(execFile);
 
+function parseCodexSubscription(auth) {
+  if (auth?.auth_mode !== "chatgpt" || typeof auth.tokens?.id_token !== "string") return null;
+  try {
+    const claims = JSON.parse(Buffer.from(auth.tokens.id_token.split(".")[1], "base64url").toString("utf8"));
+    const plan = claims["https://api.openai.com/auth"]?.chatgpt_plan_type;
+    return ["go", "plus", "pro", "team", "business", "enterprise", "edu"].includes(plan) ? { provider: "codex", plan } : null;
+  } catch { return null; }
+}
+
+async function readCodexSubscription() {
+  try {
+    const root = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
+    return parseCodexSubscription(JSON.parse(await fs.readFile(path.join(root, "auth.json"), "utf8")));
+  } catch { return null; }
+}
+
 function parseLimits(text) {
   let latest = null;
   for (const line of text.split("\n")) {
@@ -107,4 +123,4 @@ function createAwake(blocker) {
   };
 }
 
-module.exports = { readLimits, readPorts, parseLimits, parsePorts, formatResourceMetrics, createAwake };
+module.exports = { readCodexSubscription, parseCodexSubscription, readLimits, readPorts, parseLimits, parsePorts, formatResourceMetrics, createAwake };

@@ -42,7 +42,6 @@ export function TerminalSettings() {
 
   return (
     <section className="vs-settingsPanelBody vs-terminalSettings">
-      <h2>{t("settings.terminal")}</h2>
       <p className="vs-settingsHint">{t("settings.terminalHint")}</p>
 
       {isWindows ? <div className="vs-terminalSettingsGroup">

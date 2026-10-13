@@ -25,7 +25,7 @@ export const DEFAULT_TERMINAL_PREFS: TerminalPrefs = {
   inlineImages: false,
   scrollSpeed: 1,
   fastScrollSpeed: 5,
-  rightClickPaste: true,
+  rightClickPaste: false,
   focusFollowsMouse: false,
   copyOnSelect: false,
   trimGutterOnCopy: true,

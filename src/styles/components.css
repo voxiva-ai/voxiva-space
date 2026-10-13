@@ -9,7 +9,7 @@
   border: 1px solid var(--vs-border);
   background: var(--vs-bg-raised);
   color: var(--vs-text);
-  font-size: 0.82rem;
+  font-size: var(--vs-ui-text);
   font-weight: 600;
   letter-spacing: -0.01em;
   white-space: nowrap;

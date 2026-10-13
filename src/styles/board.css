@@ -1,3 +1,40 @@
+.vs-workspaceBoard { display:flex; flex-direction:column; height:100%; min-height:0; min-width:0; background:var(--vs-bg); }
+.vs-workspaceBoardHead { display:flex; align-items:center; gap:12px; min-height:52px; padding:0 16px; border-bottom:1px solid var(--vs-border); }
+.vs-workspaceBoardHead h1 { margin:0; font-size:.86rem; white-space:nowrap; }
+.vs-workspaceBoardSearch { display:flex; align-items:center; gap:7px; width:min(320px,100%); min-width:0; padding:5px 9px; border:1px solid var(--vs-border); border-radius:8px; background:var(--vs-bg-raised); color:var(--vs-muted); }
+.vs-workspaceBoardSearch:focus-within { border-color:var(--vs-accent); }
+.vs-workspaceBoardSearch input { min-width:0; width:100%; border:0; outline:0; background:transparent; color:var(--vs-text); font:inherit; font-size:.8rem; }
+.vs-workspaceBoardSearch button, .vs-workspaceBoardNew { display:grid; place-items:center; flex:none; width:24px; height:24px; padding:0; border:0; border-radius:5px; background:transparent; color:var(--vs-muted); cursor:pointer; }
+.vs-workspaceBoardNew { margin-left:auto; }
+.vs-workspaceBoardSearch button:hover, .vs-workspaceBoardNew:hover { background:var(--vs-bg-hover); color:var(--vs-text); }
+.vs-workspaceBoardBody { flex:1; min-height:0; overflow:auto; padding:12px; }
+.vs-workspaceBoardPinned { display:flex; flex-wrap:wrap; align-items:center; gap:7px; min-height:38px; margin-bottom:12px; padding:6px 9px; border:1px dashed var(--vs-border); border-radius:8px; }
+.vs-workspaceBoardPinned > button { display:flex; align-items:center; gap:7px; border:0; background:transparent; color:var(--vs-muted); font:inherit; font-size:.75rem; cursor:pointer; }
+.vs-workspaceBoardLanes { display:grid; grid-template-columns:repeat(4,minmax(175px,1fr)); gap:12px; align-items:stretch; min-height:min(550px,100%); }
+.vs-workspaceBoardLane { min-width:0; border:1px solid var(--vs-border); border-top:2px solid var(--vs-border-strong); border-radius:9px; background:color-mix(in srgb,var(--vs-bg-raised) 55%,var(--vs-bg)); }
+.vs-workspaceBoardLane.is-progress { border-top-color:#d7ad35; }
+.vs-workspaceBoardLane.is-review { border-top-color:#31b979; }
+.vs-workspaceBoardLane.is-done { border-top-color:#9b9b9b; }
+.vs-workspaceBoardLane h2 { display:flex; align-items:center; gap:7px; margin:0; padding:11px; border-bottom:1px solid var(--vs-border); font-size:.75rem; font-weight:650; }
+.vs-workspaceBoardLane h2 span { margin-left:auto; color:var(--vs-muted); font-size:.7rem; }
+.vs-workspaceBoardCards { display:flex; flex-direction:column; gap:6px; padding:7px; }
+.vs-workspaceBoardCards > p { margin:0; padding:20px 8px; color:var(--vs-muted); text-align:center; font-size:.72rem; }
+.vs-workspaceBoardCard { display:flex; min-width:0; border:1px solid var(--vs-border); border-radius:7px; background:var(--vs-bg-raised); }
+.vs-workspaceBoardCard { transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease; }
+.vs-workspaceBoardCard:hover { border-color:var(--vs-border-strong); background:var(--vs-bg-hover); }
+.vs-workspaceBoardCard:active { transform:scale(.992); }
+.vs-workspaceBoardOpen { display:grid; grid-template-columns:minmax(0,1fr) auto; flex:1; min-width:0; gap:4px; padding:10px; border:0; background:transparent; color:var(--vs-text); text-align:left; font:inherit; cursor:pointer; }
+.vs-workspaceBoardOpen strong, .vs-workspaceBoardOpen small { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.vs-workspaceBoardOpen strong { font-size:.75rem; }
+.vs-workspaceBoardOpen small { grid-column:1; color:var(--vs-muted); font-size:.68rem; }
+.vs-workspaceBoardOpen svg { grid-column:2; grid-row:1 / 3; align-self:center; color:var(--vs-muted); }
+.vs-workspaceBoardPin { align-self:start; display:grid; place-items:center; width:26px; height:26px; margin:5px 5px 0 0; border:0; border-radius:5px; background:transparent; color:var(--vs-muted); cursor:pointer; }
+.vs-workspaceBoardPin:hover, .vs-workspaceBoardPin.is-pinned { color:var(--vs-accent); background:var(--vs-accent-soft); }
+.vs-workspaceBoard button:focus-visible { outline:2px solid var(--vs-accent); outline-offset:1px; }
+@media(max-width:850px) { .vs-workspaceBoardLanes { grid-template-columns:repeat(2,minmax(175px,1fr)); } }
+@media(max-width:500px) { .vs-workspaceBoardLanes { grid-template-columns:minmax(0,1fr); } .vs-workspaceBoardHead { gap:7px; padding:0 9px; } .vs-workspaceBoardHead h1 { font-size:.75rem; } }
+@media(prefers-reduced-motion:reduce) { .vs-workspaceBoardCard { transition:none; } }
+
 .vs-boardMain {
   flex: 1;
   min-width: 0;

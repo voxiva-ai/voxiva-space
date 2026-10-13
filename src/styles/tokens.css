@@ -26,10 +26,14 @@
   --vs-radius: 10px;
   --vs-radius-sm: 7px;
   --vs-sidebar-w: 272px;
-  --vs-sidebar-rail: 52px;
   --vs-chrome-h: 42px;
   --vs-pane-chrome-h: 34px;
   --vs-font: "DM Sans", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --vs-ui-text: 0.8125rem;
+  --vs-chrome-bg: var(--vs-bg-raised);
+  --vs-ui-caption: 0.6875rem;
+  --vs-ui-heading: 1.25rem;
+  --vs-brand-size: 24px;
   --vs-mono: "JetBrains Mono", "Cascadia Code", ui-monospace, Menlo, monospace;
   --vs-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
   --vs-term-bg: #090d13;
@@ -43,6 +47,7 @@
 
 /* Appearance-driven chrome (works for every catalog theme). */
 [data-appearance="light"] {
+  --vs-chrome-bg: #ffffff;
   color-scheme: light;
   --vs-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
 }

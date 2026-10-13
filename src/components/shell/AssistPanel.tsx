@@ -124,7 +124,7 @@ export function AssistPanel({
         </div>
         <button
           type="button"
-          className="vs-iconBtn"
+          className="vs-iconBtn vs-closeIconButton"
           title={t("assist.close")}
           aria-label={t("assist.close")}
           onClick={onClose}

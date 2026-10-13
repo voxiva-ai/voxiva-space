@@ -3,7 +3,6 @@ export type StatusBarPrefs = {
   awake: boolean;
   resources: boolean;
   sessions: boolean;
-  agents: boolean;
   ports: boolean;
 };
 
@@ -12,7 +11,6 @@ export const DEFAULT_STATUS_BAR_PREFS: StatusBarPrefs = {
   awake: true,
   resources: true,
   sessions: true,
-  agents: true,
   ports: true,
 };
 

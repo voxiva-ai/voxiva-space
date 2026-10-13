@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import { useSpace, useView } from "@/features/workspace/SpaceContext";
 import { collectSessionIds, findPaneForSession } from "@/features/workspace/layout";
 import { useFolderBrowse } from "@/features/workspace/useFolderBrowse";
@@ -9,16 +9,15 @@ import {
   type Workspace,
 } from "@/lib/types";
 import type { MsgKey } from "@/i18n";
-import { IconAssistPanel, IconBell, IconMore, IconPlusStroke, IconSettings, IconSidebar, IconX } from "@/components/icons";
-import { ConfirmDialog, PromptDialog } from "@/components/PromptDialog";
+import { IconAssistPanel, IconBell, IconMore, IconPlusStroke, IconSettings, IconX } from "@/components/icons";
+import { PromptDialog } from "@/components/PromptDialog";
 import { clientError } from "@/lib/errors";
 import { savedLayoutPaneCount } from "@/features/workspace/savedLayouts";
-import { Copy, FolderPlus, LayoutGrid, Pin, PinOff, Save } from "lucide-react";
+import { Copy, Crosshair, FolderPlus, Kanban, LayoutGrid, Pin, PinOff, Save } from "lucide-react";
 import logoUrl from "@/assets/brand/voxiva-space-mark.png";
 import { formatHotkey, loadHotkeys } from "@/features/hotkeys/bindings";
-import { BookOpen, CircleHelp, Compass, ExternalLink, Flag, Github, Keyboard, MessageSquare, RotateCcw, ScrollText, RefreshCw } from "lucide-react";
-import { checkForUpdates, openUpdateUrl, type UpdateCheckResult } from "@/features/updates/api";
-import { getCurrentWindow, invoke } from "@/platform/desktop";
+import { getCurrentWindow } from "@/platform/desktop";
+import { HelpMenu } from "@/components/shell/HelpMenu";
 
 function orderWorkspaces<T extends { pinned?: boolean }>(list: T[]) {
   return [...list].sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)));
@@ -48,11 +47,9 @@ type SidebarProps = {
   onNewSpace: () => void;
   assistOpen: boolean;
   onToggleAssist: () => void;
-  collapsed: boolean;
-  onToggleCollapsed: () => void;
 };
 
-export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onToggleCollapsed }: SidebarProps) {
+export function Sidebar({ onNewSpace, assistOpen, onToggleAssist }: SidebarProps) {
   const {
     workspaces,
     activeWorkspace,
@@ -73,7 +70,6 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
     focusAttention,
     listAttention,
     clearAllAttention,
-    locale,
     t,
   } = useSpace();
   const { view, setView } = useView();
@@ -82,14 +78,11 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
   const [saveOpen, setSaveOpen] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
-  const [helpMenuOpen, setHelpMenuOpen] = useState(false);
-  const [helpBusy, setHelpBusy] = useState(false);
-  const [helpUpdate, setHelpUpdate] = useState<UpdateCheckResult | null>(null);
-  const [helpUpdateMessage, setHelpUpdateMessage] = useState("");
-  const [restartConfirm, setRestartConfirm] = useState(false);
   const plusRef = useRef<HTMLDivElement>(null);
+  const workspaceListRef = useRef<HTMLDivElement>(null);
+  const revealAnimationRef = useRef<Animation | null>(null);
   const notifyRef = useRef<HTMLDivElement>(null);
-  const helpRef = useRef<HTMLDivElement>(null);
+  const notifyMenuRef = useRef<HTMLElement>(null);
   const canSaveLayout = view === "space" && Boolean(activeWorkspace);
 
   const ordered = useMemo(() => orderWorkspaces(workspaces), [workspaces]);
@@ -109,7 +102,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
   const notifyItems = useMemo(() => listAttention(), [listAttention, sessions, workspaces]);
 
   useEffect(() => {
-    const active = Boolean(menu || plusOpen || notifyOpen || saveOpen || helpMenuOpen);
+    const active = Boolean(menu || plusOpen || notifyOpen || saveOpen);
     window.dispatchEvent(
       new CustomEvent("voxiva-native-overlay", {
         detail: { key: "sidebar-menu", active },
@@ -122,21 +115,19 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
         }),
       );
     };
-  }, [helpMenuOpen, menu, notifyOpen, plusOpen, saveOpen]);
+  }, [menu, notifyOpen, plusOpen, saveOpen]);
 
   useEffect(() => {
-    if (!plusOpen && !notifyOpen && !helpMenuOpen) return;
+    if (!plusOpen && !notifyOpen) return;
     const onPointer = (event: PointerEvent) => {
       const target = event.target as Node;
       if (plusOpen && !plusRef.current?.contains(target)) setPlusOpen(false);
       if (notifyOpen && !notifyRef.current?.contains(target)) setNotifyOpen(false);
-      if (helpMenuOpen && !helpRef.current?.contains(target)) setHelpMenuOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setPlusOpen(false);
         setNotifyOpen(false);
-        setHelpMenuOpen(false);
       }
     };
     document.addEventListener("pointerdown", onPointer);
@@ -145,7 +136,31 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
       document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
     };
-  }, [helpMenuOpen, notifyOpen, plusOpen]);
+  }, [notifyOpen, plusOpen]);
+
+  useLayoutEffect(() => {
+    if (!notifyOpen) return;
+    const place = () => {
+      const trigger = notifyRef.current?.querySelector(".vs-notifyBtn")?.getBoundingClientRect();
+      const menu = notifyMenuRef.current;
+      if (!trigger || !menu) return;
+      const margin = 8;
+      const width = Math.min(320, window.innerWidth - margin * 2);
+      const left = Math.max(margin, Math.min(trigger.left, window.innerWidth - width - margin));
+      const below = Math.max(0, window.innerHeight - trigger.bottom - 6 - margin);
+      const above = Math.max(0, trigger.top - 6 - margin);
+      const openAbove = below < Math.min(menu.scrollHeight, 220) && above > below;
+      const maxHeight = Math.min(420, openAbove ? above : below);
+      const height = Math.min(menu.scrollHeight, maxHeight);
+      menu.style.width = `${width}px`;
+      menu.style.left = `${left}px`;
+      menu.style.maxHeight = `${maxHeight}px`;
+      menu.style.top = `${openAbove ? trigger.top - height - 6 : trigger.bottom + 6}px`;
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [notifyItems.length, notifyOpen]);
 
   useEffect(() => {
     const onNotificationClick = (event: Event) => {
@@ -212,40 +227,12 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
 
   function onPlusClick() {
     setNotifyOpen(false);
-    setHelpMenuOpen(false);
     setPlusOpen((v) => !v);
   }
 
   function onNotifyClick() {
     setPlusOpen(false);
-    setHelpMenuOpen(false);
     setNotifyOpen((v) => !v);
-  }
-
-  async function runHelpUpdateCheck() {
-    setHelpBusy(true);
-    setHelpUpdateMessage("");
-    try {
-      const result = await checkForUpdates();
-      setHelpUpdate(result);
-      setHelpUpdateMessage(result.updateAvailable ? t("help.updateAvailable").replace("{version}", result.latestVersion) : t("help.updateCurrent"));
-    } catch (error) {
-      setHelpUpdate(null);
-      setHelpUpdateMessage(t("help.updateFailed"));
-      setError(String(error));
-    } finally { setHelpBusy(false); }
-  }
-
-  function openHelpLink(url: string) {
-    setHelpMenuOpen(false);
-    void invoke("open_url", { url }).catch((error) => setError(String(error)));
-  }
-
-  function openHelpSection(section: "hotkeys" | "about") {
-    setHelpMenuOpen(false);
-    sessionStorage.setItem("voxiva-open-settings-section", section);
-    window.dispatchEvent(new CustomEvent("voxiva-settings-section", { detail: section }));
-    setView("settings");
   }
 
   function formatAttentionAge(at: number) {
@@ -310,6 +297,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
     return (
       <div
         key={ws.id}
+        data-workspace-id={ws.id}
         className={`vs-wsItem${activeWorkspace?.id === ws.id ? " is-active" : ""}${
           attentionByWs.get(ws.id) ? " is-attention" : ""
         }${ws.pinned ? " is-pinned" : ""}${rail ? " has-rail" : ""}`}
@@ -369,21 +357,11 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
   };
 
   return (
-    <aside className={`vs-sidebar${collapsed ? " is-rail" : ""}`}>
+    <aside className="vs-sidebar">
       <div className="vs-sidebarBrand">
         <img src={logoUrl} alt="" className="vs-sidebarLogo" title="Voxiva Space" />
         <span className="vs-spacer" />
         <div className="vs-sidebarTools">
-          <button
-            type="button"
-            className="vs-iconBtn vs-sidebarCollapse"
-            title={t(collapsed ? "shell.sidebarExpand" : "shell.sidebarCollapse")}
-            aria-label={t(collapsed ? "shell.sidebarExpand" : "shell.sidebarCollapse")}
-            aria-expanded={!collapsed}
-            onClick={onToggleCollapsed}
-          >
-            <IconSidebar size={14} aria-hidden />
-          </button>
           <div className="vs-toolGroup" aria-label={t("shell.tools.workspace")}>
             <button
               type="button"
@@ -417,7 +395,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
                 ) : null}
               </button>
               {notifyOpen ? (
-                <section className="vs-chromeFlyout is-menu is-wide is-notifyMenu" role="dialog" aria-label={t("shell.notify.title")}>
+                <section ref={notifyMenuRef} className="vs-chromeFlyout is-menu is-wide is-notifyMenu" role="dialog" aria-label={t("shell.notify.title")}>
                   <div className="vs-notifyHead">
                     <strong>{t("shell.notify.title")}</strong>
                     {notifyItems.length > 0 ? (
@@ -471,42 +449,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
               ) : null}
             </div>
           </div>
-          <span className="vs-toolSep" aria-hidden />
           <div className="vs-toolGroup" aria-label={t("shell.tools.app")}>
-            <button
-              type="button"
-              data-view-trigger="settings"
-              className={`vs-iconBtn${view === "settings" ? " is-active" : ""}`}
-              title={t("nav.settings")}
-              aria-label={t("nav.settings")}
-              aria-pressed={view === "settings"}
-              onClick={() => {
-                setPlusOpen(false);
-                setNotifyOpen(false);
-                setView(view === "settings" ? "space" : "settings");
-              }}
-            >
-              <IconSettings size={14} aria-hidden />
-            </button>
-            <div className="vs-plusWrap" ref={helpRef}>
-              <button type="button" className={`vs-iconBtn vs-helpBtn${helpMenuOpen ? " is-active" : ""}`} title={t("help.title")} aria-label={t("help.title")} aria-haspopup="menu" aria-expanded={helpMenuOpen} onClick={() => { setPlusOpen(false); setNotifyOpen(false); setHelpMenuOpen((open) => !open); }}>
-                <CircleHelp size={15} aria-hidden="true" />
-              </button>
-              {helpMenuOpen && <div className="vs-chromeFlyout is-menu is-wide vs-helpMenu" role="menu" aria-label={t("help.menuTitle")}>
-                <div className="vs-helpMenuHeader"><strong>{t("help.menuTitle")}</strong><button type="button" className="vs-helpMenuClose" aria-label={t("help.close")} title={t("help.close")} onClick={() => setHelpMenuOpen(false)}><IconX size={14} /></button></div>
-                <button type="button" role="menuitem" onClick={() => openHelpSection("hotkeys")}><Keyboard size={14} aria-hidden="true" />{t("help.keyboardShortcuts")}</button>
-                <button type="button" role="menuitem" onClick={() => openHelpLink("https://github.com/voxiva-ai/voxiva-space/issues/new")}><MessageSquare size={14} aria-hidden="true" />{t("help.sendFeedback")}<ExternalLink size={12} className="vs-helpMenuExternal" /></button>
-                <button type="button" role="menuitem" onClick={() => openHelpLink("https://github.com/voxiva-ai/voxiva-space/milestones")}><Flag size={14} aria-hidden="true" />{t("help.milestones")}<ExternalLink size={12} className="vs-helpMenuExternal" /></button>
-                <button type="button" role="menuitem" onClick={() => { setHelpMenuOpen(false); window.dispatchEvent(new CustomEvent("voxiva-help-open")); }}><Compass size={14} aria-hidden="true" />{t("help.onboarding")}</button>
-                <button type="button" role="menuitem" onClick={() => openHelpLink(locale === "ru" ? "https://github.com/voxiva-ai/voxiva-space/blob/main/README.ru.md" : "https://github.com/voxiva-ai/voxiva-space#readme")}><BookOpen size={14} aria-hidden="true" />{t("help.docs")}<ExternalLink size={12} className="vs-helpMenuExternal" /></button>
-                <button type="button" role="menuitem" onClick={() => openHelpLink("https://github.com/voxiva-ai/voxiva-space/releases")}><ScrollText size={14} aria-hidden="true" />{t("help.changelog")}<ExternalLink size={12} className="vs-helpMenuExternal" /></button>
-                <button type="button" role="menuitem" onClick={() => openHelpLink("https://github.com/voxiva-ai/voxiva-space")}><Github size={14} aria-hidden="true" />{t("help.github")}<ExternalLink size={12} className="vs-helpMenuExternal" /></button>
-                <div className="vs-chromeMenuSep" role="separator" />
-                <button type="button" role="menuitem" disabled={helpBusy} onClick={() => void runHelpUpdateCheck()}><RefreshCw size={14} aria-hidden="true" className={helpBusy ? "vs-helpMenuSpin" : ""} />{helpBusy ? t("help.checkingUpdates") : t("help.checkUpdates")}</button>
-                {helpUpdateMessage && <div className="vs-helpMenuUpdate" role="status">{helpUpdateMessage}{helpUpdate?.updateAvailable && <button type="button" onClick={() => void openUpdateUrl(helpUpdate.downloadUrl).catch((error) => setError(String(error)))}>{t("help.downloadUpdate")}</button>}</div>}
-                <button type="button" role="menuitem" onClick={() => { setHelpMenuOpen(false); setRestartConfirm(true); }}><RotateCcw size={14} aria-hidden="true" />{t("help.restartApp")}</button>
-              </div>}
-            </div>
             <div className="vs-plusWrap" ref={plusRef}>
               <button
                 type="button"
@@ -600,7 +543,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
         </div>
       </div>
 
-      <div className="vs-workspaceList">
+      <div className="vs-workspaceList" ref={workspaceListRef}>
         {pinned.length > 0 ? (
           <>
             <div className="vs-wsSectionLabel">{t("spaces.pinned")}</div>
@@ -619,6 +562,38 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
           </button>
         )}
       </div>
+
+      <footer className="vs-sidebarFooter" aria-label={t("shell.tools.app")}>
+        <button
+          type="button"
+          data-view-trigger="settings"
+          className={`vs-iconBtn${view === "settings" ? " is-active" : ""}`}
+          title={t("nav.settings")}
+          aria-label={t("nav.settings")}
+          aria-pressed={view === "settings"}
+          onClick={() => { setPlusOpen(false); setNotifyOpen(false); setView(view === "settings" ? "space" : "settings"); }}
+        ><IconSettings size={14} aria-hidden /></button>
+        <HelpMenu />
+        <span className="vs-sidebarFooterSpacer" />
+        <button type="button" data-sidebar-tool="reveal" className="vs-iconBtn" title={t("workspaceBoard.reveal")} aria-label={t("workspaceBoard.reveal")} disabled={!activeWorkspace} onClick={() => {
+          if (!activeWorkspace) return;
+          setPlusOpen(false);
+          setNotifyOpen(false);
+          closeMenu();
+          setView("space");
+          const list = workspaceListRef.current;
+          const row = Array.from(list?.querySelectorAll<HTMLElement>("[data-workspace-id]") ?? []).find((item) => item.dataset.workspaceId === activeWorkspace.id);
+          if (!list || !row) return;
+          const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          const rowRect = row.getBoundingClientRect();
+          const listRect = list.getBoundingClientRect();
+          list.scrollTo({ top: list.scrollTop + rowRect.top - listRect.top - (listRect.height - rowRect.height) / 2, behavior: reducedMotion ? "instant" : "smooth" });
+          row.querySelector<HTMLButtonElement>(".vs-wsItemMain")?.focus({ preventScroll: true });
+          revealAnimationRef.current?.cancel();
+          if (!reducedMotion) revealAnimationRef.current = row.animate([{ boxShadow: "inset 0 0 0 2px var(--vs-accent)" }, { boxShadow: "inset 0 0 0 2px transparent" }], { duration: 1200, easing: "ease-out" });
+        }}><Crosshair size={15} strokeWidth={1.7} aria-hidden /></button>
+        <button type="button" data-sidebar-tool="workspace-board" className={`vs-iconBtn${view === "workspace-board" ? " is-active" : ""}`} title={t("nav.workspaceBoard")} aria-label={t("nav.workspaceBoard")} aria-pressed={view === "workspace-board"} onClick={() => setView(view === "workspace-board" ? "space" : "workspace-board")}><Kanban size={15} strokeWidth={1.7} aria-hidden /></button>
+      </footer>
 
       {menu ? (
         <SpaceActionMenu
@@ -664,7 +639,6 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist, collapsed, onT
           saveCurrentLayoutAs(value);
         }}
       />
-      <ConfirmDialog open={restartConfirm} title={t("help.restartTitle")} body={t("help.restartHint")} confirmLabel={t("help.restartApp")} cancelLabel={t("projects.cancel")} onCancel={() => setRestartConfirm(false)} onConfirm={() => { setRestartConfirm(false); void invoke("app_restart").catch((error) => setError(String(error))); }} />
     </aside>
   );
 }

@@ -1,5 +1,12 @@
 const assert = require("node:assert/strict");
-const { parseLimits, parsePorts, formatResourceMetrics, createAwake } = require("./status.cjs");
+const { parseCodexSubscription, parseLimits, parsePorts, formatResourceMetrics, createAwake } = require("./status.cjs");
+const subscriptionAuth = (plan) => ({ auth_mode: "chatgpt", tokens: { id_token: `header.${Buffer.from(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_plan_type: plan } })).toString("base64url")}.signature` } });
+assert.deepEqual(parseCodexSubscription(subscriptionAuth("plus")), { provider: "codex", plan: "plus" });
+assert.equal(parseCodexSubscription(subscriptionAuth("free")), null);
+assert.equal(parseCodexSubscription(subscriptionAuth("unknown")), null);
+assert.equal(parseCodexSubscription({ auth_mode: "apikey" }), null);
+assert.equal(parseCodexSubscription({ auth_mode: "chatgpt", tokens: { id_token: "broken" } }), null);
+assert.equal(parseCodexSubscription(null), null);
 const row = (at, used = 35) => JSON.stringify({ timestamp: at, type: "event_msg", payload: { type: "token_count", rate_limits: { primary: { used_percent: used, window_minutes: 300, resets_at: 1800000000 } } } });
 assert.equal(parseLimits("broken\n" + row("2026-10-11T10:00:00Z") + "\n{unfinished").windows[0].used, 35);
 assert.equal(parseLimits(row("2026-10-11T11:00:00Z", 40) + "\n" + row("2026-10-11T10:00:00Z")).windows[0].used, 40);

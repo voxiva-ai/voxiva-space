@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, Brush, Check, ChevronDown, ChevronRight, ExternalLink, Globe, Info, Keyboard, RefreshCw, Search, Settings, Smartphone, SquareTerminal, Users, Volume2 } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Brush, Check, ChevronDown, ChevronRight, ExternalLink, RefreshCw, Search, Settings, SquareTerminal } from "lucide-react";
 import { useSpace, useView } from "@/features/workspace/SpaceContext";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
+import { SETTINGS_GROUPS, SETTINGS_SEARCH_TERMS, isSettingsSection, type SectionId } from "./navigation";
+import { ExtendedSettingsSection } from "./ExtendedSettingsSection";
+import { MobileSettings } from "./MobileSettings";
 import {
   appearanceForFamilyCard,
   familyOf,
@@ -20,10 +23,13 @@ import {
   bindingsEqual,
   formatHotkey,
   loadHotkeys,
+  loadHotkeyPriority,
   saveHotkeys,
+  saveHotkeyPriority,
   setCapturingHotkey,
   type HotkeyAction,
   type HotkeyMap,
+  type HotkeyPriority,
   DEFAULT_HOTKEYS,
 } from "@/features/hotkeys/bindings";
 import { clientError } from "@/lib/errors";
@@ -57,9 +63,9 @@ import { TerminalSettings } from "./TerminalSettings";
 import { agentBots, isBotReady } from "@/features/agents/bots";
 import { AgentBrandIcon } from "@/components/agents/AgentBrandIcon";
 import { loadAgentPrefs, saveAgentPrefs } from "@/features/agents/prefs";
-import { DEFAULT_STATUS_BAR_PREFS, loadStatusBarPrefs, saveStatusBarPrefs, type StatusBarPrefs } from "@/features/ui/statusPrefs";
+import { DEFAULT_STATUS_BAR_PREFS, loadStatusBarPrefs, saveStatusBarPrefs, subscribeStatusBarPrefs, type StatusBarPrefs } from "@/features/ui/statusPrefs";
+import { loadAwakeMode, saveAwakeMode, subscribeAwakeMode, type AwakeMode } from "@/features/ui/awakePrefs";
 
-type SectionId = "general" | "agents" | "appearance" | "notifications" | "sounds" | "hotkeys" | "terminal" | "browser" | "mobile" | "about";
 
 const AGENT_INSTALL_GUIDES: Record<string, string> = {
   claude: "https://docs.anthropic.com/en/docs/claude-code/getting-started",
@@ -147,14 +153,20 @@ export function SettingsPage() {
   } = useSpace();
   const { setView } = useView();
   const [hotkeys, setHotkeys] = useState<HotkeyMap>(() => loadHotkeys());
+  const [hotkeyPriority, setHotkeyPriority] = useState<HotkeyPriority>(() => loadHotkeyPriority());
   const [listening, setListening] = useState<HotkeyAction | null>(null);
+  const [hotkeyQuery, setHotkeyQuery] = useState("");
+  const [hotkeyFilter, setHotkeyFilter] = useState<"all" | "modified" | "unassigned" | "conflicts">("all");
   const [section, setSection] = useState<SectionId>("general");
   const [navFilter, setNavFilter] = useState("");
   const [agentPrefs, setAgentPrefs] = useState(() => loadAgentPrefs());
+  const [awakeMode, setAwakeMode] = useState<AwakeMode>(() => loadAwakeMode());
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [sounds, setSounds] = useState<SoundPrefs>(() => loadSoundPrefs());
   const [attention, setAttention] = useState<AttentionPrefs>(() => loadAttentionPrefs());
   const [statusPrefs, setStatusPrefs] = useState<StatusBarPrefs>(() => loadStatusBarPrefs());
+  useEffect(() => subscribeStatusBarPrefs(setStatusPrefs), []);
+  useEffect(() => subscribeAwakeMode(setAwakeMode), []);
   const fileRef = useRef<HTMLInputElement>(null);
   const navSearchRef = useRef<HTMLInputElement>(null);
   const [appVersion, setAppVersion] = useState("…");
@@ -164,7 +176,7 @@ export function SettingsPage() {
 
   useEffect(() => {
     const applyRequestedSection = (sectionId: string | null) => {
-      if (sectionId === "hotkeys" || sectionId === "about") setSection(sectionId);
+      if (isSettingsSection(sectionId)) setSection(sectionId);
     };
     const pending = sessionStorage.getItem("voxiva-open-settings-section");
     if (pending) {
@@ -326,7 +338,7 @@ export function SettingsPage() {
     loadFamilyAppearancePrefs(),
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const menu = themeMenuRef.current;
     if (!menu) return;
     if (!themePickerOpen) {
@@ -334,34 +346,51 @@ export function SettingsPage() {
       return;
     }
     if (!menu.matches(":popover-open")) menu.showPopover();
-    themeSearchRef.current?.focus();
+    const options = menu.querySelector<HTMLElement>(".vs-themePickerOptions");
+    if (options) options.scrollTop = 0;
     const positionMenu = () => {
       const anchor = themePickerRef.current?.querySelector("summary");
       if (!anchor || !menu.matches(":popover-open")) return;
       const rect = anchor.getBoundingClientRect();
       const margin = 12;
       const gap = 7;
-      const width = Math.max(0, Math.min(368, window.innerWidth - margin * 2));
-      const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
+      const panel = anchor.closest(".vs-settingsPanel")?.getBoundingClientRect();
+      if (rect.bottom <= Math.max(margin, panel?.top ?? margin) || rect.top >= Math.min(window.innerHeight - margin, panel?.bottom ?? window.innerHeight)) {
+        menu.hidePopover();
+        setThemePickerOpen(false);
+        return;
+      }
+      const width = Math.min(rect.width, window.innerWidth - margin * 2);
+      const left = Math.max(margin, Math.min(rect.right - width, window.innerWidth - width - margin));
       menu.style.width = `${width}px`;
       menu.style.left = `${left}px`;
+      menu.style.height = "auto";
+      menu.style.maxHeight = "none";
+      const maxHeight = Math.min(360, menu.getBoundingClientRect().height);
       const below = Math.max(0, window.innerHeight - rect.bottom - gap - margin);
       const above = Math.max(0, rect.top - gap - margin);
-      const openAbove = below < Math.min(360, menu.scrollHeight) && above > below;
+      const openAbove = below < maxHeight && above > below;
       const available = openAbove ? above : below;
-      const height = Math.min(432, menu.scrollHeight, available);
+      const height = Math.min(maxHeight, available);
       menu.style.height = `${height}px`;
       menu.style.maxHeight = `${height}px`;
       menu.style.top = `${openAbove ? rect.top - gap - height : rect.bottom + gap}px`;
     };
     positionMenu();
+    themeSearchRef.current?.focus({ preventScroll: true });
+    const onScroll = (event: Event) => { if (!menu.contains(event.target as Node)) positionMenu(); };
     window.addEventListener("resize", positionMenu);
-    document.addEventListener("scroll", positionMenu, true);
+    document.addEventListener("scroll", onScroll, true);
     return () => {
       window.removeEventListener("resize", positionMenu);
-      document.removeEventListener("scroll", positionMenu, true);
+      document.removeEventListener("scroll", onScroll, true);
     };
   }, [themePickerOpen]);
+
+  useEffect(() => {
+    const options = themeMenuRef.current?.querySelector<HTMLElement>(".vs-themePickerOptions");
+    if (options) options.scrollTop = 0;
+  }, [themeSearch]);
 
   useEffect(() => {
     // Keep memory in sync when theme is applied (incl. Light/Dark of this pack).
@@ -408,45 +437,37 @@ export function SettingsPage() {
     setTheme(themeIdForAppearance(family, appearance));
   }
 
-  const nav: Array<{ id: SectionId; title: string }> = [
-    { id: "general", title: t("settings.general") },
-    { id: "agents", title: t("settings.agents") },
-    { id: "appearance", title: t("settings.appearance") },
-    { id: "notifications", title: t("settings.notifications") },
-    { id: "sounds", title: t("settings.sounds") },
-    { id: "hotkeys", title: t("settings.hotkeys") },
-    { id: "terminal", title: t("settings.terminal") },
-    { id: "browser", title: t("settings.browser") },
-    { id: "mobile", title: t("settings.mobile") },
-    { id: "about", title: t("settings.about") },
-  ];
-  const searchTerms: Record<SectionId, string> = {
-    general: "resume запуск при старте запуск агента",
-    agents: "agent агент cli install установка detected installed installed enable enabled catalog docs provider codex claude opencode gemini",
-    appearance: "theme тема светлая тёмная dark light color цвет zoom масштаб language язык font шрифт ui interface интерфейс sidebar боковая панель status bar строка состояния usage ресурсы memory ports порты",
-    notifications: "notification уведомления attention внимание ring подсветка цвет color",
-    sounds: "sound звук звуки audio аудио bell звонок chime сигнал volume громкость",
-    hotkeys: "hotkey shortcut keyboard клавиатура сочетания клавиш reset сброс",
-    terminal: "terminal терминал shell оболочка powershell cmd bash font шрифт rendering рендер gpu scroll прокрутка copy paste вставка session сессия",
-    browser: "browser браузер cookies cookie passkeys импорт сессии login авторизация",
-    mobile: "mobile телефон phone companion qr мобильный",
-    about: "about версия version update обновление install скачать github readme",
-  };
-  const navGroups = [
-    { title: t("settings.groupInterface"), items: [nav[0], ...nav.slice(2, 6)] },
-    { title: t("settings.groupWorkspace"), items: [nav[1], ...nav.slice(6, 9)] },
-    { title: t("settings.groupApp"), items: nav.slice(9) },
-  ];
+  const navGroups = SETTINGS_GROUPS.map(group => ({
+    title: locale === "ru" ? group.ru : group.en,
+    items: group.items.map(item => ({ ...item, title: locale === "ru" ? item.ru : item.en })),
+  }));
+  const nav = navGroups.flatMap(group => group.items);
   const filteredNavGroups = navGroups.map((group) => ({
     ...group,
     items: group.items.filter((item) => {
       const query = navFilter.trim().toLocaleLowerCase();
       if (!query) return true;
-      const terms = `${item.title} ${searchTerms[item.id]}`.toLocaleLowerCase();
+      const terms = `${item.title} ${item.en} ${item.ru} ${group.title} ${SETTINGS_SEARCH_TERMS[item.id] ?? ""}`.toLocaleLowerCase();
       return query.split(/\s+/).every((word) => terms.includes(word));
     }),
   })).filter((group) => group.items.length > 0);
-  const navIcons = { general: Settings, agents: Users, appearance: Brush, notifications: Bell, sounds: Volume2, hotkeys: Keyboard, terminal: SquareTerminal, browser: Globe, mobile: Smartphone, about: Info };
+  const allHotkeyIds = HOTKEY_GROUPS.flatMap((group) => group.actions);
+  const hotkeyConflicts = allHotkeyIds.filter((id) => hotkeys[id].key && allHotkeyIds.some((other) => other !== id && bindingsEqual(hotkeys[other], hotkeys[id])));
+  const hotkeyCounts = {
+    all: allHotkeyIds.length,
+    modified: allHotkeyIds.filter((id) => !bindingsEqual(hotkeys[id], DEFAULT_HOTKEYS[id])).length,
+    unassigned: allHotkeyIds.filter((id) => !hotkeys[id].key).length,
+    conflicts: hotkeyConflicts.length,
+  };
+  const visibleHotkeyGroups = HOTKEY_GROUPS.map((group) => ({
+    ...group,
+    actions: group.actions.filter((id) => {
+      const binding = hotkeys[id];
+      const matchesFilter = hotkeyFilter === "all" || (hotkeyFilter === "modified" && !bindingsEqual(binding, DEFAULT_HOTKEYS[id])) || (hotkeyFilter === "unassigned" && !binding.key) || (hotkeyFilter === "conflicts" && hotkeyConflicts.includes(id));
+      const query = hotkeyQuery.trim().toLocaleLowerCase();
+      return matchesFilter && (!query || `${t(HOTKEY_LABELS[id])} ${formatHotkey(binding)} ${t(group.labelKey)}`.toLocaleLowerCase().includes(query));
+    }),
+  })).filter((group) => group.actions.length > 0);
 
   const presets: Array<{ id: SoundPreset; label: string }> = [
     { id: "bell", label: t("settings.soundBell") },
@@ -466,24 +487,28 @@ export function SettingsPage() {
           <input ref={navSearchRef} type="search" value={navFilter} onChange={(event) => setNavFilter(event.target.value)} placeholder={locale === "ru" ? "Поиск настроек" : "Search settings"} aria-label={locale === "ru" ? "Поиск настроек" : "Search settings"} />
           <kbd>Ctrl F</kbd>
         </label>
+        <div className="vs-settingsNavSections">
         {filteredNavGroups.map((group) => (
           <div className="vs-settingsNavGroup" key={group.title}>
             <div className="vs-settingsNavTitle">{group.title}</div>
             {group.items.map((item) => {
-              const Icon = navIcons[item.id];
+              const Icon = item.icon;
               return <button key={item.id} type="button" data-settings-section={item.id} aria-current={section === item.id ? "page" : undefined} className={`vs-settingsNavItem${section === item.id ? " is-active" : ""}`} onClick={() => setSection(item.id)}>
-                <Icon size={15} aria-hidden="true" />{item.title}
+                <Icon size={15} aria-hidden="true" /><span>{item.title}</span>{"badge" in item && <small className="vs-settingsNavBadge">{item.badge === "optional" ? (locale === "ru" ? "Опц." : "Optional") : "Beta"}</small>}
               </button>;
             })}
           </div>
         ))}
         {!filteredNavGroups.length && <p className="vs-settingsNavEmpty">{locale === "ru" ? "Ничего не найдено" : "No settings found"}</p>}
+        </div>
       </aside>
 
       <div className="vs-settingsPanel">
         <header className="vs-settingsPageHead">
           <h1>{nav.find((item) => item.id === section)?.title}</h1>
+          {section === "hotkeys" && <p>{t("settings.hk.subtitle")}</p>}
         </header>
+        {!["general", "agents", "appearance", "notifications", "sounds", "hotkeys", "terminal", "browser", "mobile", "about"].includes(section) && <ExtendedSettingsSection key={section} section={section} onSection={setSection} />}
         {section === "general" && (
           <section className="vs-settingsPanelBody vs-settingsGeneral">
             <div className="vs-settingsBlock" style={{ marginTop: "1.25rem" }}>
@@ -505,27 +530,38 @@ export function SettingsPage() {
         {section === "agents" && (
           <section className="vs-settingsPanelBody vs-agentSettings">
             <p className="vs-settingsHint">{t("settings.agentsHint")}</p>
+            <div className="vs-settingsBlock vs-agentPreferences">
+              <div className="vs-agentPreferenceIntro"><h3>{t("settings.defaultAgent")}</h3><p className="vs-settingsHint">{t("settings.defaultAgentHint")}</p></div>
+              <div className="vs-agentDefaultChoices" role="group" aria-label={t("settings.defaultAgent")}>
+                {[
+                  { id: "auto", name: t("settings.agentAuto") },
+                  { id: "none", name: t("settings.agentNone") },
+                  ...agentBots.filter((bot) => bot.id !== "shell" && agentPrefs.enabled.includes(bot.id) && isBotReady(bot, agentAvailability, agentsScanned)).map((bot) => ({ id: bot.id, name: bot.name })),
+                ].map(({ id, name }) => <button key={id} type="button" className={agentPrefs.defaultId === id ? "is-active" : ""} aria-pressed={agentPrefs.defaultId === id} onClick={() => patchAgentPrefs({ defaultId: id })}>{id !== "auto" && id !== "none" ? <AgentBrandIcon id={id} size={16} /> : null}<span>{name}</span>{agentPrefs.defaultId === id ? <Check size={14} aria-hidden="true" /> : null}</button>)}
+              </div>
+              <div className="vs-agentPermission">
+                <div><strong>{t("settings.autoResume")}</strong><small>{t("settings.autoResumeHint")}</small></div>
+                <Toggle on={autoResumeAgents} onClick={() => setAutoResumeAgents(!autoResumeAgents)} label={t("settings.autoResume")} />
+              </div>
+              <div className="vs-agentPermission">
+                <div><strong>{t("settings.agentKeepAwake")}</strong><small>{t("settings.agentKeepAwakeHint")}</small></div>
+                <div className="vs-agentPermissionChoices" role="group" aria-label={t("settings.agentKeepAwake")}>
+                  {(["on", "agents", "off"] as const).map((mode) => <button key={mode} type="button" className={awakeMode === mode ? "is-active" : ""} aria-pressed={awakeMode === mode} onClick={() => saveAwakeMode(mode)}>{t(`status.${mode}`)}</button>)}
+                </div>
+              </div>
+            </div>
             <div className="vs-agentPermission">
               <div><strong>{t("settings.agentPermissions")}</strong><small>{t("settings.agentPermissionsHint")}</small></div>
               <div className="vs-agentPermissionChoices" role="group" aria-label={t("settings.agentPermissions")}>
                 {(["yolo", "manual"] as const).map((mode) => <button key={mode} type="button" className={agentPrefs.permissionMode === mode ? "is-active" : ""} aria-pressed={agentPrefs.permissionMode === mode} onClick={() => patchAgentPrefs({ permissionMode: mode })}>{t(mode === "yolo" ? "settings.agentPermissionYolo" : "settings.agentPermissionManual")}</button>)}
               </div>
             </div>
-            <div className="vs-settingsBlock">
-              <div className="vs-settingsRow">
-                <div><h3>{t("settings.defaultAgent")}</h3><p className="vs-settingsHint">{t("settings.defaultAgentHint")}</p></div>
-                <select aria-label={t("settings.defaultAgent")} value={agentPrefs.defaultId} onChange={(e) => patchAgentPrefs({ defaultId: e.target.value })}>
-                  <option value="auto">{t("settings.agentAuto")}</option><option value="none">{t("settings.agentNone")}</option>
-                  {agentBots.filter((bot) => bot.id !== "shell" && agentPrefs.enabled.includes(bot.id) && isBotReady(bot, agentAvailability, agentsScanned)).map((bot) => <option key={bot.id} value={bot.id}>{bot.name}</option>)}
-                </select>
-              </div>
-            </div>
             <div className="vs-settingsPanelHead">
-              <div><h2>{t("settings.agentCatalog")} <small className="vs-agentSettingsCount">{agentBots.length - 1}</small></h2><p className="vs-settingsHint">{t("settings.agentCatalogHint")}</p></div>
+              <div><h2>{t("settings.agentCatalog")}</h2><p className="vs-settingsHint">{t("settings.agentCatalogHint")}</p></div>
               <button type="button" className="vs-btn" onClick={() => void refreshAgents()}><RefreshCw size={14} aria-hidden="true" />{t("settings.refreshAgents")}</button>
             </div>
             <div className="vs-agentSettingsList">
-              <h3 className="vs-agentSettingsGroupTitle">{t("settings.agentInstalled")}</h3>
+              <h3 className="vs-agentSettingsGroupTitle">{t("settings.agentInstalled")} <small className="vs-agentSettingsCount">{agentBots.filter((bot) => bot.id !== "shell" && isBotReady(bot, agentAvailability, agentsScanned)).length}</small></h3>
               {agentBots.filter((bot) => bot.id !== "shell" && isBotReady(bot, agentAvailability, agentsScanned)).map((bot) => {
                 const enabled = agentPrefs.enabled.includes(bot.id);
                 const expanded = expandedAgent === bot.id;
@@ -538,7 +574,10 @@ export function SettingsPage() {
                     </button>
                     <span className="vs-agentSettingsStatus is-ready">{t("settings.agentDetected")}</span>
                     <div className="vs-agentSettingsActions">
-                      <button type="button" className={`vs-agentAvailability${enabled ? " is-enabled" : ""}`} aria-pressed={enabled} onClick={() => patchAgentPrefs({ enabled: enabled ? agentPrefs.enabled.filter((id) => id !== bot.id) : [...agentPrefs.enabled, bot.id], ...(enabled && agentPrefs.defaultId === bot.id ? { defaultId: "auto" } : {}) })}>{enabled ? t("settings.agentEnabled") : t("settings.agentDisabled")}</button>
+                      <div className="vs-agentAvailabilityChoices" role="group" aria-label={`${bot.name}: ${t("settings.agentEnabled")}`}>
+                        <button type="button" className={enabled ? "is-active" : ""} aria-pressed={enabled} onClick={() => { if (!enabled) patchAgentPrefs({ enabled: [...agentPrefs.enabled, bot.id] }); }}>{t("settings.agentEnabled")}</button>
+                        <button type="button" className={!enabled ? "is-active" : ""} aria-pressed={!enabled} onClick={() => { if (enabled) patchAgentPrefs({ enabled: agentPrefs.enabled.filter((id) => id !== bot.id), ...(agentPrefs.defaultId === bot.id ? { defaultId: "auto" } : {}) }); }}>{t("settings.agentDisabled")}</button>
+                      </div>
                       <button type="button" className={`vs-agentDefault${agentPrefs.defaultId === bot.id ? " is-default" : ""}`} disabled={agentPrefs.defaultId === bot.id} onClick={() => patchAgentPrefs({ enabled: enabled ? agentPrefs.enabled : [...agentPrefs.enabled, bot.id], defaultId: bot.id })}>{agentPrefs.defaultId === bot.id ? t("settings.agentIsDefault") : t("settings.agentSetDefault")}</button>
                       <button type="button" className="vs-agentGuide" aria-label={t("settings.agentDocs")} title={t("settings.agentDocs")} onClick={() => void openUpdateUrl(AGENT_INSTALL_GUIDES[bot.id] ?? "https://github.com/search?q=" + encodeURIComponent(`${bot.name} CLI`))}><ExternalLink size={14} aria-hidden="true" /></button>
                     </div>
@@ -550,7 +589,7 @@ export function SettingsPage() {
                   </div>}
                 </article>;
               })}
-              <h3 className="vs-agentSettingsGroupTitle is-available">{t("settings.agentAvailable")}</h3>
+              <h3 className="vs-agentSettingsGroupTitle is-available">{t("settings.agentAvailable")} <small className="vs-agentSettingsCount">{agentBots.filter((bot) => bot.id !== "shell" && !isBotReady(bot, agentAvailability, agentsScanned)).length}</small></h3>
               {agentBots.filter((bot) => bot.id !== "shell" && !isBotReady(bot, agentAvailability, agentsScanned)).map((bot) => {
                 const expanded = expandedAgent === bot.id;
                 return <article className={`vs-agentSettingsRow${expanded ? " is-expanded" : ""}`} key={bot.id}>
@@ -638,7 +677,6 @@ export function SettingsPage() {
                   ["awake", "status.awake"],
                   ["resources", "status.resources"],
                   ["sessions", "status.sessions"],
-                  ["agents", "nav.agents"],
                   ["ports", "status.ports"],
                 ] as const).map(([key, label]) => (
                   <div className="vs-appearanceRow" key={key}>
@@ -654,7 +692,6 @@ export function SettingsPage() {
 
         {section === "notifications" && (
           <section className="vs-settingsPanelBody">
-            <h2>{t("settings.notifications")}</h2>
             <p className="vs-settingsHint">{t("settings.notificationsHint")}</p>
             <div className="vs-soundCard">
               <div className="vs-soundRow">
@@ -677,7 +714,6 @@ export function SettingsPage() {
 
         {section === "sounds" && (
           <section className="vs-settingsPanelBody">
-            <h2>{t("settings.sounds")}</h2>
             <p className="vs-settingsHint">{t("settings.soundsHint")}</p>
             <div className="vs-soundCard">
               {(
@@ -794,7 +830,6 @@ export function SettingsPage() {
 
         {section === "browser" && (
           <section className="vs-settingsPanelBody">
-            <h2>{t("settings.browser")}</h2>
             <p className="vs-settingsHint">{t("settings.browserHint")}</p>
 
             <div className="vs-settingsBlock">
@@ -821,27 +856,11 @@ export function SettingsPage() {
 
         {section === "terminal" && <TerminalSettings />}
 
-        {section === "mobile" && (
-          <section className="vs-settingsPanelBody">
-            <h2>{t("settings.mobile")}</h2>
-            <p className="vs-settingsHint">{t("settings.mobileHint")}</p>
-
-            <div className="vs-companionCard">
-              <div className="vs-companionMeta">
-                <span className="vs-companionBadge is-wait">{t("settings.mobileDev")}</span>
-                <p>{t("settings.mobileDevBody")}</p>
-              </div>
-              <div className="vs-companionQrWrap">
-                <div className="vs-companionQrPlaceholder">{t("settings.mobileDevShort")}</div>
-              </div>
-            </div>
-          </section>
-        )}
+        {section === "mobile" && <MobileSettings />}
 
         {section === "hotkeys" && (
           <section className="vs-settingsPanelBody">
-            <div className="vs-settingsPanelHead">
-              <h2>{t("settings.hotkeys")}</h2>
+            <div className="vs-settingsPanelHead is-actionsOnly">
               <button
                 type="button"
                 className="vs-btn"
@@ -855,47 +874,44 @@ export function SettingsPage() {
                 {t("settings.hk.reset")}
               </button>
             </div>
-            <p className="vs-settingsHint">{t("settings.hotkeysHint")}</p>
-            <p className="vs-settingsHint">{t("settings.hk.fixed")}</p>
-            {HOTKEY_GROUPS.map((group) => (
-              <div key={group.id} className="vs-hotkeyGroup">
-                <div className="vs-hotkeyGroupTitle">{t(group.labelKey)}</div>
-                <ul className="vs-hotkeyRows">
-                  {group.actions.map((id) => {
-                    const conflict = (Object.keys(hotkeys) as HotkeyAction[]).find(
-                      (other) => other !== id && bindingsEqual(hotkeys[other], hotkeys[id]),
-                    );
-                    return (
-                      <li key={id}>
-                        <span>
-                          {t(HOTKEY_LABELS[id])}
-                          {conflict ? (
-                            <small className="vs-hotkeyConflict">
-                              {t("settings.hk.conflict")} {t(HOTKEY_LABELS[conflict])}
-                            </small>
-                          ) : null}
-                        </span>
-                        <button
-                          type="button"
-                          className={`vs-hotkeyEdit${listening === id ? " is-listening" : ""}${
-                            conflict ? " is-conflict" : ""
-                          }`}
-                          onClick={() => setListening((cur) => (cur === id ? null : id))}
-                        >
-                          {listening === id ? t("settings.hk.press") : formatHotkey(hotkeys[id])}
+            <div className="vs-hotkeyPriority">
+              <div><strong>{t("settings.hk.terminalPriority")}</strong><small>{t("settings.hk.terminalPriorityHint")}</small></div>
+              <div role="group" aria-label={t("settings.hk.terminalPriority")}>{(["voxiva", "terminal"] as const).map((priority) => <button key={priority} type="button" data-hotkey-priority={priority} aria-pressed={hotkeyPriority === priority} className={hotkeyPriority === priority ? "is-active" : ""} onClick={() => { setHotkeyPriority(priority); saveHotkeyPriority(priority); }}>{t(priority === "voxiva" ? "settings.hk.voxivaFirst" : "settings.hk.terminalFirst")}</button>)}</div>
+            </div>
+            <div className="vs-settingsPanelHead vs-hotkeyListHead"><div><h2>{t("settings.hk.keyboardShortcuts")}</h2><p className="vs-settingsHint">{t("settings.hotkeysHint")}</p></div></div>
+            <div className="vs-hotkeyManager">
+              <aside className="vs-hotkeyFilters">
+                <label className="vs-hotkeySearch"><Search size={14} aria-hidden="true" /><input type="search" value={hotkeyQuery} onChange={(event) => setHotkeyQuery(event.target.value)} placeholder={t("settings.hk.search")} aria-label={t("settings.hk.search")} /></label>
+                <span className="vs-hotkeyFilterLabel">{t("settings.hk.status")}</span>
+                {(["all", "modified", "unassigned", "conflicts"] as const).map((filter) => <button type="button" key={filter} data-hotkey-filter={filter} className={hotkeyFilter === filter ? "is-active" : ""} onClick={() => setHotkeyFilter(filter)}>{t(`settings.hk.${filter === "unassigned" ? "unassignedFilter" : filter}`)}<small>{hotkeyCounts[filter]}</small></button>)}
+              </aside>
+              <div className="vs-hotkeyCatalog" aria-live="polite">
+                {visibleHotkeyGroups.length ? visibleHotkeyGroups.map((group) => <section key={group.id} className="vs-hotkeyGroup">
+                  <h3 className="vs-hotkeyGroupTitle">{t(group.labelKey)}</h3>
+                  <ul className="vs-hotkeyRows">{group.actions.map((id) => {
+                    const binding = hotkeys[id];
+                    const conflict = binding.key ? allHotkeyIds.find((other) => other !== id && bindingsEqual(hotkeys[other], binding)) : undefined;
+                    return <li key={id} data-hotkey-action={id}>
+                      <span>{t(HOTKEY_LABELS[id])}{conflict && <small className="vs-hotkeyConflict">{t("settings.hk.conflict")} {t(HOTKEY_LABELS[conflict])}</small>}</span>
+                      <div className="vs-hotkeyRowActions">
+                        <button type="button" aria-label={`${t("settings.hk.clear")}: ${t(HOTKEY_LABELS[id])}`} title={t("settings.hk.clear")} disabled={!binding.key} className="vs-hotkeyClear" onClick={() => {
+                          const updated = { ...hotkeys, [id]: { key: "", alt: false, ctrl: false, shift: false } };
+                          setHotkeys(updated); saveHotkeys(updated); window.dispatchEvent(new Event("voxiva-hotkeys-changed")); setListening(null);
+                        }}>×</button>
+                        <button type="button" className={`vs-hotkeyEdit${listening === id ? " is-listening" : ""}${conflict ? " is-conflict" : ""}${!binding.key ? " is-unassigned" : ""}`} onClick={() => setListening((cur) => cur === id ? null : id)}>
+                          {listening === id ? t("settings.hk.press") : binding.key ? formatHotkey(binding).split(" + ").map((key) => <kbd key={key}>{key}</kbd>) : t("settings.hk.unassigned")}
                         </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+                      </div>
+                    </li>;
+                  })}</ul>
+                </section>) : <p className="vs-hotkeyEmpty">{t("settings.hk.empty")}</p>}
               </div>
-            ))}
+            </div>
           </section>
         )}
 
         {section === "about" && (
           <section className="vs-settingsPanelBody">
-            <h2>{t("settings.about")}</h2>
             <p className="vs-settingsHint">{t("settings.aboutHint")}</p>
             <div className="vs-soundCard">
               <div className="vs-soundRow">

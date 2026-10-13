@@ -728,7 +728,7 @@ export function TerminalPane({
         terminalRef.current?.focus();
       }}
       onContextMenu={(event) => {
-        if (!terminalPrefsRef.current.rightClickPaste || event.ctrlKey || event.metaKey) return;
+        if (!terminalPrefsRef.current.rightClickPaste || !(event.ctrlKey || event.metaKey)) return;
         event.preventDefault();
         event.stopPropagation();
         void navigator.clipboard.readText().then((text) => { if (text) pasteInto(text); }).catch(() => undefined);

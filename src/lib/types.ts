@@ -3,6 +3,7 @@ export type ViewId =
   | "projects"
   | "agents"
   | "board"
+  | "workspace-board"
   | "history"
   | "browser"
   | "settings";

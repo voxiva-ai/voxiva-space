@@ -180,11 +180,22 @@ export const DEFAULT_HOTKEYS: HotkeyMap = {
 };
 
 const STORAGE_KEY = "voxiva-space-hotkeys-v5";
+const PRIORITY_KEY = "voxiva-space-hotkey-priority-v1";
+export type HotkeyPriority = "voxiva" | "terminal";
+
+export function loadHotkeyPriority(): HotkeyPriority {
+  try { return localStorage.getItem(PRIORITY_KEY) === "terminal" ? "terminal" : "voxiva"; } catch { return "voxiva"; }
+}
+
+export function saveHotkeyPriority(priority: HotkeyPriority) {
+  try { localStorage.setItem(PRIORITY_KEY, priority); } catch { /* ignore */ }
+  window.dispatchEvent(new Event("voxiva-hotkeys-changed"));
+}
 
 function normalizeBinding(raw: unknown, fallback: HotkeyBinding): HotkeyBinding {
   if (!raw || typeof raw !== "object") return fallback;
   const value = raw as Partial<HotkeyBinding>;
-  const key = typeof value.key === "string" && value.key ? value.key.toLowerCase() : fallback.key;
+  const key = typeof value.key === "string" ? value.key.toLowerCase() : fallback.key;
   return {
     key,
     alt: Boolean(value.alt),
@@ -220,6 +231,7 @@ export function saveHotkeys(map: HotkeyMap) {
 }
 
 export function formatHotkey(binding: HotkeyBinding) {
+  if (!binding.key) return "";
   const parts: string[] = [];
   if (binding.ctrl) parts.push("Ctrl");
   if (binding.alt) parts.push("Alt");

@@ -9,10 +9,6 @@
   transition: none !important;
 }
 
-.vs-root.is-sidebarCollapsed {
-  grid-template-columns: var(--vs-sidebar-rail) minmax(0, 1fr);
-}
-
 .vs-root.is-settingsView {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -37,34 +33,8 @@
   min-height: 0;
   min-width: 0;
   border-right: 1px solid var(--vs-border);
-  background:
-    radial-gradient(ellipse 85% 42% at 0% 0%, color-mix(in srgb, var(--vs-brand-cyan) 10%, transparent), transparent 58%),
-    radial-gradient(ellipse 70% 34% at 0% 100%, color-mix(in srgb, var(--vs-brand-warm) 6%, transparent), transparent 62%),
-    var(--vs-bg-raised);
+  background: var(--vs-chrome-bg);
 }
-
-.vs-sidebar.is-rail {
-  align-items: center;
-  gap: 0;
-  padding: 0;
-  background: var(--vs-bg-raised);
-  height: 100%;
-}
-
-.vs-sidebar.is-rail > :not(.vs-sidebarBrand) { display: none !important; }
-.vs-sidebar.is-rail .vs-sidebarBrand {
-  width: 100%;
-  height: auto;
-  min-height: 0;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.5rem 0.25rem;
-  border-bottom: 0;
-}
-.vs-sidebar.is-rail .vs-sidebarBrand .vs-spacer { display: none; }
-.vs-sidebar.is-rail .vs-sidebarTools { height: auto; }
-.vs-sidebar.is-rail .vs-sidebarTools > :not(.vs-sidebarCollapse) { display: none !important; }
-.vs-sidebarCollapse { flex: none; }
 
 .vs-railBrand {
   display: grid;
@@ -226,14 +196,17 @@
 }
 
 .vs-chromeFlyout.is-notifyMenu {
+  position: fixed;
+  box-sizing: border-box;
   z-index: 120;
-  top: calc(100% + 6px);
-  right: 0;
-  left: auto;
-  min-width: 260px;
-  max-width: min(92vw, 320px);
+  top: 42px;
+  right: auto;
+  width: min(320px, calc(100vw - 16px));
+  min-width: 0;
+  max-width: calc(100vw - 16px);
   max-height: min(70vh, 420px);
   overflow: auto;
+  animation: vs-sidebarFlyoutIn 180ms cubic-bezier(.2,.75,.2,1) both;
 }
 
 .vs-notifyHead {
@@ -328,12 +301,11 @@
 }
 
 .vs-sidebarLogo {
-  width: 24px;
-  height: 24px;
+  width: var(--vs-brand-size);
+  height: var(--vs-brand-size);
   display: block;
   flex-shrink: 0;
   object-fit: contain;
-  filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.28));
 }
 
 .vs-brandName {
@@ -543,6 +515,16 @@
   padding: 0.35rem 0.4rem 0.45rem;
   overflow: auto;
 }
+.vs-sidebarFooter button:focus-visible { outline:2px solid var(--vs-accent); outline-offset:1px; }
+.vs-sidebarFooter { display: flex; align-items: center; gap: 4px; flex: 0 0 38px; min-height: 38px; padding: 0 0.55rem; border-top: 1px solid var(--vs-border); background: var(--vs-chrome-bg); }
+.vs-sidebarFooterSpacer { flex:1; }
+.vs-sidebarFooter > .vs-iconBtn, .vs-sidebarFooter .vs-statusHelpButton { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; min-width: 26px; min-height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--vs-muted); cursor: pointer; }
+.vs-sidebarFooter > .vs-iconBtn:hover, .vs-sidebarFooter > .vs-iconBtn.is-active, .vs-sidebarFooter .vs-statusHelpButton:hover, .vs-sidebarFooter .vs-statusHelpButton[aria-expanded="true"] { background: var(--vs-bg-hover); color: color-mix(in srgb, var(--vs-text) 78%, var(--vs-muted)); }
+.vs-sidebarFooter > .vs-iconBtn, .vs-sidebarFooter .vs-statusHelpButton { transition: background-color 160ms ease, color 160ms ease, transform 160ms ease; }
+.vs-sidebarFooter > .vs-iconBtn:active, .vs-sidebarFooter .vs-statusHelpButton:active { transform: scale(.93); }
+.vs-sidebarFooter > .vs-iconBtn svg, .vs-sidebarFooter .vs-statusHelpButton svg { stroke-width:1.7; }
+.vs-sidebarFooter > .vs-iconBtn:disabled { opacity:.4; cursor:default; }
+.vs-sidebarFooter .vs-statusHelpWrap { margin: 0; }
 
 .vs-wsSectionLabel {
   padding: 0.55rem 0.55rem 0.28rem;
@@ -638,6 +620,10 @@
   color: var(--vs-text);
 }
 
+.vs-wsItem:focus-within { border-color: var(--vs-border-strong); }
+.vs-wsItem:has(.vs-wsItemMain:focus-visible) { outline: 2px solid var(--vs-accent); outline-offset: -2px; }
+.vs-wsItemMain:focus-visible { outline: none; }
+
 .vs-wsItemMain {
   display: flex;
   align-items: center;
@@ -701,7 +687,7 @@
   display: flex;
   align-items: baseline;
   gap: 0.35rem;
-  font-size: 0.78rem;
+  font-size: var(--vs-ui-text);
   font-weight: 650;
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -732,7 +718,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.62rem;
+  font-size: var(--vs-ui-caption);
   line-height: 1.2;
   color: var(--vs-muted);
 }
@@ -879,6 +865,10 @@
   width: 14px;
   height: 14px;
 }
+
+.vs-closeIconButton { width: 26px; min-width: 26px; height: 26px; min-height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--vs-muted); }
+.vs-closeIconButton svg { width: 14px; height: 14px; stroke-width: 1.8; }
+.vs-closeIconButton:hover { background: var(--vs-bg-hover); color: var(--vs-text); }
 
 .vs-iconBtn:hover {
   background: var(--vs-bg-hover);
@@ -1037,8 +1027,7 @@
   min-height: 42px;
   padding: 0 0 0 0.9rem;
   border-bottom: 1px solid var(--vs-border);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--vs-bg-raised) 80%, transparent), var(--vs-bg));
+  background: var(--vs-chrome-bg);
   flex-shrink: 0;
 }
 
@@ -1106,6 +1095,11 @@ html[data-electron] .vs-titleDrag { -webkit-app-region: drag; }
   gap: 0.05rem;
   flex-shrink: 0;
 }
+
+.vs-root.is-settingsView .vs-topbar { padding-left: 0.3rem; }
+.vs-topbarSettingsLogo { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 32px; height: 32px; padding: 4px; border-radius: 7px; background: transparent; }
+.vs-topbarSettingsLogo img { display: block; width: var(--vs-brand-size); height: var(--vs-brand-size); object-fit: contain; }
+.vs-topbarSettingsLogo:hover { background: var(--vs-bg-hover); }
 
 .vs-topbarNav .vs-iconBtn:disabled {
   opacity: 0.28;
@@ -1239,7 +1233,10 @@ html[data-electron] .vs-titleDrag { -webkit-app-region: drag; }
   min-width: 296px;
   max-width: min(92vw, 360px);
   box-shadow: 0 14px 38px color-mix(in srgb, var(--vs-shadow-color, #111827) 18%, transparent);
+  animation: vs-sidebarFlyoutIn 180ms cubic-bezier(.2,.75,.2,1) both;
 }
+@keyframes vs-sidebarFlyoutIn { from { opacity:0; transform:translateY(-6px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .vs-chromeFlyout.is-plusMenu, .vs-chromeFlyout.is-notifyMenu { animation:none; } }
 
 .vs-chromeFlyout.is-plusMenu.is-layouts {
   padding: 0.45rem;
@@ -1379,7 +1376,11 @@ html[data-electron] .vs-titleDrag { -webkit-app-region: drag; }
   width: min(244px, calc(100vw - 24px));
   max-height: min(80vh, 520px);
   overflow-y: auto;
+  background: var(--vs-chrome-bg);
 }
+.vs-helpMenu:popover-open { animation: vs-help-menu-enter 180ms cubic-bezier(.2,.75,.2,1) both; }
+@keyframes vs-help-menu-enter { from { opacity:0; transform:translateY(7px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .vs-helpMenu:popover-open { animation:none; } .vs-sidebarFooter > .vs-iconBtn, .vs-sidebarFooter .vs-statusHelpButton { transition:none; } }
 
 .vs-helpMenuHeader {
   display: flex;
@@ -1390,18 +1391,10 @@ html[data-electron] .vs-titleDrag { -webkit-app-region: drag; }
   color: var(--vs-text);
   font-size: 0.76rem;
 }
-
-.vs-chromeFlyout.is-menu .vs-helpMenuHeader .vs-helpMenuClose {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  min-height: 24px;
-  padding: 0;
-  border: 1px solid var(--vs-border);
-  border-radius: 6px;
-  color: var(--vs-muted);
-}
+.vs-helpMenuHeader strong { flex: 1; white-space: nowrap; }
+.vs-chromeFlyout.is-menu.vs-helpMenu > button[role="menuitem"] { min-height: 30px; padding: 0.4rem 0.55rem; font-size: var(--vs-ui-text); font-weight: 400; }
+.vs-helpMenu > button[role="menuitem"] > svg { flex: 0 0 auto; color: var(--vs-muted); }
+.vs-chromeFlyout.is-menu .vs-helpMenuClose { flex: 0 0 26px; justify-content: center; width: 26px; height: 26px; min-height: 26px; padding: 0; margin-left: 8px; border-radius: 6px; color: var(--vs-muted); }
 
 .vs-helpMenuExternal { margin-left: auto; color: var(--vs-muted); }
 .vs-helpMenuUpdate { padding: 0.35rem 0.6rem; color: var(--vs-muted); font-size: 0.7rem; }

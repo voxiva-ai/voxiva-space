@@ -4,8 +4,8 @@ const readline = require("node:readline");
 const http = require("node:http");
 const os = require("node:os");
 const { spawn } = require("node:child_process");
-const { app, BrowserWindow, WebContentsView, ipcMain, Menu, dialog, shell, protocol, net, session, powerSaveBlocker, screen } = require("electron");
-const { readLimits, readPorts, formatResourceMetrics, createAwake } = require("./status.cjs");
+const { app, BrowserWindow, WebContentsView, ipcMain, Menu, dialog, shell, protocol, net, session, powerSaveBlocker, screen, safeStorage } = require("electron");
+const { readCodexSubscription, readLimits, readPorts, formatResourceMetrics, createAwake } = require("./status.cjs");
 const { bounds } = require("./pilot-bounds.cjs");
 const { files, findComponentFiles, workspaceDiskUsage } = require("./files.cjs");
 const { captureBeforeHide } = require("./view-visibility.cjs");
@@ -15,6 +15,7 @@ const inspector = require("./inspector.cjs");
 const { createCompanion } = require("./companion.cjs");
 const cookies = require("./cookies.cjs");
 const { createUpdates } = require("./updates.cjs");
+const { createProviderAccounts } = require("./provider-accounts.cjs");
 const { autoUpdater } = require("electron-updater");
 const { ignoreBrokenPipe } = require("./console-pipe.cjs");
 const fs = require("node:fs/promises");
@@ -51,7 +52,16 @@ app.whenReady().then(() => {
     height: Math.max(480, Math.min(1000, Math.floor(workHeight * 0.98))),
     minWidth: 760, minHeight: 480, show: false, center: true,
     frame: false, backgroundColor: "#10151d",
-    webPreferences: { preload: path.join(__dirname, "app-preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false },
+    webPreferences: { preload: path.join(__dirname, "app-preload.cjs"), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: !smoke },
+  });
+  window.webContents.on("context-menu", (_event, params) => {
+    if (!params.isEditable && !params.selectionText) return;
+    Menu.buildFromTemplate([
+      { role: "copy", enabled: Boolean(params.selectionText) },
+      { role: "paste", enabled: Boolean(params.isEditable) },
+      { type: "separator" },
+      { role: "selectAll" },
+    ]).popup({ window });
   });
   const views = new Map();
   const pending = new Map();
@@ -63,6 +73,7 @@ app.whenReady().then(() => {
   const event = (name, payload) => { if (!window.isDestroyed()) window.webContents.send("voxiva:event", name, payload); };
   const companion = createCompanion(event);
   const updates = createUpdates(app, autoUpdater);
+  const providerAccounts = createProviderAccounts(safeStorage, path.join(app.getPath("userData"), "provider-accounts.json"));
   const awake = createAwake(powerSaveBlocker);
   window.webContents.on("render-process-gone", () => awake.stop());
   readline.createInterface({ input: backend.stdout }).on("line", (line) => {
@@ -165,8 +176,13 @@ app.whenReady().then(() => {
       }
     }
     if (command === "status_snapshot") {
-      return { limits: await readLimits(), ...formatResourceMetrics(app.getAppMetrics(), os.totalmem(), os.freemem()) };
+      const [limits, subscription] = await Promise.all([readLimits(), readCodexSubscription()]);
+      return { limits, subscription, ...formatResourceMetrics(app.getAppMetrics(), os.totalmem(), os.freemem()) };
     }
+    if (command === "provider_accounts_list") return providerAccounts.list();
+    if (command === "provider_account_save") return providerAccounts.save(args.id, args.secret);
+    if (command === "provider_account_remove") return providerAccounts.remove(args.id);
+    if (command === "provider_account_usage") return providerAccounts.usage(args.id);
     if (command === "workspace_disk_usage") return workspaceDiskUsage(args);
     if (command === "status_ports") return readPorts();
     if (command === "status_awake") return awake.set(args.mode, args.hasAgents);
@@ -226,12 +242,16 @@ app.whenReady().then(() => {
     void companion.stop();
   });
   if (smoke) {
+    window.webContents.on("console-message", (event) => { if (event.message?.startsWith("Smoke stage:")) console.log(event.message); });
     const timeout = setTimeout(() => { console.error("Electron app smoke timed out"); app.exit(1); }, 60000);
     window.webContents.once("did-finish-load", async () => {
       try {
         const result = await window.webContents.executeJavaScript("(async () => ({ mounted: document.getElementById('root')?.childElementCount, cwd: await window.voxiva.invoke('get_default_terminal_cwd') }))()");
         if (!result.mounted || !result.cwd) throw new Error(`App did not mount: ${JSON.stringify(result)}`);
-        const status = await window.webContents.executeJavaScript(`(async () => {
+        window.setSize(863, 680);
+        await new Promise(resolve => setTimeout(resolve, 80));
+        const statusScript = `(async () => {
+          console.log('Smoke stage: status and navigation');
           const snapshot = await window.voxiva.invoke('status_snapshot');
           if (!Number.isFinite(snapshot.memoryMb)) throw new Error('Missing process memory');
           for (const mode of ['on', 'agents', 'off']) {
@@ -240,7 +260,7 @@ app.whenReady().then(() => {
           }
           const bar = document.querySelector('.vs-statusBar');
           if (!bar || Math.abs(bar.getBoundingClientRect().bottom - innerHeight) > 1) throw new Error('Status bar is not at the bottom');
-          if (!document.querySelector('.vs-statusMemory') || !document.querySelector('.vs-statusAgents')) throw new Error('Status actions are missing from the status bar');
+          if (!document.querySelector('.vs-statusMemory') || !document.querySelector('.vs-statusPorts') || document.querySelector('.vs-statusAgents')) throw new Error('Status actions are missing from the status bar');
           const viewIds = ['space', 'projects', 'agents', 'board', 'history', 'browser', 'settings'];
           const waitFor = (check, label) => new Promise((resolve, reject) => {
             const start = Date.now();
@@ -270,23 +290,87 @@ app.whenReady().then(() => {
             if (rect.left < 0 || rect.right > innerWidth || rect.bottom > bar.getBoundingClientRect().top) throw new Error('Status popup out of bounds');
             if (id === 'usage') {
               const compact = popup.querySelector('[aria-pressed="false"]');
-              if (!popup.querySelector('.vs-usageProviders, .vs-usageEmpty') || !compact) throw new Error('Usage details did not render');
+              if (!popup.querySelector('.vs-usageProviders, .vs-usageEmpty') || !compact || popup.querySelector('.vs-usageDetailsLink')) throw new Error('Usage details did not render or still links to a separate page');
+              const provider = popup.querySelector('.vs-usageProvider');
+              if (provider) {
+                provider.click();
+                const detail = await waitFor(() => popup.querySelector('.vs-usageDetail'), 'usage agent detail');
+                const detailRect = detail.getBoundingClientRect();
+                if (getComputedStyle(popup).overflowX !== 'visible' || detailRect.right > innerWidth || detailRect.left < rect.right) throw new Error('Usage agent detail is clipped instead of opening beside the list');
+                if (detailRect.top < 8 || detailRect.bottom > bar.getBoundingClientRect().top - 8) throw new Error('Usage agent detail extends outside the available window height');
+              }
               compact.click();
               await new Promise(resolve => setTimeout(resolve, 50));
               if (!popup.classList.contains('is-compact')) throw new Error('Compact usage view did not activate');
             }
             popup.hidePopover();
           }
-          document.querySelector('.vs-helpBtn').click();
-          const helpMenu = await waitFor(() => document.querySelector('.vs-helpMenu'), 'help menu');
+          const notificationButton = document.querySelector('.vs-notifyBtn');
+          notificationButton.click();
+          await new Promise(resolve => setTimeout(resolve, 100));
+          const notificationMenu = document.querySelector('.is-notifyMenu');
+          if (!notificationMenu) throw new Error('Notification menu did not render: ' + JSON.stringify({ expanded: notificationButton.getAttribute('aria-expanded'), sidebar: document.querySelector('.vs-sidebar')?.className, view: document.querySelector('.vs-viewSlot.is-active')?.dataset.viewSlot }));
+          const notificationRect = notificationMenu.getBoundingClientRect();
+          if (notificationRect.left < 0 || notificationRect.right > innerWidth || notificationRect.bottom > innerHeight || notificationRect.left < notificationButton.getBoundingClientRect().left - 1) throw new Error('Notification menu is clipped or opens on the wrong side');
+          notificationButton.click();
+          await waitFor(() => !document.querySelector('.is-notifyMenu'), 'notification menu close');
+          const helpButton = document.querySelector('.vs-helpBtn');
+          const helpMenu = document.querySelector('.vs-helpMenu');
+          if (helpMenu.matches(':popover-open') || helpButton.getAttribute('aria-expanded') !== 'false' || getComputedStyle(helpMenu).display !== 'none' || helpMenu.getClientRects().length) throw new Error('Help menu should start visually closed');
+          helpButton.click();
+          await waitFor(() => helpMenu, 'help menu');
+          await waitFor(() => helpMenu.matches(':popover-open') ? helpMenu : null, 'help menu open');
+          await new Promise(resolve => setTimeout(resolve, 180));
           if (helpMenu.querySelectorAll('[role="menuitem"] svg').length < 8 || !helpMenu.querySelector('.vs-helpMenuClose')) throw new Error('Help menu actions or icons did not render');
+          const helpRect = helpMenu.getBoundingClientRect();
+          const helpButtonRect = helpButton.getBoundingClientRect();
+          if (!helpMenu.matches(':popover-open') || helpRect.left < 0 || helpRect.right > innerWidth || helpRect.bottom > helpButtonRect.top + 2) throw new Error('Help menu is not anchored above its bottom button');
           helpMenu.querySelector('.vs-helpMenuClose').click();
-          await waitFor(() => !document.querySelector('.vs-helpMenu'), 'help menu close');
+          await waitFor(() => !helpMenu.matches(':popover-open'), 'help menu close');
+          if (getComputedStyle(helpMenu).display !== 'none') throw new Error('Closed help menu is still visible');
+          helpButton.click();
+          await waitFor(() => helpMenu.matches(':popover-open') ? helpMenu : null, 'help menu toggle open');
+          helpButton.click();
+          await waitFor(() => !helpMenu.matches(':popover-open'), 'help menu toggle close');
+          if (document.querySelector('.vs-sidebarNavigation')) throw new Error('Search and Tasks must not appear above the workspace list');
+          const tool = (name) => document.querySelector('.vs-sidebarFooter [data-sidebar-tool="' + name + '"]');
+          for (const name of ['reveal', 'workspace-board']) if (!tool(name)) throw new Error('Missing bottom toolbar action: ' + name);
+          if (tool('search') || tool('tasks')) throw new Error('Removed Search and Tasks buttons are still present');
+          window.dispatchEvent(new Event('voxiva-command-palette-open'));
+          await waitFor(() => document.querySelector('.vs-palette[role="dialog"]'), 'search palette');
+          document.querySelector('.vs-paletteScrim').click();
+          await waitFor(() => !document.querySelector('.vs-palette[role="dialog"]'), 'search palette close');
+          tool('workspace-board').click();
+          await waitFor(() => document.querySelector('[data-view-slot="workspace-board"].is-active .vs-workspaceBoard'), 'workspace board');
+          const activeWorkspaceRow = document.querySelector('.vs-workspaceList .vs-wsItem.is-active');
+          if (activeWorkspaceRow) {
+            tool('reveal').click();
+            await waitFor(() => document.querySelector('[data-view-slot="space"].is-active'), 'reveal workspace');
+            if (document.activeElement !== activeWorkspaceRow.querySelector('.vs-wsItemMain')) throw new Error('Reveal did not focus the active workspace');
+          } else {
+            if (!tool('reveal').disabled) throw new Error('Reveal should be disabled without an active workspace');
+            tool('workspace-board').click();
+            await waitFor(() => document.querySelector('[data-view-slot="space"].is-active'), 'workspace board close');
+          }
           const settingsButton = document.querySelector('[data-view-trigger="settings"]');
+          const workspaceLogoRect = document.querySelector('.vs-sidebarLogo').getBoundingClientRect();
+          const workspaceNavFont = getComputedStyle(document.querySelector('.vs-wsItem strong') || document.body).fontSize;
+          const zoomBeforeSettings = document.documentElement.style.zoom;
+          console.log('Smoke stage: settings layout');
           if (!settingsButton) throw new Error('Settings button missing');
           settingsButton.click();
-          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          await new Promise(resolve => setTimeout(resolve, 40));
           if (!document.querySelector('.vs-root.is-settingsView') || getComputedStyle(document.querySelector('.vs-sidebar')).display !== 'none') throw new Error('Settings did not open as a full-screen view');
+          const settingsLogo = document.querySelector('.vs-topbarSettingsLogo');
+          if (!settingsLogo?.querySelector('img') || document.querySelector('.vs-topbarNav')) throw new Error('Settings should show the brand logo instead of workspace navigation');
+          const settingsLogoRect = settingsLogo.querySelector('img').getBoundingClientRect();
+          if (Math.abs(settingsLogoRect.width - workspaceLogoRect.width) > 0.5 || Math.abs(settingsLogoRect.height - workspaceLogoRect.height) > 0.5 || Math.abs(settingsLogoRect.left - workspaceLogoRect.left) > 0.5 || Math.abs(settingsLogoRect.top - workspaceLogoRect.top) > 0.5) throw new Error('Logo size or position changes between workspace and settings');
+          const settingsNavigation = await waitFor(() => document.querySelector('.vs-settingsNavItem'), 'settings navigation');
+          if (getComputedStyle(settingsNavigation).fontSize !== workspaceNavFont || document.documentElement.style.zoom !== zoomBeforeSettings) throw new Error('Navigation text or zoom changes in settings');
+          settingsLogo.click();
+          await waitFor(() => !document.querySelector('.vs-root.is-settingsView'), 'settings logo return');
+          settingsButton.click();
+          await waitFor(() => document.querySelector('.vs-root.is-settingsView'), 'settings reopen');
           const settings = await new Promise((resolve, reject) => { const start = Date.now(); const poll = () => {
             const page = document.querySelector('.vs-settingsLayout');
             const back = document.querySelector('.vs-settingsBack');
@@ -296,6 +380,17 @@ app.whenReady().then(() => {
             else setTimeout(poll, 25);
           }; poll(); });
           if (settings.width < 500 || settings.height < 300) throw new Error('Settings page did not fill the window: ' + JSON.stringify(settings));
+          const generalNav = document.querySelector('[data-settings-section="general"]');
+          generalNav.click();
+          await new Promise(resolve => setTimeout(resolve, 40));
+          const layout = document.querySelector('.vs-settingsLayout');
+          const panel = document.querySelector('.vs-settingsPanel');
+          const content = document.querySelector('.vs-settingsPageHead');
+          const panelRect = panel.getBoundingClientRect();
+          const contentRect = content.getBoundingClientRect();
+          if (layout.scrollWidth > layout.clientWidth + 1 || panel.scrollWidth > panel.clientWidth + 1 || contentRect.left < panelRect.left - 1 || contentRect.right > panelRect.right + 1) {
+            throw new Error('Settings content overflows at narrow width: ' + JSON.stringify({ layout: [layout.clientWidth, layout.scrollWidth], panel: [panel.clientWidth, panel.scrollWidth], content: [contentRect.left, contentRect.right], panelBounds: [panelRect.left, panelRect.right] }));
+          }
           {
             const waitForThemePicker = (check, label) => new Promise((resolve, reject) => {
               const start = Date.now();
@@ -311,10 +406,20 @@ app.whenReady().then(() => {
             if (!nav) throw new Error('Appearance settings are missing');
             nav.click();
             const picker = await waitForThemePicker(() => document.querySelector('.vs-themePicker'), 'picker control');
+            const language = document.querySelector('[data-dropdown-select="language"]');
+            language.querySelector('button').click();
+            const languageMenu = await waitForThemePicker(() => {
+              const element = language.querySelector('.vs-dropdownMenu');
+              return element?.matches(':popover-open') ? element : null;
+            }, 'language menu');
+            const languageRect = languageMenu.getBoundingClientRect();
+            if (languageRect.left < 8 || languageRect.top < 8 || languageRect.right > innerWidth - 8 || languageRect.bottom > innerHeight - 8 || languageMenu.querySelectorAll('[role="option"]').length !== 2) throw new Error('Language dropdown is clipped or incomplete');
+            languageMenu.querySelector('[role="option"][aria-selected="true"]').click();
+            await waitForThemePicker(() => !languageMenu.matches(':popover-open'), 'language menu close');
             const panel = document.querySelector('.vs-settingsPanel');
             const trigger = picker.querySelector('summary');
             panel.scrollTop += trigger.getBoundingClientRect().top - innerHeight + 140;
-            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            await new Promise((resolve) => setTimeout(resolve, 40));
             trigger.click();
             const menu = await waitForThemePicker(() => {
               const element = document.querySelector('.vs-themePickerMenu');
@@ -327,33 +432,151 @@ app.whenReady().then(() => {
             if (Math.abs(rect.left - Math.max(12, Math.min(trigger.getBoundingClientRect().left, innerWidth - rect.width - 12))) > 2) throw new Error('Theme picker is not aligned with its control');
             const options = menu.querySelector('.vs-themePickerOptions');
             if (!options || options.clientHeight < 80 || options.scrollHeight <= options.clientHeight) throw new Error('Theme list is clipped instead of scrolling');
+            if (rect.right > trigger.getBoundingClientRect().right + 1) throw new Error('Theme menu protrudes beyond its control');
+            options.scrollTop = options.scrollHeight;
+            await new Promise(resolve => setTimeout(resolve, 160));
+            const afterScroll = menu.getBoundingClientRect();
+            if (!menu.matches(':popover-open') || options.scrollTop === 0 || Math.abs(rect.top - afterScroll.top) > 1 || Math.abs(rect.left - afterScroll.left) > 1) throw new Error('Theme menu moved or closed while scrolling its list');
             menu.querySelector('.vs-themePickerOption.is-active')?.click();
             await waitForThemePicker(() => !menu.matches(':popover-open'), 'popover close');
           }
           const sections = [...document.querySelectorAll('.vs-settingsNavItem')];
-          if (sections.length !== 10) throw new Error('Expected 10 settings sections, found ' + sections.length);
+          if (sections.length !== 34) throw new Error('Expected 34 settings sections, found ' + sections.length);
           for (const section of sections) {
+            console.log('Smoke stage: settings ' + section.dataset.settingsSection);
             section.click();
-            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            await new Promise(resolve => setTimeout(resolve, 40));
             if (!section.classList.contains('is-active') || !document.querySelector('.vs-settingsPanel h1')?.textContent.trim() || !document.querySelector('.vs-settingsPanelBody')) throw new Error('Settings section failed to render: ' + section.textContent.trim());
+            if (section.dataset.settingsSection === 'input-editing') {
+              const toggle = document.querySelector('.vs-settingsPanel [role="switch"]');
+              const before = toggle.getAttribute('aria-checked') === 'true';
+              toggle.click();
+              await waitFor(() => toggle.getAttribute('aria-checked') === String(!before), 'input preference change');
+              if (JSON.parse(localStorage.getItem('voxiva-terminal-prefs-v1')).rightClickPaste !== !before) throw new Error('Input preference was not persisted');
+              toggle.click();
+            }
+            if (section.dataset.settingsSection === 'stats-usage') {
+              const toggle = document.querySelector('.vs-settingsPanel [role="switch"]');
+              const before = toggle.getAttribute('aria-checked') === 'true';
+              toggle.click();
+              await waitFor(() => toggle.getAttribute('aria-checked') === String(!before), 'status preference change');
+              if (JSON.parse(localStorage.getItem('voxiva-status-bar-prefs-v1')).usage !== !before || Boolean(document.querySelector('.vs-statusUsageSummary')) !== !before) throw new Error('Usage preference did not update the status bar');
+              toggle.click();
+            }
+            if (section.dataset.settingsSection === 'ssh') {
+              const fill = (field, value) => { const input = document.querySelector('[data-ssh-field="' + field + '"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })); };
+              fill('name', 'Smoke host'); fill('host', '--invalid');
+              await new Promise(resolve => setTimeout(resolve, 30));
+              document.querySelector('.vs-settingsHostForm').requestSubmit();
+              await waitFor(() => document.querySelector('.vs-settingsFormError'), 'SSH validation');
+              fill('host', 'localhost');
+              await new Promise(resolve => setTimeout(resolve, 30));
+              document.querySelector('.vs-settingsHostForm').requestSubmit();
+              const saved = await waitFor(() => document.querySelector('.vs-settingsConnectionList article'), 'saved SSH host');
+              if (!JSON.parse(localStorage.getItem('voxiva-ssh-hosts-v1')).some(host => host.name === 'Smoke host' && host.host === 'localhost')) throw new Error('SSH host was not persisted');
+              saved.querySelector('.vs-iconBtn').click();
+              await waitFor(() => !document.querySelector('.vs-settingsConnectionList article'), 'removed SSH host');
+            }
+            if (section.dataset.settingsSection === 'mobile') {
+              const toggle = await waitFor(() => { const button = document.querySelector('.vs-settingsPanel [role="switch"]'); return button && !button.disabled ? button : null; }, 'mobile status');
+              const started = toggle.getAttribute('aria-checked') === 'true';
+              if (!started) {
+                toggle.click();
+                await waitFor(() => document.querySelector('.vs-companionQr canvas'), 'mobile pairing QR');
+                if (!(await window.voxiva.invoke('companion_status')).running) throw new Error('Mobile server did not start');
+                await waitFor(() => !toggle.disabled, 'mobile switch ready');
+                toggle.click();
+                await waitFor(() => toggle.getAttribute('aria-checked') === 'false', 'mobile server stop');
+                if ((await window.voxiva.invoke('companion_status')).running) throw new Error('Mobile server did not stop');
+              }
+            }
+            if (section.dataset.settingsSection === 'agents') {
+              const choices = document.querySelector('.vs-agentDefaultChoices');
+              if (!choices || !choices.querySelector('button[aria-pressed="true"]')) throw new Error('Default agent choices did not render');
+              choices.querySelector('button').click();
+              await waitFor(() => choices.querySelector('button')?.getAttribute('aria-pressed') === 'true', 'default agent choice');
+              const awakeChoices = document.querySelector('.vs-agentPreferences .vs-agentPermissionChoices');
+              awakeChoices.querySelectorAll('button')[1].click();
+              await waitFor(() => localStorage.getItem('voxiva-awake-mode') === 'agents', 'awake preference');
+              awakeChoices.querySelectorAll('button')[2].click();
+              await waitFor(() => localStorage.getItem('voxiva-awake-mode') === 'off', 'awake preference restore');
+              if (!document.querySelector('.vs-agentSettingsRow img, .vs-agentSettingsRow .vs-brandMark')) throw new Error('Agent icons did not render');
+              const enabled = document.querySelector('.vs-agentAvailabilityChoices');
+              if (enabled) {
+                const [on, off] = enabled.querySelectorAll('button');
+                const initial = on.getAttribute('aria-pressed') === 'true';
+                (initial ? off : on).click();
+                await waitFor(() => on.getAttribute('aria-pressed') === String(!initial), 'agent enable preference');
+                (initial ? on : off).click();
+                await waitFor(() => on.getAttribute('aria-pressed') === String(initial), 'agent enable restore');
+              }
+            }
+            if (section.dataset.settingsSection === 'provider-accounts') {
+              const names = [...document.querySelectorAll('.vs-providerTitle strong')].map((item) => item.textContent.trim());
+              if (!['OpenCode', 'Devin', 'Claude', 'Codex', 'Gemini CLI', 'MiniMax', 'Cursor', 'GLM Coding Plan'].every((name) => names.includes(name))) throw new Error('Provider account sections are incomplete');
+              if (!document.querySelector('.vs-providerAccountRow') || !document.querySelector('.vs-providerActions button')) throw new Error('Provider account actions did not render');
+            }
+            if (section.dataset.settingsSection === 'orchestration') {
+              const depth = document.querySelector('#vs-orchestration-depth');
+              if (!document.querySelector('.vs-orchestrationCard') || !document.querySelector('.vs-orchestrationAgents') || document.querySelectorAll('.vs-orchestrationAgents > span').length !== 4 || depth?.min !== '1' || depth.max !== '5' || depth.value !== '1') throw new Error('Orchestration controls or agent coverage did not render');
+              if (!document.querySelector('.vs-orchestrationScenarioGrid .vs-orchestrationScenario') || !document.querySelector('.vs-orchestrationActions .vs-orchestrationPrimary')) throw new Error('Orchestration guidance or install action did not render');
+            }
+            if (section.dataset.settingsSection === 'terminal') {
+              const duplicateTitle = [...document.querySelectorAll('.vs-terminalSettings h2')].some((heading) => heading.textContent.trim() === section.textContent.trim());
+              if (duplicateTitle) throw new Error('Terminal settings repeat the page title');
+              const shellChoices = document.querySelector('.vs-terminalSettingsGroup .vs-terminalRangeChoices');
+              if (!shellChoices || [...shellChoices.querySelectorAll('button')].some((button) => button.scrollWidth > button.clientWidth + 1)) throw new Error('Terminal shell labels overflow their buttons');
+            }
+            if (section.dataset.settingsSection === 'hotkeys') {
+              const terminalFirst = document.querySelector('[data-hotkey-priority="terminal"]');
+              if (!terminalFirst || !document.querySelector('[data-hotkey-priority="voxiva"]')) throw new Error('Terminal shortcut priority control did not render');
+              terminalFirst.click();
+              await new Promise(resolve => setTimeout(resolve, 40));
+              if (localStorage.getItem('voxiva-space-hotkey-priority-v1') !== 'terminal') throw new Error('Terminal shortcut priority was not saved');
+              document.querySelector('[data-hotkey-priority="voxiva"]').click();
+              const row = document.querySelector('.vs-hotkeyRows li');
+              const clear = row?.querySelector('.vs-hotkeyClear');
+              if (!row || !clear || !document.querySelector('.vs-hotkeySearch')) throw new Error('Shortcut manager controls did not render');
+              const action = row.dataset.hotkeyAction;
+              clear.click();
+              await new Promise(resolve => setTimeout(resolve, 40));
+              document.querySelector('[data-hotkey-filter="unassigned"]').click();
+              await new Promise((resolve, reject) => { const start = Date.now(); const poll = () => { if (row.querySelector('.vs-hotkeyEdit.is-unassigned')) resolve(); else if (Date.now() - start > 5000) reject(new Error('Cleared shortcut was not shown in Unassigned')); else setTimeout(poll, 25); }; poll(); });
+              row.querySelector('.vs-hotkeyEdit').click();
+              await new Promise(resolve => setTimeout(resolve, 30));
+              window.dispatchEvent(new KeyboardEvent('keydown', { key: 'q', bubbles: true, cancelable: true }));
+              await new Promise(resolve => setTimeout(resolve, 30));
+              document.querySelector('[data-hotkey-filter="all"]').click();
+              await new Promise((resolve, reject) => { const start = Date.now(); const poll = () => { const reassigned = document.querySelector('[data-hotkey-action="' + action + '"] .vs-hotkeyEdit'); if (reassigned && !reassigned.classList.contains('is-unassigned') && reassigned.querySelector('kbd')) resolve(); else if (Date.now() - start > 5000) reject(new Error('Shortcut reassignment did not save')); else setTimeout(poll, 25); }; poll(); });
+              document.querySelector('.vs-settingsPanelHead .vs-btn').click();
+            }
           }
-          document.querySelector('.vs-settingsBack').click();
-          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-          if (document.querySelector('.vs-root.is-settingsView')) throw new Error('Settings did not return to the workspace');
+          const appearance = document.querySelector('[data-settings-section="appearance"]');
+          appearance.click();
+          await new Promise(resolve => setTimeout(resolve, 40));
+          const language = document.querySelector('[data-dropdown-select="language"]');
+          language.querySelector('button').click();
+          await new Promise((resolve, reject) => { const start = Date.now(); const poll = () => { if (language.querySelector('.vs-dropdownMenu')?.matches(':popover-open')) resolve(); else if (Date.now() - start > 5000) reject(new Error('Language menu did not reopen for capture')); else setTimeout(poll, 25); }; poll(); });
           return true;
-        })()`);
+        })()`;
+        new Function(statusScript);
+        const status = await window.webContents.executeJavaScript(statusScript);
         if (!status) throw new Error("Status bar smoke failed");
+        const settingsDropdownPreview = path.join(os.tmpdir(), "voxiva-settings-dropdown-smoke.png");
+        await fs.writeFile(settingsDropdownPreview, (await window.webContents.capturePage()).toPNG());
+        console.log(`Settings dropdown preview: ${settingsDropdownPreview}`);
+        await window.webContents.executeJavaScript("document.querySelector('[data-dropdown-select=language] .vs-dropdownMenu')?.hidePopover(); document.querySelector('.vs-settingsBack')?.click(); new Promise(resolve => setTimeout(resolve, 40))");
         await window.webContents.executeJavaScript("document.querySelector('button[popovertarget=\"status-usage\"]').click(); new Promise(resolve => setTimeout(resolve, 100))");
         const usagePreview = path.join(os.tmpdir(), "voxiva-usage-smoke.png");
         await fs.writeFile(usagePreview, (await window.webContents.capturePage()).toPNG());
         await window.webContents.executeJavaScript("document.getElementById('status-usage').hidePopover()");
         console.log(`Usage preview: ${usagePreview}`);
-        await window.webContents.executeJavaScript("document.querySelector('button[popovertarget=\"status-resources\"]').click(); new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+        await window.webContents.executeJavaScript("document.querySelector('button[popovertarget=\"status-resources\"]').click(); new Promise(resolve => setTimeout(resolve, 40))");
         const resourceOpen = await window.webContents.executeJavaScript("document.getElementById('status-resources').matches(':popover-open')");
         if (!resourceOpen) throw new Error("Resource manager did not stay open for capture");
         const resourcePreview = path.join(os.tmpdir(), "voxiva-resource-smoke.png");
         await fs.writeFile(resourcePreview, (await window.webContents.capturePage()).toPNG());
-        await window.webContents.executeJavaScript("document.getElementById('status-resources').hidePopover(); new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+        await window.webContents.executeJavaScript("document.getElementById('status-resources').hidePopover(); new Promise(resolve => setTimeout(resolve, 40))");
         console.log(`Resource manager preview: ${resourcePreview}`);
         await window.webContents.executeJavaScript(`document.querySelector('[data-view-trigger="settings"]').click()`);
         const settingsFrame = await window.webContents.executeJavaScript("new Promise((resolve,reject)=>{const start=Date.now();const poll=()=>{const page=document.querySelector('.vs-settingsLayout');const r=page?.getBoundingClientRect();const active=document.querySelector('.vs-root.is-settingsView');const button=document.querySelector('[data-view-trigger=\\\"settings\\\"]');if(active&&page&&r?.width>0&&r.height>0&&button?.getAttribute('aria-pressed')==='true')requestAnimationFrame(()=>requestAnimationFrame(()=>resolve({width:r.width,height:r.height})));else if(Date.now()-start>5000)reject(new Error('Settings is not active/visible: '+JSON.stringify({active:!!active,rect:r&&[r.width,r.height],pressed:button?.getAttribute('aria-pressed')})));else setTimeout(poll,25)};poll()})");
@@ -361,12 +584,34 @@ app.whenReady().then(() => {
         const settingsPreview = path.join(os.tmpdir(), "voxiva-settings-smoke.png");
         await fs.writeFile(settingsPreview, (await window.webContents.capturePage()).toPNG());
         console.log(`Settings preview: ${settingsPreview}`);
+        await window.webContents.executeJavaScript("document.querySelector('[data-settings-section=agents]').click(); new Promise(resolve => setTimeout(resolve, 80))");
+        const agentsPreview = path.join(os.tmpdir(), "voxiva-agents-settings-smoke.png");
+        await fs.writeFile(agentsPreview, (await window.webContents.capturePage()).toPNG());
+        console.log(`Agent settings preview: ${agentsPreview}`);
         window.setSize(760, 600);
         const fits = await window.webContents.executeJavaScript(`new Promise(resolve => requestAnimationFrame(() => {
           const bar = document.querySelector('.vs-statusBar');
-          resolve(bar.scrollWidth <= bar.clientWidth);
+          const rows = [...document.querySelectorAll('.vs-agentSettingsRowHead')];
+          resolve(bar.scrollWidth <= bar.clientWidth && rows.every((row) => row.scrollWidth <= row.clientWidth + 1));
         }))`);
-        if (!fits) throw new Error("Status bar overflows at minimum window width");
+        if (!fits) throw new Error("Status bar or agent settings overflows at minimum window width");
+        window.setSize(1240, 780);
+        let [viewportWidth, viewportHeight] = [0, 0];
+        let windowBounds;
+        for (let attempt = 0; attempt < 40; attempt++) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+          [viewportWidth, viewportHeight] = await window.webContents.executeJavaScript("[innerWidth, innerHeight]");
+          windowBounds = window.getContentBounds();
+          if (Math.abs(viewportWidth - windowBounds.width) <= 1 && Math.abs(viewportHeight - windowBounds.height) <= 1) break;
+        }
+        if (Math.abs(viewportWidth - windowBounds.width) > 1 || Math.abs(viewportHeight - windowBounds.height) > 1) throw new Error("Renderer viewport did not resize with the window");
+        await window.webContents.executeJavaScript("new Promise((resolve, reject) => { document.querySelector('[data-settings-section=provider-accounts]').click(); const start = Date.now(); const poll = () => document.querySelector('.vs-providerAccounts') ? resolve() : Date.now() - start > 5000 ? reject(new Error('Provider accounts page did not open')) : setTimeout(poll, 25); poll(); })");
+        const providerPreview = path.join(os.tmpdir(), "voxiva-provider-accounts-smoke.png");
+        await fs.writeFile(providerPreview, (await window.webContents.capturePage()).toPNG());
+        console.log(`Provider accounts preview: ${providerPreview}`);
+        window.setSize(760, 600);
+        const providerFits = await window.webContents.executeJavaScript("new Promise(resolve => requestAnimationFrame(() => { const page = document.querySelector('.vs-providerAccounts'); resolve(page && page.scrollWidth <= page.clientWidth + 1); }))");
+        if (!providerFits) throw new Error("Provider accounts overflows at minimum window width");
         window.setSize(1240, 780);
         const statusPreview = path.join(os.tmpdir(), "voxiva-status-smoke.png");
         await fs.writeFile(statusPreview, (await window.webContents.capturePage()).toPNG());

@@ -48,7 +48,7 @@ export function HelpGuide({ open, onClose }: { open: boolean; onClose: () => voi
             <h2 id="vs-help-title">{t("help.title")}</h2>
             <span>{t("help.lead")}</span>
           </div>
-          <button type="button" className="vs-iconBtn" aria-label={t("help.close")} onClick={onClose}>
+          <button type="button" className="vs-iconBtn vs-closeIconButton" aria-label={t("help.close")} onClick={onClose}>
             ×
           </button>
         </header>

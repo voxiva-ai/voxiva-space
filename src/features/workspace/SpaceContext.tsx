@@ -932,7 +932,7 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    void companionStatus()
+    const refresh = () => { void companionStatus()
       .then((status) => {
         const live = Boolean(status.running);
         setCompanionLive(live);
@@ -941,7 +941,10 @@ export function SpaceProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         setCompanionLive(false);
         setCompanionRunning(false);
-      });
+      }); };
+    refresh();
+    window.addEventListener("voxiva-companion-changed", refresh);
+    return () => window.removeEventListener("voxiva-companion-changed", refresh);
   }, []);
 
   useEffect(() => {

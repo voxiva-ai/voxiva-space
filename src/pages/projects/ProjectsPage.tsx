@@ -137,7 +137,7 @@ export function ProjectsPage() {
               <strong>{t("projects.setupTitle")}</strong>
               <button
                 type="button"
-                className="vs-iconBtn"
+                className="vs-iconBtn vs-closeIconButton"
                 onClick={() => setModalOpen(false)}
                 aria-label={t("space.close")}
                 title={t("space.close")}
