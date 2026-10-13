@@ -490,6 +490,21 @@ app.whenReady().then(() => {
                 if ((await window.voxiva.invoke('companion_status')).running) throw new Error('Mobile server did not stop');
               }
             }
+            if (section.dataset.settingsSection === 'voice') {
+              const prefsKey = 'voxiva-voice-prefs-v1';
+              const toggle = document.querySelector('.vs-voiceSettings [role="switch"]');
+              const wasEnabled = toggle.getAttribute('aria-checked') === 'true';
+              toggle.click();
+              await waitFor(() => JSON.parse(localStorage.getItem(prefsKey)).enabled === !wasEnabled, 'voice enabled preference');
+              const mode = document.querySelector('.vs-voiceSettings .vs-agentPermissionChoices button');
+              mode.click();
+              await waitFor(() => JSON.parse(localStorage.getItem(prefsKey)).mode === 'toggle', 'voice dictation mode');
+              const model = document.querySelector('.vs-voiceModelSelect .vs-dropdownTrigger');
+              model.click();
+              const option = await waitFor(() => [...document.querySelectorAll('.vs-voiceModelSelect .vs-dropdownOption')].find(button => button.textContent.includes('Parakeet TDT v3')), 'voice model option');
+              option.click();
+              await waitFor(() => JSON.parse(localStorage.getItem(prefsKey)).model === 'parakeet-v3', 'voice model preference');
+            }
             if (section.dataset.settingsSection === 'agents') {
               const choices = document.querySelector('.vs-agentDefaultChoices');
               if (!choices || !choices.querySelector('button[aria-pressed="true"]')) throw new Error('Default agent choices did not render');
