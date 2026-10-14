@@ -113,25 +113,23 @@ function AppInner() {
   }, [t]);
 
   useEffect(() => {
+    // Render the home screen immediately; pairing is best-effort and must not gate app startup.
+    setReady(true);
     void (async () => {
-      await migrateLegacySession();
-      const list = await loadDevices();
-      const active = (await loadActiveDeviceId()) || list[0]?.id || null;
-      setDevices(list);
-      setActiveId(active);
-      if (active) {
+      try {
+        await migrateLegacySession();
+        const list = await loadDevices();
+        const active = (await loadActiveDeviceId()) || list[0]?.id || null;
+        setDevices(list);
+        setActiveId(active);
+
         const d = list.find((x) => x.id === active);
-        if (d) {
-          try {
-            await pair(d);
-          } catch {
-            // offline
-          }
-        }
+        if (d) void pair(d).catch(() => {});
+
+        void Linking.getInitialURL().then(applyPairUrl).catch(() => {});
+      } catch {
+        // Keep the app usable even if local storage cannot be restored.
       }
-      const initial = await Linking.getInitialURL();
-      await applyPairUrl(initial);
-      setReady(true);
     })();
     const sub = Linking.addEventListener("url", ({ url }) => {
       void applyPairUrl(url);
