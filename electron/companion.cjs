@@ -20,7 +20,7 @@ function createCompanion(emit, port = 17847, host = "0.0.0.0") {
   const status = () => {
     const ip = lanIp();
     const pairUrl = token ? `voxiva-space://pair?t=${encodeURIComponent(token)}&h=${ip || "127.0.0.1"}&p=${actualPort()}` : null;
-    return { running: Boolean(server?.listening), port: actualPort(), lanIp: ip, token: token || null, paired, pairUrl, deepLink: pairUrl, installPageUrl };
+    return { running: Boolean(server?.listening), port: actualPort(), lanIp: ip, machineName: os.hostname(), token: token || null, paired, pairUrl, deepLink: pairUrl, installPageUrl };
   };
   const authorized = (provided) => {
     if (typeof provided !== "string" || !token) return false;

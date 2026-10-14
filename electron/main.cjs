@@ -352,6 +352,12 @@ app.whenReady().then(() => {
             tool('workspace-board').click();
             await waitFor(() => document.querySelector('[data-view-slot="space"].is-active'), 'workspace board close');
           }
+          tool('workspace-board').click();
+          await waitFor(() => document.querySelector('[data-view-slot="workspace-board"].is-active .vs-workspaceBoard'), 'workspace board reopen');
+          if (tool('workspace-board').getAttribute('aria-pressed') !== 'true') throw new Error('Workspace board button is not marked active');
+          tool('workspace-board').click();
+          await waitFor(() => document.querySelector('[data-view-slot="space"].is-active'), 'workspace board toggle close');
+          if (tool('workspace-board').getAttribute('aria-pressed') !== 'false') throw new Error('Workspace board button did not clear its active state');
           const settingsButton = document.querySelector('[data-view-trigger="settings"]');
           const workspaceLogoRect = document.querySelector('.vs-sidebarLogo').getBoundingClientRect();
           const workspaceNavFont = getComputedStyle(document.querySelector('.vs-wsItem strong') || document.body).fontSize;
@@ -464,11 +470,13 @@ app.whenReady().then(() => {
               toggle.click();
             }
             if (section.dataset.settingsSection === 'ssh') {
+              document.querySelector('[data-ssh-add-target]').click();
+              await waitFor(() => document.querySelector('[data-ssh-form]'), 'SSH add form');
               const fill = (field, value) => { const input = document.querySelector('[data-ssh-field="' + field + '"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })); };
               fill('name', 'Smoke host'); fill('host', '--invalid');
               await new Promise(resolve => setTimeout(resolve, 30));
               document.querySelector('.vs-settingsHostForm').requestSubmit();
-              await waitFor(() => document.querySelector('.vs-settingsFormError'), 'SSH validation');
+              await waitFor(() => document.querySelector('.vs-sshFeedback[role="alert"]'), 'SSH validation');
               fill('host', 'localhost');
               await new Promise(resolve => setTimeout(resolve, 30));
               document.querySelector('.vs-settingsHostForm').requestSubmit();
@@ -476,6 +484,15 @@ app.whenReady().then(() => {
               if (!JSON.parse(localStorage.getItem('voxiva-ssh-hosts-v1')).some(host => host.name === 'Smoke host' && host.host === 'localhost')) throw new Error('SSH host was not persisted');
               saved.querySelector('.vs-iconBtn').click();
               await waitFor(() => !document.querySelector('.vs-settingsConnectionList article'), 'removed SSH host');
+              const fileInput = document.querySelector('.vs-sshSettings input[type="file"]');
+              const transfer = new DataTransfer();
+              transfer.items.add(new File(['Host smoke-import\\n  HostName 127.0.0.1\\n  User smoke\\n  Port 2222\\n'], 'config', { type: 'text/plain' }));
+              fileInput.files = transfer.files;
+              fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+              await waitFor(() => document.querySelector('.vs-settingsConnectionList article'), 'imported SSH host');
+              if (!JSON.parse(localStorage.getItem('voxiva-ssh-hosts-v1')).some(host => host.name === 'smoke-import' && host.host === '127.0.0.1' && host.user === 'smoke' && host.port === 2222)) throw new Error('SSH config import did not preserve host settings');
+              document.querySelector('.vs-settingsConnectionList article .vs-iconBtn').click();
+              await waitFor(() => !document.querySelector('.vs-settingsConnectionList article'), 'removed imported SSH host');
             }
             if (section.dataset.settingsSection === 'mobile') {
               const toggle = await waitFor(() => { const button = document.querySelector('.vs-settingsPanel [role="switch"]'); return button && !button.disabled ? button : null; }, 'mobile status');

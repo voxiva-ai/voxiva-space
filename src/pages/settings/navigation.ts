@@ -36,7 +36,7 @@ export const SETTINGS_GROUPS = [
     { id: "sounds", en: "Sounds", ru: "Звуки", icon: Volume2 },
   ] },
   { en: "Remote hosts", ru: "Удалённые хосты", items: [
-    { id: "ssh", en: "SSH hosts", ru: "SSH-хосты", icon: Server },
+    { id: "ssh", en: "SSH Hosts", ru: "SSH-хосты", icon: Server },
     { id: "remote-servers", en: "Remote Voxiva servers", ru: "Удалённые серверы Voxiva", icon: Network, badge: "beta" },
   ] },
   { en: "Privacy & security", ru: "Приватность и безопасность", items: [

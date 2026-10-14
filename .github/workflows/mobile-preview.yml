@@ -1,0 +1,39 @@
+name: Mobile preview
+
+on:
+  push:
+    tags:
+      - "mobile-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx expo prebuild --platform android --no-install --clean
+      - run: cd android && ./gradlew assembleDebug
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Voxiva Space Mobile ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          prerelease: true
+          generate_release_notes: true
+          files: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true

@@ -47,7 +47,7 @@ import { saveBlobToTemp } from "@/features/terminal/paste";
 import { TerminalPane } from "@/features/terminal";
 import { yieldToUi } from "@/features/terminal/spawnQueue";
 import { NativeBrowser, type BrowserTabMeta } from "@/features/browser/NativeBrowser";
-import { browserFaviconUrl, prettyBrowserLabel } from "@/features/browser/tabMeta";
+import { prettyBrowserLabel } from "@/features/browser/tabMeta";
 import { readAgentDrag, isAgentDrag, endAgentDragSession, type AgentDragPayload } from "@/features/agents/drag";
 import { agentBots, resolveBotLaunchCommand, resumeCommandFor } from "@/features/agents/bots";
 import { PaneActions } from "@/features/workspace/PaneActions";
@@ -199,28 +199,6 @@ function PaneMediaPreview({ absPath }: { paneId: string; absPath: string }) {
         chrome="pane"
       />
     </div>
-  );
-}
-
-function BrowserTabIcon({ url, pageFavicon }: { url: string; pageFavicon?: string | null }) {
-  const src = browserFaviconUrl(url, pageFavicon);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    setFailed(false);
-  }, [src]);
-  if (!src || failed) {
-    return <IconBrowser size={11} className="vs-paneTabIcon" />;
-  }
-  return (
-    <img
-      className="vs-paneTabFavicon"
-      src={src}
-      alt=""
-      width={12}
-      height={12}
-      draggable={false}
-      onError={() => setFailed(true)}
-    />
   );
 }
 
@@ -900,11 +878,7 @@ function PaneLeaf({
                       }
                     >
                       <TabGlyph>
-                        {(tab.url || "").trim() ? (
-                          <BrowserTabIcon url={tab.url || ""} pageFavicon={meta?.favicon} />
-                        ) : (
-                          <IconBrowser size={11} className="vs-paneTabIcon" />
-                        )}
+                        <IconBrowser size={11} className="vs-paneTabIcon" />
                       </TabGlyph>
                       <span className="vs-paneTabLabel">{label}</span>
                       <span

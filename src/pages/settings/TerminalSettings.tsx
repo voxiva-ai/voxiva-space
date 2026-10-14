@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { collectSessionIds } from "@/features/workspace/layout";
 import { TERMINAL_OPTIONS } from "@/features/terminal/shells";
 import {
@@ -13,17 +13,18 @@ function Switch({ checked, label, onChange }: { checked: boolean; label: string;
   return <button type="button" role="switch" aria-checked={checked} aria-label={label} className={`vs-toggle${checked ? " is-on" : ""}`} onClick={onChange}><i /></button>;
 }
 
-function Choices<T extends string>({ value, options, onChange }: {
+function Choices<T extends string>({ value, options, onChange, className }: {
   value: T;
   options: readonly { value: T; label: string }[];
   onChange: (value: T) => void;
+  className?: string;
 }) {
-  return <div className="vs-terminalRangeChoices">{options.map((option) => (
+  return <div className={`vs-terminalRangeChoices${className ? ` ${className}` : ""}`}>{options.map((option) => (
     <button key={option.value} type="button" className={value === option.value ? "is-active" : ""} aria-pressed={value === option.value} onClick={() => onChange(option.value)}>{option.label}</button>
   ))}</div>;
 }
 
-export function TerminalSettings() {
+export function TerminalSettings({ embedded = false }: { embedded?: boolean } = {}) {
   const { t, activeWorkspace, sessions, restartSession, closeSession, preferredShell, setPreferredShell, setError } = useSpace();
   const [prefs, setPrefs] = useState<TerminalPrefs>(() => loadTerminalPrefs());
   const [busySession, setBusySession] = useState<string | null>(null);
@@ -35,13 +36,20 @@ export function TerminalSettings() {
     saveTerminalPrefs(next);
     return next;
   });
+  const previewRange = (key: "customContrastRatio" | "scrollSpeed" | "fastScrollSpeed", value: number) => setPrefs((current) => ({ ...current, [key]: value }));
+  const commitRange = (key: "customContrastRatio" | "scrollSpeed" | "fastScrollSpeed", value: number) => {
+    const next = { ...prefs, [key]: value };
+    saveTerminalPrefs(next);
+    setPrefs(next);
+  };
+  const rangeStyle = (value: number, min: number, max: number) => ({ "--vs-range-progress": `${((value - min) / (max - min)) * 100}%` } as CSSProperties);
   const runSessionAction = async (id: string, action: () => Promise<void>) => {
     setBusySession(id);
     try { await action(); } catch (error) { setError(String(error)); } finally { setBusySession(null); }
   };
 
   return (
-    <section className="vs-settingsPanelBody vs-terminalSettings">
+    <section className={`vs-settingsPanelBody vs-terminalSettings${embedded ? " is-embedded" : ""}`}>
       <p className="vs-settingsHint">{t("settings.terminalHint")}</p>
 
       {isWindows ? <div className="vs-terminalSettingsGroup">
@@ -49,7 +57,7 @@ export function TerminalSettings() {
         <p className="vs-settingsHint">{t("settings.termWindowsShellHint")}</p>
         <div className="vs-terminalSettingRow">
           <span><strong>{t("settings.termDefaultShell")}</strong><small>{t("settings.termDefaultShellHint")}</small></span>
-          <Choices value={TERMINAL_OPTIONS.some((option) => option.value === preferredShell) ? preferredShell as typeof TERMINAL_OPTIONS[number]["value"] : "powershell.exe"} options={TERMINAL_OPTIONS} onChange={setPreferredShell} />
+          <Choices className="is-shellChoices" value={TERMINAL_OPTIONS.some((option) => option.value === preferredShell) ? preferredShell as typeof TERMINAL_OPTIONS[number]["value"] : "powershell.exe"} options={TERMINAL_OPTIONS} onChange={setPreferredShell} />
         </div>
       </div> : null}
 
@@ -75,7 +83,7 @@ export function TerminalSettings() {
           </div>
           {prefs.colorContrast === "custom" ? <label className="vs-terminalSettingField">
             <span>{t("settings.termContrastRatio")}: {prefs.customContrastRatio.toFixed(1)}:1</span>
-            <input type="range" min="1" max="7" step="0.5" value={prefs.customContrastRatio} onChange={(event) => patch({ customContrastRatio: Number(event.target.value) })} />
+            <input type="range" min="1" max="7" step="0.5" value={prefs.customContrastRatio} style={rangeStyle(prefs.customContrastRatio, 1, 7)} onChange={(event) => previewRange("customContrastRatio", Number(event.target.value))} onPointerUp={(event) => commitRange("customContrastRatio", Number(event.currentTarget.value))} onKeyUp={(event) => commitRange("customContrastRatio", Number(event.currentTarget.value))} />
           </label> : null}
           <div className="vs-terminalSettingRow">
             <span><strong>{t("settings.termInlineImages")}</strong><small>{t("settings.termInlineImagesHint")}</small></span>
@@ -92,13 +100,13 @@ export function TerminalSettings() {
           <label className="vs-terminalRangeCard">
             <span>{t("settings.termNormalScroll")}<b>{prefs.scrollSpeed.toFixed(2)}×</b></span>
             <small>{t("settings.termNormalScrollHint")}</small>
-            <input type="range" min="0.5" max="3" step="0.05" value={prefs.scrollSpeed} onChange={(event) => patch({ scrollSpeed: Number(event.target.value) })} />
+            <input type="range" min="0.5" max="3" step="0.05" value={prefs.scrollSpeed} style={rangeStyle(prefs.scrollSpeed, 0.5, 3)} aria-label={t("settings.termNormalScroll")} aria-valuetext={`${prefs.scrollSpeed.toFixed(2)}×`} onChange={(event) => previewRange("scrollSpeed", Number(event.target.value))} onPointerUp={(event) => commitRange("scrollSpeed", Number(event.currentTarget.value))} onKeyUp={(event) => commitRange("scrollSpeed", Number(event.currentTarget.value))} />
             <span className="vs-terminalRangeEnds"><small>0.5×</small><small>3×</small></span>
           </label>
           <label className="vs-terminalRangeCard">
             <span>{t("settings.termFastScroll")}<b>{prefs.fastScrollSpeed.toFixed(1)}×</b></span>
             <small>{t("settings.termFastScrollHint")}</small>
-            <input type="range" min="1" max="10" step="0.25" value={prefs.fastScrollSpeed} onChange={(event) => patch({ fastScrollSpeed: Number(event.target.value) })} />
+            <input type="range" min="1" max="10" step="0.25" value={prefs.fastScrollSpeed} style={rangeStyle(prefs.fastScrollSpeed, 1, 10)} aria-label={t("settings.termFastScroll")} aria-valuetext={`${prefs.fastScrollSpeed.toFixed(1)}×`} onChange={(event) => previewRange("fastScrollSpeed", Number(event.target.value))} onPointerUp={(event) => commitRange("fastScrollSpeed", Number(event.currentTarget.value))} onKeyUp={(event) => commitRange("fastScrollSpeed", Number(event.currentTarget.value))} />
             <span className="vs-terminalRangeEnds"><small>1×</small><small>10×</small></span>
           </label>
         </div>
@@ -147,7 +155,7 @@ export function TerminalSettings() {
         <button className="vs-btn vs-btnGhost" type="button" onClick={() => { const next = { ...DEFAULT_TERMINAL_PREFS }; saveTerminalPrefs(next); setPrefs(next); setPreferredShell(""); }}>{t("settings.termReset")}</button>
       </div>
 
-      <div className="vs-terminalSettingsGroup">
+      {!embedded && <div className="vs-terminalSettingsGroup">
         <h3>{t("settings.termManageSessions")}</h3>
         <p className="vs-settingsHint">{t("settings.termManageSessionsHint")}</p>
         <div className="vs-terminalSessionList">
@@ -160,7 +168,7 @@ export function TerminalSettings() {
           </div>)}
           {!liveSessions.length ? <p className="vs-settingsHint">{t("settings.termNoSessions")}</p> : null}
         </div>
-      </div>
+      </div>}
     </section>
   );
 }

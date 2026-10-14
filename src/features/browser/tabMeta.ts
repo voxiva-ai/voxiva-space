@@ -90,14 +90,3 @@ export function prettyBrowserLabel(url: string, pageTitle?: string | null): stri
   if (host.length <= 22) return host;
   return truncate(host, 22);
 }
-
-/** Favicon URL: page link first, else public favicon service. */
-export function browserFaviconUrl(url: string, pageFavicon?: string | null): string | null {
-  const fromPage = pageFavicon?.trim();
-  if (fromPage && /^https?:\/\//i.test(fromPage)) return fromPage;
-
-  const parsed = parseBrowserUrl(url);
-  if (!parsed?.hostname) return null;
-  const host = parsed.hostname;
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
-}

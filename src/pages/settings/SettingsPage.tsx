@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Brush, Check, ChevronDown, ChevronRight, ExternalLink, RefreshCw, Search, Settings, SquareTerminal } from "lucide-react";
+import { Brush, Check, ChevronDown, ExternalLink, RefreshCw, Search, Settings, SquareTerminal } from "lucide-react";
 import { useSpace, useView } from "@/features/workspace/SpaceContext";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { SETTINGS_GROUPS, SETTINGS_SEARCH_TERMS, isSettingsSection, type SectionId } from "./navigation";
@@ -506,7 +506,13 @@ export function SettingsPage() {
       <div className="vs-settingsPanel">
         <header className="vs-settingsPageHead">
           <h1>{nav.find((item) => item.id === section)?.title}</h1>
+          {section === "advanced" && <p>{locale === "ru" ? "Дополнительные параметры терминала и совместимости." : "Additional terminal and compatibility options."}</p>}
+          {section === "privacy" && <p>{locale === "ru" ? "Локальное хранение данных и разрешения приложения." : "Local data storage and app permissions."}</p>}
+          {section === "experimental" && <p>{locale === "ru" ? "Дополнительные функции, которые можно включать отдельно." : "Optional features you can enable individually."}</p>}
+          {section === "plugins" && <p>{locale === "ru" ? "Сторонние плагины пока не поддерживаются; настройки CLI-агентов находятся отдельно." : "Third-party plugins are not supported yet; CLI agent settings are available separately."}</p>}
           {section === "hotkeys" && <p>{t("settings.hk.subtitle")}</p>}
+          {section === "remote-servers" && <p>{locale === "ru" ? "Подключайте хосты по SSH или свои устройства через Companion." : "Connect to remote hosts over SSH or pair your devices with Companion."}</p>}
+          {section === "ssh" && <p>{locale === "ru" ? "Управляйте сохранёнными хостами и подключайтесь к ним через SSH." : "Manage saved hosts and connect to them over SSH."}</p>}
         </header>
         {!["general", "agents", "appearance", "notifications", "sounds", "hotkeys", "terminal", "browser", "mobile", "about"].includes(section) && <ExtendedSettingsSection key={section} section={section} onSection={setSection} />}
         {section === "general" && (
@@ -663,15 +669,16 @@ export function SettingsPage() {
                 </label>
               </div>
             </details>
-            <details className="vs-appearanceGroup">
+            <details className="vs-appearanceGroup" open>
               <summary><span className="vs-appearanceGroupIcon"><SquareTerminal size={16} /></span><strong>{t("settings.appearanceTerminal")}</strong></summary>
               <div className="vs-appearanceGroupBody">
-                <div className="vs-appearanceRow"><span><strong>{t("settings.appearanceTerminalHint")}</strong><small>{t("settings.appearanceTerminalDescription")}</small></span><button type="button" className="vs-appearanceAction" onClick={() => setSection("terminal")}>{t("settings.openTerminalSettings")}<ChevronRight size={15} /></button></div>
+                <TerminalSettings embedded />
               </div>
             </details>
             <details className="vs-appearanceGroup" open>
               <summary><span className="vs-appearanceGroupIcon"><Settings size={16} /></span><strong>{t("settings.appearanceWindow")}</strong></summary>
               <div className="vs-appearanceGroupBody">
+                <div className="vs-appearanceSubhead"><strong>{t("status.title")}</strong><small>{t("settings.appearanceStatusBarHint")}</small></div>
                 {([
                   ["usage", "status.usage"],
                   ["awake", "status.awake"],

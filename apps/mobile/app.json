@@ -1,0 +1,71 @@
+{
+  "expo": {
+    "name": "Voxiva Space",
+    "slug": "voxiva-space-mobile-app",
+    "version": "0.2.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "voxiva-space",
+    "icon": "./assets/voxiva-space-mark.png",
+    "splash": {
+      "image": "./assets/voxiva-space-mark.png",
+      "backgroundColor": "#0A0C10",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ai.voxiva.space.mobile",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Камера нужна, чтобы отсканировать QR из Voxiva Space на компьютере.",
+        "NSLocalNetworkUsageDescription": "Voxiva Space подключается к приложению на вашем компьютере в локальной сети.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "android": {
+      "package": "ai.voxiva.space.mobile",
+      "versionCode": 2,
+      "allowBackup": false,
+      "adaptiveIcon": {
+      "foregroundImage": "./assets/voxiva-space-mark.png",
+        "backgroundColor": "#0A0C10"
+      },
+      "permissions": [
+        "CAMERA",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_WIFI_STATE"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "category": ["BROWSABLE", "DEFAULT"],
+          "data": [
+            { "scheme": "voxiva-space" },
+            { "scheme": "voxiva-space", "host": "pair" }
+          ]
+        }
+      ]
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Камера нужна, чтобы отсканировать QR из Voxiva Space на компьютере.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
+    ]
+  }
+}

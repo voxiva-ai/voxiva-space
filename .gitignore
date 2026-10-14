@@ -4,6 +4,14 @@ dist/
 release/
 .DS_Store
 *.log
+.expo/
+apps/mobile/android/.gradle/
+apps/mobile/android/app/debug.keystore
+apps/mobile/android/local.properties
+apps/mobile/ios/Pods/
+apps/mobile/ios/build/
+apps/mobile/.env.*
+apps/mobile/*.keystore
 .env
 .env.*
 _t3themes/

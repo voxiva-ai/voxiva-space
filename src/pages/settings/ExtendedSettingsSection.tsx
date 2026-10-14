@@ -8,6 +8,7 @@ import { SshSettings } from "./SshSettings";
 import { ProviderAccountsSettings } from "./ProviderAccountsSettings";
 import { OrchestrationSettings } from "./OrchestrationSettings";
 import { VoiceSettings } from "./VoiceSettings";
+import { RemoteServersSettings } from "./RemoteServersSettings";
 import type { SectionId } from "./navigation";
 
 const UNAVAILABLE: Partial<Record<SectionId, [string, string]>> = {
@@ -45,7 +46,8 @@ export function ExtendedSettingsSection({ section, onSection }: { section: Secti
   if (section === "provider-accounts") return <ProviderAccountsSettings />;
   if (section === "orchestration") return <OrchestrationSettings />;
   if (section === "voice") return <VoiceSettings />;
-  return <section className="vs-settingsPanelBody vs-settingsExtended">
+  if (section === "remote-servers") return <RemoteServersSettings onSection={onSection} locale={locale} />;
+  return <section className={`vs-settingsPanelBody vs-settingsExtended is-section-${section}`}>
     {missing && <div className="vs-settingsAvailability" role="note"><Info size={18} aria-hidden="true" /><div><strong>{text("Not available in this build", "Недоступно в этой сборке")}</strong><p>{missing[ru ? 1 : 0]}</p></div></div>}
     {section === "computer-use" && <><p className="vs-settingsHint">{text("The embedded browser supports element inspection and sending page context to agents. Autonomous control of desktop applications is not connected yet.", "Встроенный браузер поддерживает выбор элементов и передачу контекста страницы агентам. Автономное управление настольными приложениями пока не подключено.")}</p>{link(text("Open browser", "Открыть браузер"), () => setView("browser"))}</>}
     {section === "integrations" && <><p className="vs-settingsHint">{text("Configure the integrations already used by this installation.", "Настройте интеграции, которые уже работают в этой установке.")}</p><div className="vs-settingsActionRow">{link(text("CLI agents", "CLI-агенты"), () => onSection("agents"))}{link(text("Browser sessions", "Сессии браузера"), () => onSection("browser"))}{link(text("Mobile companion", "Подключение телефона"), () => onSection("mobile"))}{link(text("Open project editor", "Открыть редактор проекта"), () => run(async () => { await space.openWorkspaceInVsCodeInline(activeWorkspace?.cwd || undefined); setView("space"); }), !activeWorkspace?.cwd)}</div></>}
@@ -69,7 +71,6 @@ export function ExtendedSettingsSection({ section, onSection }: { section: Secti
     {section === "advanced" && <><p className="vs-settingsHint">{t("settings.termAdvancedHint")}</p><label className="vs-settingsField">{t("settings.termScrollback")}<input type="number" min={1000} max={100000} step={1000} value={prefs.scrollbackRows} onChange={e => { const rows = Number(e.target.value); if (Number.isFinite(rows)) patch({ scrollbackRows: Math.min(100000, Math.max(1000, rows)) }); }} /></label><p className="vs-settingsHint">{t("settings.termNewPanesHint")}</p>{link(text("Terminal rendering settings", "Настройки рендеринга терминала"), () => onSection("terminal"))}</>}
     {section === "experimental" && <><p className="vs-settingsHint">{text("These controls are connected to the terminal renderer. New terminal panes use the updated settings.", "Эти параметры подключены к рендереру терминала. Новые терминальные панели используют обновлённые настройки.")}</p>{toggle("inlineImages", t("settings.termInlineImages"), t("settings.termInlineImagesHint"))}{toggle("allowOsc52", t("settings.termOsc52"), t("settings.termOsc52Hint"))}</>}
     {section === "projects" && <><p className="vs-settingsHint">{text("Manage project directories and their workspaces.", "Управляйте каталогами проектов и их рабочими пространствами.")}</p>{link(text("Open projects", "Открыть проекты"), () => setView("projects"))}</>}
-    {section === "remote-servers" && link(text("Configure SSH hosts", "Настроить SSH-хосты"), () => onSection("ssh"))}
     {(section === "plugins" || section === "share-skills") && link(text("Configure installed agents", "Настроить установленных агентов"), () => onSection("agents"))}
     {section === "floating-workspace" && link(text("Open workspace", "Открыть пространство"), () => setView("space"), !activeWorkspace)}
     {section === "mobile-emulator" && link(text("Open browser", "Открыть браузер"), () => setView("browser"))}

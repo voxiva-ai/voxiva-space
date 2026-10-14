@@ -13,9 +13,10 @@ import { IconAssistPanel, IconBell, IconMore, IconPlusStroke, IconSettings, Icon
 import { PromptDialog } from "@/components/PromptDialog";
 import { clientError } from "@/lib/errors";
 import { savedLayoutPaneCount } from "@/features/workspace/savedLayouts";
-import { Copy, Crosshair, FolderPlus, Kanban, LayoutGrid, Pin, PinOff, Save } from "lucide-react";
+import { Copy, Crosshair, FolderPlus, Kanban, LayoutGrid, Pin, PinOff, Save, Smartphone } from "lucide-react";
 import logoUrl from "@/assets/brand/voxiva-space-mark.png";
 import { formatHotkey, loadHotkeys } from "@/features/hotkeys/bindings";
+import { loadCompanionPrefs } from "@/features/companion/prefs";
 import { getCurrentWindow } from "@/platform/desktop";
 import { HelpMenu } from "@/components/shell/HelpMenu";
 
@@ -78,12 +79,19 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist }: SidebarProps
   const [saveOpen, setSaveOpen] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
+  const [showMobileButton, setShowMobileButton] = useState(() => loadCompanionPrefs().showSidebarButton);
   const plusRef = useRef<HTMLDivElement>(null);
   const workspaceListRef = useRef<HTMLDivElement>(null);
   const revealAnimationRef = useRef<Animation | null>(null);
   const notifyRef = useRef<HTMLDivElement>(null);
   const notifyMenuRef = useRef<HTMLElement>(null);
   const canSaveLayout = view === "space" && Boolean(activeWorkspace);
+
+  useEffect(() => {
+    const refresh = () => setShowMobileButton(loadCompanionPrefs().showSidebarButton);
+    window.addEventListener("voxiva-companion-prefs", refresh);
+    return () => window.removeEventListener("voxiva-companion-prefs", refresh);
+  }, []);
 
   const ordered = useMemo(() => orderWorkspaces(workspaces), [workspaces]);
   const pinned = useMemo(() => ordered.filter((w) => w.pinned), [ordered]);
@@ -574,6 +582,7 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist }: SidebarProps
           onClick={() => { setPlusOpen(false); setNotifyOpen(false); setView(view === "settings" ? "space" : "settings"); }}
         ><IconSettings size={14} aria-hidden /></button>
         <HelpMenu />
+        {showMobileButton && <button type="button" data-sidebar-tool="mobile" className={`vs-iconBtn${view === "settings" ? " is-active" : ""}`} title={t("settings.mobile")} aria-label={t("settings.mobile")} onClick={() => { sessionStorage.setItem("voxiva-open-settings-section", "mobile"); setView("settings"); }}><Smartphone size={15} strokeWidth={1.7} aria-hidden /></button>}
         <span className="vs-sidebarFooterSpacer" />
         <button type="button" data-sidebar-tool="reveal" className="vs-iconBtn" title={t("workspaceBoard.reveal")} aria-label={t("workspaceBoard.reveal")} disabled={!activeWorkspace} onClick={() => {
           if (!activeWorkspace) return;
@@ -590,7 +599,11 @@ export function Sidebar({ onNewSpace, assistOpen, onToggleAssist }: SidebarProps
           list.scrollTo({ top: list.scrollTop + rowRect.top - listRect.top - (listRect.height - rowRect.height) / 2, behavior: reducedMotion ? "instant" : "smooth" });
           row.querySelector<HTMLButtonElement>(".vs-wsItemMain")?.focus({ preventScroll: true });
           revealAnimationRef.current?.cancel();
-          if (!reducedMotion) revealAnimationRef.current = row.animate([{ boxShadow: "inset 0 0 0 2px var(--vs-accent)" }, { boxShadow: "inset 0 0 0 2px transparent" }], { duration: 1200, easing: "ease-out" });
+          if (!reducedMotion) revealAnimationRef.current = row.animate([
+            { boxShadow: "inset 0 0 0 2px #5aa6ff, 0 0 0 5px rgba(90,166,255,.18)", backgroundColor: "rgba(90,166,255,.1)" },
+            { boxShadow: "inset 0 0 0 1px rgba(90,166,255,.5), 0 0 0 2px rgba(90,166,255,.08)", backgroundColor: "rgba(90,166,255,.04)", offset: 0.35 },
+            { boxShadow: "inset 0 0 0 1px transparent, 0 0 0 0 transparent", backgroundColor: "rgba(90,166,255,0)" },
+          ], { duration: 1500, easing: "ease-out" });
         }}><Crosshair size={15} strokeWidth={1.7} aria-hidden /></button>
         <button type="button" data-sidebar-tool="workspace-board" className={`vs-iconBtn${view === "workspace-board" ? " is-active" : ""}`} title={t("nav.workspaceBoard")} aria-label={t("nav.workspaceBoard")} aria-pressed={view === "workspace-board"} onClick={() => setView(view === "workspace-board" ? "space" : "workspace-board")}><Kanban size={15} strokeWidth={1.7} aria-hidden /></button>
       </footer>

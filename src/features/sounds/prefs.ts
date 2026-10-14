@@ -87,53 +87,22 @@ function ctx() {
 
 ensureAudioUnlocked();
 
-function tone(
-  freqs: number[],
-  duration = 0.35,
-  gain = 0.12,
-  opts?: { type?: OscillatorType; delay?: number; detune?: number },
-) {
-  const c = ctx();
-  const now = c.currentTime + (opts?.delay ?? 0);
-  const g = c.createGain();
-  g.connect(c.destination);
-  g.gain.setValueAtTime(0.001, now);
-  g.gain.exponentialRampToValueAtTime(gain, now + 0.018);
-  g.gain.exponentialRampToValueAtTime(gain * 0.34, now + duration * 0.45);
-  g.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  for (const f of freqs) {
-    const o = c.createOscillator();
-    o.type = opts?.type ?? "sine";
-    o.frequency.value = f;
-    if (opts?.detune) o.detune.value = opts.detune;
-    o.connect(g);
-    o.start(now);
-    o.stop(now + duration);
-  }
-}
-
-function noise(duration = 0.12, gain = 0.018, delay = 0) {
+function chime(freq: number, delay: number, gain: number, duration = 0.85) {
   const c = ctx();
   const now = c.currentTime + delay;
-  const samples = Math.max(1, Math.floor(c.sampleRate * duration));
-  const buffer = c.createBuffer(1, samples, c.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < samples; i += 1) {
-    data[i] = (Math.random() * 2 - 1) * (1 - i / samples);
+  for (const [ratio, level] of [[1, 1], [2.01, 0.32], [3.9, 0.1]] as const) {
+    const oscillator = c.createOscillator();
+    const envelope = c.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.value = freq * ratio;
+    envelope.gain.setValueAtTime(0.0001, now);
+    envelope.gain.linearRampToValueAtTime(gain * level, now + 0.009);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    oscillator.connect(envelope);
+    envelope.connect(c.destination);
+    oscillator.start(now);
+    oscillator.stop(now + duration + 0.02);
   }
-  const src = c.createBufferSource();
-  const filter = c.createBiquadFilter();
-  const g = c.createGain();
-  filter.type = "highpass";
-  filter.frequency.value = 1800;
-  g.gain.setValueAtTime(gain, now);
-  g.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  src.buffer = buffer;
-  src.connect(filter);
-  filter.connect(g);
-  g.connect(c.destination);
-  src.start(now);
-  src.stop(now + duration);
 }
 
 function playPreset(preset: SoundPreset, customDataUrl: string | null) {
@@ -144,21 +113,18 @@ function playPreset(preset: SoundPreset, customDataUrl: string | null) {
     return;
   }
   if (preset === "soft") {
-    tone([659.25, 987.77], 0.24, 0.045);
-    tone([1318.51], 0.18, 0.028, { delay: 0.07 });
-    noise(0.08, 0.01);
+    chime(659.25, 0, 0.038, 0.72);
+    chime(987.77, 0.12, 0.025, 0.82);
     return;
   }
   if (preset === "chime") {
-    tone([523.25, 783.99], 0.2, 0.05);
-    tone([659.25, 1046.5], 0.24, 0.045, { delay: 0.09 });
-    tone([1567.98], 0.16, 0.025, { delay: 0.16 });
+    chime(523.25, 0, 0.042, 0.8);
+    chime(659.25, 0.12, 0.035, 0.88);
+    chime(783.99, 0.25, 0.03, 0.95);
     return;
   }
-  // bell
-  tone([880, 1760], 0.28, 0.055, { type: "triangle" });
-  tone([1320], 0.18, 0.03, { delay: 0.045, detune: -8 });
-  noise(0.1, 0.012);
+  chime(587.33, 0, 0.05, 0.95);
+  chime(880, 0.08, 0.028, 1.05);
 }
 
 export type SoundEvent = "attention" | "exit";

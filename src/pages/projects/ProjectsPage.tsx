@@ -1,5 +1,5 @@
-import { type CSSProperties } from "react";
-import { useState } from "react";
+import { type CSSProperties, type MouseEvent, useMemo, useState } from "react";
+import { FolderOpen, FolderPlus, MoreHorizontal, Search } from "lucide-react";
 import {
   CreateSpaceSetup,
   type CreateSpaceSetupValue,
@@ -27,6 +27,7 @@ export function ProjectsPage() {
     removeWorkspace,
     refreshBranch,
     selectWorkspace,
+    sessions,
     setError,
     t,
   } = useSpace();
@@ -35,6 +36,7 @@ export function ProjectsPage() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Workspace | null>(null);
   const [setup, setSetup] = useState<CreateSpaceSetupValue>({
     grid: 2,
@@ -42,6 +44,18 @@ export function ProjectsPage() {
     includeBrowser: false,
     color: "green",
   });
+  const [query, setQuery] = useState("");
+  const visibleWorkspaces = useMemo(() => {
+    const filter = query.trim().toLocaleLowerCase();
+    if (!filter) return workspaces;
+    return workspaces.filter((ws) => `${ws.name} ${ws.cwd} ${ws.branch ?? ""}`.toLocaleLowerCase().includes(filter));
+  }, [query, workspaces]);
+
+  function closeProjectMenu(event: MouseEvent<HTMLButtonElement>, run: () => void) {
+    const menu = event.currentTarget.closest("details");
+    if (menu instanceof HTMLDetailsElement) menu.open = false;
+    run();
+  }
 
   async function browseFolder(apply: (path: string) => void) {
     try {
@@ -53,6 +67,8 @@ export function ProjectsPage() {
   }
 
   function openCreateModal() {
+    setName("");
+    setCwd("");
     setSetup({
       grid: 2,
       agentIds: [],
@@ -63,65 +79,35 @@ export function ProjectsPage() {
   }
 
   async function confirmCreate() {
-    await createWorkspace({
-      name: name || "Space",
-      cwd: cwd.trim(),
-      grid: setup.grid,
-      includeBrowser: setup.includeBrowser,
-      color: setup.color,
-      agentIds: setup.agentIds,
-    });
-    setName("");
-    setCwd("");
-    setModalOpen(false);
+    if (creating) return;
+    setCreating(true);
+    try {
+      await createWorkspace({
+        name: name.trim() || t("welcome.defaultName"),
+        cwd: cwd.trim(),
+        grid: setup.grid,
+        includeBrowser: setup.includeBrowser,
+        color: setup.color,
+        agentIds: setup.agentIds,
+      });
+      setModalOpen(false);
+    } catch (err) {
+      setError(clientError(err));
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
-    <div className="vs-page vs-pageNarrow">
+    <div className="vs-page vs-pageNarrow vs-projectsPage">
       <div className="vs-pageHeader">
-        <div className="vs-kicker">{t("projects.title")}</div>
         <h2>{t("projects.title")}</h2>
         <p>{t("projects.lead")}</p>
       </div>
 
-      <div className="vs-formRow">
-        <label className="vs-field">
-          <span>{t("projects.name")}</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Frontend" />
-        </label>
-        <label className="vs-field">
-          <span>{t("projects.folder")}</span>
-          <input
-            value={cwd}
-            onChange={(e) => setCwd(e.target.value)}
-            placeholder="D:/projects/app"
-            spellCheck={false}
-          />
-        </label>
-        <div className="vs-formActions">
-          <button
-            type="button"
-            className="vs-btn"
-            onClick={() =>
-              void browseFolder((picked) => {
-                setCwd(picked);
-                if (!name.trim()) {
-                  const base = picked.replace(/[\\/]+$/, "").split(/[\\/]/).pop();
-                  if (base) setName(base);
-                }
-              })
-            }
-          >
-            {t("projects.browse")}
-          </button>
-          <button
-            type="button"
-            className="vs-btn vs-btnPrimary"
-            onClick={openCreateModal}
-          >
-            {t("projects.add")}
-          </button>
-        </div>
+      <div className="vs-projectToolbar">
+        <label className="vs-projectSearch"><Search size={15} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("projects.search")} aria-label={t("projects.search")} /><span>{visibleWorkspaces.length} / {workspaces.length}</span></label>
+        <button type="button" className="vs-btn vs-btnPrimary" onClick={openCreateModal}><FolderPlus size={15} aria-hidden="true" />{t("projects.add")}</button>
       </div>
 
       {modalOpen && (
@@ -147,13 +133,18 @@ export function ProjectsPage() {
             </div>
             <p className="vs-modalLead">{t("projects.setupLead")}</p>
 
+            <div className="vs-projectCreateFields">
+              <label className="vs-field"><span>{t("projects.name")}</span><input value={name} onChange={(event) => setName(event.target.value)} autoFocus /></label>
+              <label className="vs-field"><span>{t("projects.folder")}</span><span className="vs-projectFolderField"><input value={cwd} onChange={(event) => setCwd(event.target.value)} placeholder={t("projects.folderOptional")} spellCheck={false} /><button type="button" className="vs-btn" onClick={() => void browseFolder((picked) => { setCwd(picked); if (!name.trim()) setName(picked.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || ""); })}><FolderOpen size={14} aria-hidden="true" />{t("projects.browse")}</button></span></label>
+            </div>
+
             <CreateSpaceSetup value={setup} onChange={setSetup} />
 
             <div className="vs-modalActions">
               <button type="button" className="vs-btn" onClick={() => setModalOpen(false)}>
                 {t("projects.cancel")}
               </button>
-              <button type="button" className="vs-btn vs-btnPrimary" onClick={() => void confirmCreate()}>
+              <button type="button" className="vs-btn vs-btnPrimary" disabled={creating} onClick={() => void confirmCreate()}>
                 {t("projects.create")}
               </button>
             </div>
@@ -161,9 +152,10 @@ export function ProjectsPage() {
         </div>
       )}
 
-      <div className="vs-projectList">
-        {workspaces.map((ws) => (
-          <div className="vs-projectRow" key={ws.id}>
+      <div className="vs-projectList" aria-live="polite">
+        {visibleWorkspaces.map((ws) => {
+          const liveSessions = collectSessionIds(ws.layout).filter((id) => sessions[id]?.status === "online").length;
+          return <article className={`vs-projectRow${activeWorkspace?.id === ws.id ? " is-active" : ""}`} key={ws.id}>
             <div>
               {renamingId === ws.id ? (
                 <input
@@ -198,68 +190,31 @@ export function ProjectsPage() {
                   ) : null}
                 </strong>
               )}
-              <span>{ws.cwd}</span>
+              <span className="vs-projectPath" title={ws.cwd}>{ws.cwd || t("spaces.noFolder")}</span>
               <span className="vs-projectMeta">
-                {ws.branch
-                  ? `${t("projects.branch")}: ${ws.branch}`
-                  : t("projects.noGit")}
+                {ws.branch ? <><span className="vs-projectBranch"><i aria-hidden="true" />{ws.branch}</span><span className="vs-projectMetaDivider" aria-hidden="true">·</span></> : null}
+                <span>{t("projects.sessions").replace("{n}", String(liveSessions))}</span>
               </span>
             </div>
             <div className="vs-projectActions">
-              <button type="button" className="vs-btn vs-btnPrimary" onClick={() => selectWorkspace(ws.id)}>
-                {t("projects.open")}
-              </button>
-              <button
-                type="button"
-                className="vs-btn"
-                onClick={() => {
+              <button type="button" className="vs-btn vs-btnPrimary" onClick={() => selectWorkspace(ws.id)}>{t("projects.open")}</button>
+              <details className="vs-projectMenu">
+                <summary aria-label={t("projects.moreActions")} title={t("projects.moreActions")}><MoreHorizontal size={16} aria-hidden="true" /></summary>
+                <div className="vs-projectMenuPanel" role="menu">
+                  <button type="button" role="menuitem" onClick={(event) => closeProjectMenu(event, () => {
                   setRenamingId(ws.id);
                   setRenameDraft(ws.name);
-                }}
-              >
-                {t("projects.rename")}
-              </button>
-              <button
-                type="button"
-                className="vs-btn"
-                onClick={() =>
-                  void browseFolder((picked) => {
-                    void updateWorkspace(ws.id, { cwd: picked });
-                  })
-                }
-              >
-                {t("projects.changeFolder")}
-              </button>
-              <button type="button" className="vs-btn" onClick={() => void refreshBranch(ws.id)}>
-                {t("projects.refreshGit")}
-              </button>
-              {!ws.branch && (
-                <button
-                  type="button"
-                  className="vs-btn"
-                  title={t("projects.bindGitHint")}
-                  onClick={() =>
-                    void browseFolder((picked) => {
-                      void updateWorkspace(ws.id, { cwd: picked });
-                    })
-                  }
-                >
-                  {t("projects.bindGit")}
-                </button>
-              )}
-              <button
-                type="button"
-                className="vs-btn"
-                onClick={() => void openInExplorer(ws.cwd).catch((err) => setError(clientError(err)))}
-              >
-                {t("projects.openFolder")}
-              </button>
-              <button type="button" className="vs-btn vs-btnGhost" onClick={() => setPendingDelete(ws)}>
-                {t("projects.remove")}
-              </button>
+                  })}>{t("projects.rename")}</button>
+                  <button type="button" role="menuitem" onClick={(event) => closeProjectMenu(event, () => void browseFolder((picked) => { void updateWorkspace(ws.id, { cwd: picked }); }))}>{t("projects.changeFolder")}</button>
+                  <button type="button" role="menuitem" onClick={(event) => closeProjectMenu(event, () => void refreshBranch(ws.id))}>{t("projects.refreshGit")}</button>
+                  <button type="button" role="menuitem" disabled={!ws.cwd} onClick={(event) => closeProjectMenu(event, () => void openInExplorer(ws.cwd).catch((err) => setError(clientError(err))))}>{t("projects.openFolder")}</button>
+                  <button type="button" className="is-danger" role="menuitem" onClick={(event) => closeProjectMenu(event, () => setPendingDelete(ws))}>{t("projects.remove")}</button>
+                </div>
+              </details>
             </div>
-          </div>
-        ))}
+          </article>;
+        })}
+        {!visibleWorkspaces.length && <div className="vs-projectEmpty"><FolderOpen size={20} aria-hidden="true" /><strong>{workspaces.length ? t("projects.noMatches") : t("projects.empty")}</strong><span>{workspaces.length ? t("projects.searchHint") : t("projects.emptyHint")}</span></div>}
       </div>
 
       <ConfirmDialog

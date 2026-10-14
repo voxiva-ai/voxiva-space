@@ -1,0 +1,16 @@
+node_modules/
+.expo/
+dist/
+android/.gradle/
+android/app/debug.keystore
+android/local.properties
+ios/Pods/
+ios/build/
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+.env
+.env.*
+.DS_Store

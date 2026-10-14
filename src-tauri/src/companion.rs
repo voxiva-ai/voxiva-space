@@ -25,6 +25,7 @@ pub struct CompanionStatus {
     pub running: bool,
     pub port: u16,
     pub lan_ip: Option<String>,
+    pub machine_name: String,
     pub token: Option<String>,
     pub paired: bool,
     /// Deep link encoded in the Settings QR (`voxiva-space://pair?...`).
@@ -124,6 +125,15 @@ fn cors_ok(body: &str, status: &str, content_type: &str) -> String {
 
 fn install_page_url() -> String {
     format!("{INSTALL_ORIGIN}/products/voxiva-space/mobile")
+}
+
+fn machine_name() -> String {
+    std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "Voxiva Space".into())
 }
 
 fn deep_link(token: &str, host: &str, port: u16) -> String {
@@ -608,6 +618,7 @@ fn status_snapshot(state: &CompanionState) -> CompanionStatus {
         running: false,
         port: COMPANION_PORT,
         lan_ip: ip.clone(),
+        machine_name: machine_name(),
         token: None,
         paired: false,
         pair_url: None,
@@ -625,6 +636,7 @@ fn status_snapshot(state: &CompanionState) -> CompanionStatus {
                 running: true,
                 port: COMPANION_PORT,
                 lan_ip: ip,
+                machine_name: machine_name(),
                 token: Some(inner.token.clone()),
                 paired: inner.paired,
                 pair_url: Some(link.clone()),
@@ -715,6 +727,7 @@ pub fn companion_stop(state: State<'_, Arc<CompanionState>>) -> Result<Companion
         running: false,
         port: COMPANION_PORT,
         lan_ip: lan_ip(),
+        machine_name: machine_name(),
         token: None,
         paired: false,
         pair_url: None,

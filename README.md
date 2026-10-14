@@ -128,7 +128,11 @@ Installers are written to `release/`. `npm run dev` builds the React UI and Rust
 
 ## Privacy
 
-Workspace layouts and preferences stay on this PC. The app does not include telemetry. Update checks request release metadata from GitHub (with a Voxiva endpoint fallback), and the optional phone companion stays on the local network.
+Workspace files, layouts, preferences, session history, and saved provider credentials are stored on this PC; this build has no Voxiva account, cloud sync, or telemetry. Data can still leave the PC when an installed AI agent sends prompts or workspace context to its provider, when you browse a website, or when you explicitly refresh provider usage. Update checks contact GitHub for release metadata, with a Voxiva endpoint fallback. The optional phone companion is off until enabled; while running, it shares workspace/session details, task-board data, and recent terminal output with a paired device over your local network. Voxiva does not receive that companion data.
+
+## Mobile companion
+
+The Expo / React Native app is maintained in [`apps/mobile`](apps/mobile), with an independent package lockfile and Android native project. It pairs with the desktop app over the local network bridge; no cloud relay is implemented. Android downloads are hosted by the separate Voxiva Web project. iOS build configuration exists, but App Store distribution is not published yet.
 
 ## Contributing
 

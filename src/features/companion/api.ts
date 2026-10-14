@@ -4,6 +4,7 @@ export type CompanionStatus = {
   running: boolean;
   port: number;
   lanIp: string | null;
+  machineName: string;
   token: string | null;
   paired: boolean;
   /** Deep link encoded in the Settings QR. */
