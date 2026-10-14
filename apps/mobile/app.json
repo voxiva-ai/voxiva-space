@@ -26,7 +26,7 @@
     },
     "android": {
       "package": "ai.voxiva.space.mobile",
-      "versionCode": 2,
+      "versionCode": 3,
       "allowBackup": false,
       "adaptiveIcon": {
       "foregroundImage": "./assets/voxiva-space-mark.png",
@@ -65,7 +65,8 @@
           "microphonePermission": false,
           "recordAudioAndroid": false
         }
-      ]
+      ],
+      "./plugins/with-adaptive-icon-safe-zone"
     ]
   }
 }
